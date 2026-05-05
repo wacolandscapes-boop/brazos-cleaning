@@ -8370,21 +8370,24 @@ class Scheduler {
                     if (!name) return;
 
                     const freqNorm = typeMap[(freq||'').toString().trim().toUpperCase()] || 'semanal';
-                    const billingNorm = (billing||'').toLowerCase().includes('perservice') ? 'perservice' : 'monthly';
-                    const cliType = ['airbnb','unico'].includes(freqNorm) ? freqNorm : freqNorm;
-                    // invoicingType from col 11 (Tipo Facturación)
-                    const invTypeRaw = (r[11]||'').toString().toLowerCase();
-                    const invType = invTypeRaw.includes('fijo') || invTypeRaw.includes('fixed') ? 'fixed_monthly' :
-                                    invTypeRaw.includes('perservice') || invTypeRaw.includes('servicio') ? 'perservice' : 'monthly';
+                    const cliType = freqNorm;
+                    // invoicingType — single calculation from col K (Periodo Facturación)
+                    // 'fixed_monthly' = cuota fija mensual (no suma visitas)
+                    // 'monthly'       = factura mensual sumando todas las visitas
+                    // 'perservice'    = factura el mismo día del servicio
+                    const billingRaw = (billing||'').toString().toLowerCase().trim();
+                    const invType = billingRaw.includes('fijo') || billingRaw.includes('fixed') ? 'fixed_monthly' :
+                                    billingRaw.includes('perservice') || billingRaw.includes('por servicio') ? 'perservice' : 'monthly';
+
+                    // Group assignment from col L
+                    const groupName = (group||'').toString().trim();
 
                     const exists = this.clis.find(c => c.name.trim().toLowerCase() === name.trim().toLowerCase());
                     if (!exists) {
-                        // invoicingType:
-                        // 'fixed_monthly' = pago fijo al mes (no multiplica por visitas)
-                        // 'monthly'       = factura mensual = suma de todas las visitas
-                        // 'perservice'    = factura el mismo dia del servicio
-                        const invType = billingNorm === 'perservice' ? 'perservice' :
-                                        billingNorm === 'monthly'    ? 'monthly'    : 'monthly';
+                        // Create group if it doesn't exist yet
+                        if (groupName && this.grupos[groupName] === undefined) {
+                            this.grupos[groupName] = [];
+                        }
                         this.clis.push({
                             id: `cli_bra_${Date.now()}_${i}`,
                             name: name.trim(),
@@ -8398,8 +8401,9 @@ class Scheduler {
                             fee: parseFloat(price) || 0,
                             type: cliType,
                             serviceType: (svcType||'residencial').toLowerCase(),
-                            billingPeriod: billingNorm,
+                            billingPeriod: invType === 'perservice' ? 'perservice' : 'monthly',
                             invoicingType: invType,
+                            group: groupName || '',
                             propId: propId ? propId.trim() : name.trim(),
                             active: true,
                             notes: notes || ''
@@ -8412,7 +8416,8 @@ class Scheduler {
                         if (!exists.zip  && zip)     { exists.zip  = zip.trim();  changed = true; }
                         if (!exists.email && email)  { exists.email = email.trim(); changed = true; }
                         if ((!exists.price || exists.price===0) && price) { exists.price = parseFloat(price)||0; exists.fee = exists.price; changed = true; }
-                        if (!exists.billingPeriod && billing) { exists.billingPeriod = billingNorm; changed = true; }
+                        if (!exists.invoicingType && invType) { exists.invoicingType = invType; exists.billingPeriod = invType === 'perservice' ? 'perservice' : 'monthly'; changed = true; }
+                        if (!exists.group && groupName) { exists.group = groupName; changed = true; }
                         if (changed) updated++;
                     }
                 });
