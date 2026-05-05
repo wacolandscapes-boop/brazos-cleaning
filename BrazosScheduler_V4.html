@@ -8580,6 +8580,13 @@ class Scheduler {
         const view=document.getElementById('prodView').value, dateStr=document.getElementById('prodDate').value;
         const groupFilt=document.getElementById('prodGroup').value, content=document.getElementById('prodContent');
         if (!this._prodReports) { content.innerHTML='<p style="color:#888;text-align:center;padding:40px">Toca 🔄 Recargar Drive.</p>'; return; }
+        const fmt=n=>n.toFixed(2);
+        const fmtT=t=>{if(!t)return'';const[h24,m]=t.split(':').map(Number),ap=h24>=12?'PM':'AM',h=h24%12||12;return h+':'+(m+'').padStart(2,'0')+' '+ap;};
+        const fmtH=h=>h>=1?`${Math.floor(h)}h ${Math.round((h%1)*60)}min`:`${Math.round(h*60)}min`;
+        const fmtDate=d=>{const[y,mo,da]=d.split('-');return `${da}/${mo}/${y}`;};
+        const nominaEmps=JSON.parse(localStorage.getItem('brazos_employees')||'[]');
+        const getRateForEmp=emp=>{if(!emp)return 15;if(parseFloat(emp.rate)>0)return parseFloat(emp.rate);const ne=nominaEmps.find(n=>n.name&&emp.name&&n.name.trim().toLowerCase()===emp.name.trim().toLowerCase());return parseFloat(ne?.rate||ne?.payRate||ne?.hourlyRate||15);};
+
         let dates=[];
         if (view==='day') { dates=[dateStr]; }
         else {
@@ -8587,32 +8594,58 @@ class Scheduler {
             d.setDate(d.getDate()+diff);
             for(let i=0;i<7;i++){const dd=new Date(d);dd.setDate(d.getDate()+i);dates.push(dd.toLocaleDateString('en-CA'));}
         }
-        const groupRows={};let grandHrs=0,grandCost=0,grandSvcs=0,grandBilled=0;
+
+        // Build groupRows: { grp: { services, totalHrs, totalCost, totalBilled, doneCount, members, empHrs:{empId:{name,hrs,cost,rate}} } }
+        const groupRows={};
+        // For weekly: dailyTotals[dt] = { hrs, cost, billed, svcs }
+        const dailyTotals={};
+        let grandHrs=0,grandCost=0,grandSvcs=0,grandBilled=0;
+
         dates.forEach(dt=>{
+            dailyTotals[dt]={hrs:0,cost:0,billed:0,svcs:0};
             const dayData=this._prodReports[dt]; if(!dayData)return;
             Object.keys(dayData).forEach(grp=>{
                 if(groupFilt!=='all'&&grp!==groupFilt)return;
                 const gd=dayData[grp];
-                if(!groupRows[grp]){const mIds=(this.grupos[grp]||[]).map(String);const mEmps=mIds.map(id=>this.emps.find(e=>String(e.id)===id)).filter(Boolean);groupRows[grp]={services:[],totalHrs:0,totalCost:0,totalBilled:0,doneCount:0,members:mEmps};}
+                if(!groupRows[grp]){
+                    const mIds=(this.grupos[grp]||[]).map(String);
+                    const mEmps=mIds.map(id=>this.emps.find(e=>String(e.id)===id)).filter(Boolean);
+                    groupRows[grp]={services:[],totalHrs:0,totalCost:0,totalBilled:0,doneCount:0,members:mEmps,empHrs:{}};
+                    mEmps.forEach(e=>{groupRows[grp].empHrs[e.id]={name:e.name,hrs:0,cost:0,rate:getRateForEmp(e)};});
+                }
                 (gd.services||[]).slice().sort((a,b)=>{const ta=a.scheduledStart||'',tb=b.scheduledStart||'';if(ta&&tb)return ta.localeCompare(tb);if(ta)return -1;if(tb)return 1;return 0;}).forEach(svc=>{
                     let hrs=0;
                     if(svc.checkin&&svc.checkout){const[sh,sm]=svc.checkin.split(':').map(Number),[eh,em]=svc.checkout.split(':').map(Number);hrs=Math.max(0,((eh*60+em)-(sh*60+sm))/60);}
                     const memberIds=(this.grupos[grp]||[]).map(String);
                     const members=memberIds.map(id=>this.emps.find(e=>String(e.id)===id||e.id==id)).filter(Boolean);
-                    const nominaEmps=JSON.parse(localStorage.getItem('brazos_employees')||'[]');
-                    const getRateForEmp=(emp)=>{if(!emp)return 15;if(parseFloat(emp.rate)>0)return parseFloat(emp.rate);const ne=nominaEmps.find(n=>n.name&&emp.name&&n.name.trim().toLowerCase()===emp.name.trim().toLowerCase());return parseFloat(ne?.rate||ne?.payRate||ne?.hourlyRate||15);};
-                    const defaultRate=15;
                     let cost=0;
                     if(members.length>0){cost=members.reduce((s,e)=>s+(getRateForEmp(e)*hrs),0);}
-                    else if(memberIds.length>0){cost=memberIds.length*defaultRate*hrs;}
-                    let svcPrice=parseFloat(svc.price||0);if(!svcPrice){const matchCli=this.clis.find(c=>c.name===svc.clientName||(svc.clientName&&svc.clientName.startsWith(c.name)));if(matchCli)svcPrice=parseFloat(matchCli.price||matchCli.fee||0);}groupRows[grp].services.push({date:dt,clientName:svc.clientName,address:svc.address,checkin:svc.checkin,checkout:svc.checkout,hrs,cost,price:svcPrice,status:svc.status,note:svc.note});
-                    if(svc.status==='done'){groupRows[grp].doneCount++;groupRows[grp].totalHrs+=hrs;groupRows[grp].totalCost+=cost;groupRows[grp].totalBilled+=svcPrice;grandHrs+=hrs;grandCost+=cost;grandSvcs++;grandBilled+=svcPrice;}
+                    else if(memberIds.length>0){cost=memberIds.length*15*hrs;}
+                    let svcPrice=parseFloat(svc.price||0);
+                    if(!svcPrice){const matchCli=this.clis.find(c=>c.name===svc.clientName||(svc.clientName&&svc.clientName.startsWith(c.name)));if(matchCli)svcPrice=parseFloat(matchCli.price||matchCli.fee||0);}
+                    groupRows[grp].services.push({date:dt,clientName:svc.clientName,address:svc.address,scheduledStart:svc.scheduledStart,scheduledEnd:svc.scheduledEnd,checkin:svc.checkin,checkout:svc.checkout,hrs,cost,price:svcPrice,status:svc.status,note:svc.note});
+                    if(svc.status==='done'){
+                        groupRows[grp].doneCount++;groupRows[grp].totalHrs+=hrs;groupRows[grp].totalCost+=cost;groupRows[grp].totalBilled+=svcPrice;
+                        grandHrs+=hrs;grandCost+=cost;grandSvcs++;grandBilled+=svcPrice;
+                        dailyTotals[dt].hrs+=hrs;dailyTotals[dt].cost+=cost;dailyTotals[dt].billed+=svcPrice;dailyTotals[dt].svcs++;
+                        // Employee hours breakdown
+                        members.forEach(e=>{
+                            if(!groupRows[grp].empHrs[e.id])groupRows[grp].empHrs[e.id]={name:e.name,hrs:0,cost:0,rate:getRateForEmp(e)};
+                            groupRows[grp].empHrs[e.id].hrs+=hrs;
+                            groupRows[grp].empHrs[e.id].cost+=getRateForEmp(e)*hrs;
+                        });
+                    }
                 });
             });
         });
+
+        // Save for CSV export
+        this._lastProdRender={groupRows,dates,grandHrs,grandCost,grandSvcs,grandBilled,dailyTotals,view};
+
         if(!Object.keys(groupRows).length){content.innerHTML='<p style="color:#888;text-align:center;padding:40px">Sin datos para este período.</p>';return;}
-        const fmt=n=>n.toFixed(2),fmtT=t=>{if(!t)return'';const[h24,m]=t.split(':').map(Number),ap=h24>=12?'PM':'AM',h=h24%12||12;return h+':'+(m+'').padStart(2,'0')+' '+ap;}, fmtH=h=>h>=1?`${Math.floor(h)}h ${Math.round((h%1)*60)}min`:`${Math.round(h*60)}min`;
         const grandNet=grandBilled-grandCost;
+
+        // ── SUMMARY CARDS ──
         let html=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px">
           <div style="background:#e8f8f5;border-radius:10px;padding:12px;text-align:center"><div style="font-size:0.72rem;color:#27ae60;font-weight:600;text-transform:uppercase">Servicios completados</div><div style="font-size:1.8rem;font-weight:700;color:#1a6b4a">${grandSvcs}</div></div>
           <div style="background:#eaf4fb;border-radius:10px;padding:12px;text-align:center"><div style="font-size:0.72rem;color:#2980b9;font-weight:600;text-transform:uppercase">Horas en campo</div><div style="font-size:1.8rem;font-weight:700;color:#1a5276">${fmtH(grandHrs)}</div></div>
@@ -8623,8 +8656,77 @@ class Scheduler {
           <div style="font-size:0.75rem;color:${grandNet>=0?'#27ae60':'#e74c3c'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">Ganancia neta (Facturado − Costo)</div>
           <div style="font-size:2.2rem;font-weight:700;color:${grandNet>=0?'#1a6b4a':'#922b21'}">${grandNet>=0?'+':''}$${fmt(grandNet)}</div>
         </div>`;
+
+        // ── WEEKLY DAILY TOTALS BAR ──
+        if(view==='week'){
+            const dayNames=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+            html+=`<div style="margin-bottom:20px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden">
+              <div style="background:#374151;color:white;padding:10px 16px;font-weight:700;font-size:0.88rem">📅 Totales por Día</div>
+              <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+                <thead><tr style="background:#f8f9fa">
+                  <th style="padding:8px 12px;text-align:left;color:#555">Día</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Fecha</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Servicios</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Horas</th>
+                  <th style="padding:8px 12px;text-align:right;color:#555">Facturado</th>
+                  <th style="padding:8px 12px;text-align:right;color:#555">Costo MO</th>
+                  <th style="padding:8px 12px;text-align:right;color:#555">Neto</th>
+                </tr></thead><tbody>
+                ${dates.map((dt,i)=>{
+                    const d=dailyTotals[dt];
+                    const net=d.billed-d.cost;
+                    const hasData=d.svcs>0;
+                    return `<tr style="border-top:1px solid #f1f3f5;background:${hasData?(i%2===0?'#fff':'#fafafa'):'#fafafa'}">
+                      <td style="padding:8px 12px;font-weight:700;color:#374151">${dayNames[i]}</td>
+                      <td style="padding:8px 12px;text-align:center;color:#666">${fmtDate(dt)}</td>
+                      <td style="padding:8px 12px;text-align:center;font-weight:600;color:${hasData?'#27ae60':'#bbb'}">${hasData?d.svcs:'—'}</td>
+                      <td style="padding:8px 12px;text-align:center;color:${hasData?'#2980b9':'#bbb'}">${hasData?fmtH(d.hrs):'—'}</td>
+                      <td style="padding:8px 12px;text-align:right;font-weight:600;color:${hasData?'#9a7d0a':'#bbb'}">${hasData?'$'+fmt(d.billed):'—'}</td>
+                      <td style="padding:8px 12px;text-align:right;color:${hasData?'#0e7490':'#bbb'}">${hasData?'$'+fmt(d.cost):'—'}</td>
+                      <td style="padding:8px 12px;text-align:right;font-weight:700;color:${!hasData?'#bbb':net>=0?'#1e8449':'#922b21'}">${hasData?(net>=0?'+':'')+'$'+fmt(net):'—'}</td>
+                    </tr>`;
+                }).join('')}
+                <tr style="background:#374151;color:white;font-weight:700;border-top:2px solid #1f2937">
+                  <td colspan="2" style="padding:8px 12px">TOTAL SEMANA</td>
+                  <td style="padding:8px 12px;text-align:center">${grandSvcs}</td>
+                  <td style="padding:8px 12px;text-align:center">${fmtH(grandHrs)}</td>
+                  <td style="padding:8px 12px;text-align:right">$${fmt(grandBilled)}</td>
+                  <td style="padding:8px 12px;text-align:right">$${fmt(grandCost)}</td>
+                  <td style="padding:8px 12px;text-align:right;color:${grandNet>=0?'#6ee7b7':'#fca5a5'}">${grandNet>=0?'+':''}$${fmt(grandNet)}</td>
+                </tr>
+              </tbody></table></div></div>`;
+        }
+
+        // ── GROUP SECTIONS ──
         Object.keys(groupRows).sort().forEach(grp=>{
             const row=groupRows[grp];
+            // Employee breakdown table rows
+            const empEntries=Object.values(row.empHrs).filter(e=>e.hrs>0);
+            const empBreakdownHTML=empEntries.length?`
+              <div style="margin:12px 16px;border:1px solid #b2dfdb;border-radius:8px;overflow:hidden">
+                <div style="background:#e0f2f1;padding:7px 12px;font-size:0.78rem;font-weight:700;color:#00695c">👷 Desglose por Empleado</div>
+                <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
+                  <thead><tr style="background:#f1f8f7">
+                    <th style="padding:6px 12px;text-align:left;color:#555">Empleado</th>
+                    <th style="padding:6px 12px;text-align:center;color:#555">Tarifa</th>
+                    <th style="padding:6px 12px;text-align:center;color:#555">Horas</th>
+                    <th style="padding:6px 12px;text-align:right;color:#555">Costo</th>
+                  </tr></thead><tbody>
+                  ${empEntries.map((e,i)=>`<tr style="border-top:1px solid #e8f5e9;background:${i%2===0?'#fff':'#f9fefe'}">
+                    <td style="padding:6px 12px;font-weight:600">${e.name}</td>
+                    <td style="padding:6px 12px;text-align:center;color:#666">$${fmt(e.rate)}/hr</td>
+                    <td style="padding:6px 12px;text-align:center;color:#2980b9;font-weight:600">${fmtH(e.hrs)}</td>
+                    <td style="padding:6px 12px;text-align:right;font-weight:700;color:#0e7490">$${fmt(e.cost)}</td>
+                  </tr>`).join('')}
+                  ${empEntries.length>1?`<tr style="background:#e0f2f1;font-weight:700;border-top:2px solid #b2dfdb">
+                    <td colspan="2" style="padding:6px 12px;color:#00695c">TOTAL GRUPO</td>
+                    <td style="padding:6px 12px;text-align:center;color:#2980b9">${fmtH(row.totalHrs)}</td>
+                    <td style="padding:6px 12px;text-align:right;color:#0e7490">$${fmt(row.totalCost)}</td>
+                  </tr>`:''}
+                  </tbody></table>
+              </div>`:'';
+
             html+=`<div style="border:1px solid #e9ecef;border-radius:12px;overflow:hidden;margin-bottom:16px">
               <div style="background:#0e7490;color:white;padding:10px 16px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -8637,24 +8739,29 @@ class Scheduler {
                   <span>👷 Costo: $${fmt(row.totalCost)}</span>
                   <span style="font-weight:700">= Neto: $${fmt(row.totalBilled-row.totalCost)}</span>
                 </div>
-                ${row.members.length?`<div style="font-size:0.75rem;opacity:.75;margin-top:3px">${row.members.map(e=>{const ne=JSON.parse(localStorage.getItem('brazos_employees')||'[]').find(n=>n.name&&e.name&&n.name.trim().toLowerCase()===e.name.trim().toLowerCase());const r=parseFloat(e.rate||ne?.rate||ne?.payRate||15);return e.name+' ($'+r.toFixed(2)+'/hr)';}).join(' · ')}</div>`:''}
+                ${row.members.length?`<div style="font-size:0.75rem;opacity:.75;margin-top:3px">${row.members.map(e=>{const r=getRateForEmp(e);return e.name+' ($'+r.toFixed(2)+'/hr)';}).join(' · ')}</div>`:''}
               </div>
+              ${empBreakdownHTML}
               <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
                 <thead><tr style="background:#f8f9fa">
-                  <th style="padding:8px 12px;text-align:left;color:#555">Fecha</th><th style="padding:8px 12px;text-align:left;color:#555">Cliente</th>
-                  <th style="padding:8px 12px;text-align:center;color:#555">Llegada</th><th style="padding:8px 12px;text-align:center;color:#555">Salida</th>
-                  <th style="padding:8px 12px;text-align:center;color:#555">Horas</th><th style="padding:8px 12px;text-align:right;color:#555">Facturado</th>
+                  <th style="padding:8px 12px;text-align:left;color:#555">Fecha</th>
+                  <th style="padding:8px 12px;text-align:left;color:#555">Cliente</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Llegada</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Salida</th>
+                  <th style="padding:8px 12px;text-align:center;color:#555">Horas</th>
+                  <th style="padding:8px 12px;text-align:right;color:#555">Facturado</th>
                   <th style="padding:8px 12px;text-align:right;color:#555">Costo MO</th>
                   <th style="padding:8px 12px;text-align:center;color:#555">Estado</th>
                 </tr></thead><tbody>
                 ${row.services.map((s,i)=>`<tr style="border-top:1px solid #f1f3f5;background:${i%2===0?'#fff':'#fafafa'}">
-                  <td style="padding:8px 12px;color:#666">${s.date}</td>
+                  <td style="padding:8px 12px;color:#666">${fmtDate(s.date)}</td>
                   <td style="padding:8px 12px">
-                      <strong>${s.clientName}</strong>
-                      <br><small style="color:#999">${s.address}</small>
-                      ${s.scheduledStart ? '<br><small style="color:#aaa">⏰ Prog: ' + fmtT(s.scheduledStart) + (s.scheduledEnd ? ' – ' + fmtT(s.scheduledEnd) : '') + '</small>' : ''}
-                    </td>
-                  <td style="padding:8px 12px;text-align:center">${s.checkin?fmtT(s.checkin):'—'}</td><td style="padding:8px 12px;text-align:center">${s.checkout?fmtT(s.checkout):'—'}</td>
+                    <strong>${s.clientName}</strong>
+                    <br><small style="color:#999">${s.address}</small>
+                    ${s.scheduledStart?'<br><small style="color:#aaa">⏰ Prog: '+fmtT(s.scheduledStart)+(s.scheduledEnd?' – '+fmtT(s.scheduledEnd):'')+' </small>':''}
+                  </td>
+                  <td style="padding:8px 12px;text-align:center">${s.checkin?fmtT(s.checkin):'—'}</td>
+                  <td style="padding:8px 12px;text-align:center">${s.checkout?fmtT(s.checkout):'—'}</td>
                   <td style="padding:8px 12px;text-align:center;font-weight:600;color:#2980b9">${s.hrs>0?fmtH(s.hrs):'—'}</td>
                   <td style="padding:8px 12px;text-align:right;font-weight:600;color:#9a7d0a">${s.price>0?'$'+fmt(s.price):'—'}</td>
                   <td style="padding:8px 12px;text-align:right;font-weight:600;color:#0e7490">${s.cost>0?'$'+fmt(s.cost):'—'}</td>
@@ -8663,6 +8770,118 @@ class Scheduler {
                 </tbody></table></div>`;
         });
         content.innerHTML=html;
+    }
+
+    exportProductionCSV() {
+        if (!this._lastProdRender) { alert('Genera el reporte primero.'); return; }
+        const {groupRows, dates, grandHrs, grandCost, grandSvcs, grandBilled} = this._lastProdRender;
+        const fmtT=t=>{if(!t)return'';const[h24,m]=t.split(':').map(Number),ap=h24>=12?'PM':'AM',h=h24%12||12;return h+':'+(m+'').padStart(2,'0')+' '+ap;};
+        const fmtH=h=>h>=1?`${Math.floor(h)}h ${Math.round((h%1)*60)}min`:`${Math.round(h*60)}min`;
+        const esc=v=>`"${String(v||'').replace(/"/g,'""')}"`;
+        const rows=[['Grupo','Fecha','Cliente','Dirección','Llegada','Salida','Horas','Facturado','Costo MO','Neto','Estado']];
+        Object.keys(groupRows).sort().forEach(grp=>{
+            groupRows[grp].services.forEach(s=>{
+                rows.push([esc(grp),esc(s.date),esc(s.clientName),esc(s.address),esc(s.checkin?fmtT(s.checkin):''),esc(s.checkout?fmtT(s.checkout):''),esc(s.hrs>0?fmtH(s.hrs):''),s.price>0?s.price.toFixed(2):'0.00',s.cost>0?s.cost.toFixed(2):'0.00',(s.price-s.cost).toFixed(2),esc(s.status)]);
+            });
+            // employee breakdown rows
+            Object.values(groupRows[grp].empHrs).filter(e=>e.hrs>0).forEach(e=>{
+                rows.push([esc(grp+' → '+e.name),'','','','','',esc(fmtH(e.hrs)),'',e.cost.toFixed(2),'',esc('empleado — $'+e.rate.toFixed(2)+'/hr')]);
+            });
+            rows.push([esc('TOTAL: '+grp),'','','','','',esc(fmtH(groupRows[grp].totalHrs)),groupRows[grp].totalBilled.toFixed(2),groupRows[grp].totalCost.toFixed(2),(groupRows[grp].totalBilled-groupRows[grp].totalCost).toFixed(2),'']);
+            rows.push([]);
+        });
+        rows.push(['GRAND TOTAL','','','','','',fmtH(grandHrs),grandBilled.toFixed(2),grandCost.toFixed(2),(grandBilled-grandCost).toFixed(2),'']);
+        const csv=rows.map(r=>r.join(',')).join('\n');
+        const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+        a.download=`BrazosProduccion_${dates[0]}${dates.length>1?'_al_'+dates[dates.length-1]:''}.csv`;
+        a.click();
+    }
+
+    printProductionPDF() {
+        if (!this._lastProdRender) { alert('Genera el reporte primero.'); return; }
+        const {groupRows, dates, grandHrs, grandCost, grandSvcs, grandBilled, dailyTotals, view} = this._lastProdRender;
+        const fmt=n=>n.toFixed(2);
+        const fmtT=t=>{if(!t)return'';const[h24,m]=t.split(':').map(Number),ap=h24>=12?'PM':'AM',h=h24%12||12;return h+':'+(m+'').padStart(2,'0')+' '+ap;};
+        const fmtH=h=>h>=1?`${Math.floor(h)}h ${Math.round((h%1)*60)}min`:`${Math.round(h*60)}min`;
+        const fmtDate=d=>{const[y,mo,da]=d.split('-');return `${da}/${mo}/${y}`;};
+        const grandNet=grandBilled-grandCost;
+        const periodo=dates.length===1?fmtDate(dates[0]):`${fmtDate(dates[0])} – ${fmtDate(dates[dates.length-1])}`;
+        const dayNames=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+        let weeklyTableHTML='';
+        if(view==='week'){
+            weeklyTableHTML=`<h3 style="color:#374151;margin:20px 0 8px">Totales por Día</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:20px">
+              <thead><tr style="background:#374151;color:white">
+                <th style="padding:6px 8px;text-align:left">Día</th><th style="padding:6px 8px;text-align:center">Fecha</th>
+                <th style="padding:6px 8px;text-align:center">Svcs</th><th style="padding:6px 8px;text-align:center">Horas</th>
+                <th style="padding:6px 8px;text-align:right">Facturado</th><th style="padding:6px 8px;text-align:right">Costo MO</th>
+                <th style="padding:6px 8px;text-align:right">Neto</th>
+              </tr></thead><tbody>
+              ${dates.map((dt,i)=>{const d=dailyTotals[dt];const net=d.billed-d.cost;const has=d.svcs>0;
+                return `<tr style="border-bottom:1px solid #eee;background:${i%2===0?'#fff':'#f9f9f9'}">
+                  <td style="padding:5px 8px;font-weight:700">${dayNames[i]}</td><td style="padding:5px 8px;text-align:center">${fmtDate(dt)}</td>
+                  <td style="padding:5px 8px;text-align:center">${has?d.svcs:'—'}</td><td style="padding:5px 8px;text-align:center">${has?fmtH(d.hrs):'—'}</td>
+                  <td style="padding:5px 8px;text-align:right">${has?'$'+fmt(d.billed):'—'}</td><td style="padding:5px 8px;text-align:right">${has?'$'+fmt(d.cost):'—'}</td>
+                  <td style="padding:5px 8px;text-align:right;font-weight:700;color:${!has?'#aaa':net>=0?'#1e8449':'#c0392b'}">${has?(net>=0?'+':'')+'$'+fmt(net):'—'}</td>
+                </tr>`;}).join('')}
+              <tr style="background:#374151;color:white;font-weight:700"><td colspan="2" style="padding:6px 8px">TOTAL</td>
+                <td style="padding:6px 8px;text-align:center">${grandSvcs}</td><td style="padding:6px 8px;text-align:center">${fmtH(grandHrs)}</td>
+                <td style="padding:6px 8px;text-align:right">$${fmt(grandBilled)}</td><td style="padding:6px 8px;text-align:right">$${fmt(grandCost)}</td>
+                <td style="padding:6px 8px;text-align:right;color:${grandNet>=0?'#6ee7b7':'#fca5a5'}">${grandNet>=0?'+':''}$${fmt(grandNet)}</td>
+              </tr></tbody></table>`;
+        }
+
+        let groupsHTML='';
+        Object.keys(groupRows).sort().forEach(grp=>{
+            const row=groupRows[grp];
+            const empEntries=Object.values(row.empHrs).filter(e=>e.hrs>0);
+            groupsHTML+=`<div style="margin-bottom:18px;border:1px solid #ccc;border-radius:6px;overflow:hidden;page-break-inside:avoid">
+              <div style="background:#0e7490;color:white;padding:8px 12px">
+                <strong>👥 ${grp}</strong> — ${row.doneCount} servicios · ${fmtH(row.totalHrs)} · Facturado: $${fmt(row.totalBilled)} · Costo: $${fmt(row.totalCost)} · <strong>Neto: $${fmt(row.totalBilled-row.totalCost)}</strong>
+              </div>`;
+            if(empEntries.length){
+                groupsHTML+=`<div style="padding:8px 12px;background:#e0f2f1">
+                  <strong style="font-size:10px;color:#00695c">Desglose empleados:</strong>
+                  ${empEntries.map(e=>`<span style="margin-left:10px;font-size:10px">${e.name}: ${fmtH(e.hrs)} = $${fmt(e.cost)}</span>`).join('')}
+                </div>`;
+            }
+            groupsHTML+=`<table style="width:100%;border-collapse:collapse;font-size:10px">
+              <thead><tr style="background:#f5f5f5">
+                <th style="padding:5px 8px;text-align:left">Fecha</th><th style="padding:5px 8px;text-align:left">Cliente</th>
+                <th style="padding:5px 8px;text-align:center">Llegada</th><th style="padding:5px 8px;text-align:center">Salida</th>
+                <th style="padding:5px 8px;text-align:center">Horas</th><th style="padding:5px 8px;text-align:right">Facturado</th>
+                <th style="padding:5px 8px;text-align:right">Costo MO</th><th style="padding:5px 8px;text-align:center">Estado</th>
+              </tr></thead><tbody>
+              ${row.services.map((s,i)=>`<tr style="border-top:1px solid #f0f0f0;background:${i%2===0?'#fff':'#fafafa'}">
+                <td style="padding:5px 8px;color:#666">${fmtDate(s.date)}</td>
+                <td style="padding:5px 8px"><strong>${s.clientName}</strong><br><span style="color:#999;font-size:9px">${s.address}</span></td>
+                <td style="padding:5px 8px;text-align:center">${s.checkin?fmtT(s.checkin):'—'}</td>
+                <td style="padding:5px 8px;text-align:center">${s.checkout?fmtT(s.checkout):'—'}</td>
+                <td style="padding:5px 8px;text-align:center;font-weight:600;color:#2980b9">${s.hrs>0?fmtH(s.hrs):'—'}</td>
+                <td style="padding:5px 8px;text-align:right;color:#9a7d0a">${s.price>0?'$'+fmt(s.price):'—'}</td>
+                <td style="padding:5px 8px;text-align:right;color:#0e7490">${s.cost>0?'$'+fmt(s.cost):'—'}</td>
+                <td style="padding:5px 8px;text-align:center;font-size:9px">${s.status==='done'?'✅ Terminado':s.status==='active'?'⏳ Activo':'🔜 Pendiente'}</td>
+              </tr>`).join('')}
+              </tbody></table></div>`;
+        });
+
+        const win=window.open('','_blank');
+        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Producción Brazos</title>
+        <style>body{font-family:Arial,sans-serif;margin:30px;color:#333}h1{color:#0e7490;margin-bottom:4px}@media print{.no-print{display:none}}</style></head><body>
+        <div class="no-print" style="margin-bottom:16px"><button onclick="window.print()" style="background:#0e7490;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:1rem">🖨️ Imprimir</button></div>
+        <h1>📊 Reporte de Producción — Brazos Cleaning</h1>
+        <p style="color:#666;margin:0 0 16px">Período: ${periodo} &nbsp;·&nbsp; Generado: ${new Date().toLocaleString('es-MX')}</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+          <div style="background:#e8f8f5;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#27ae60;font-weight:700;text-transform:uppercase">Servicios</div><div style="font-size:1.5rem;font-weight:700">${grandSvcs}</div></div>
+          <div style="background:#eaf4fb;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#2980b9;font-weight:700;text-transform:uppercase">Horas</div><div style="font-size:1.5rem;font-weight:700">${fmtH(grandHrs)}</div></div>
+          <div style="background:#fef9e7;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#d4a017;font-weight:700;text-transform:uppercase">Facturado</div><div style="font-size:1.5rem;font-weight:700">$${fmt(grandBilled)}</div></div>
+          <div style="background:${grandNet>=0?'#e8f8f5':'#fdf2f8'};border-radius:8px;padding:10px;text-align:center;border:2px solid ${grandNet>=0?'#27ae60':'#e74c3c'}"><div style="font-size:10px;color:${grandNet>=0?'#27ae60':'#e74c3c'};font-weight:700;text-transform:uppercase">Ganancia Neta</div><div style="font-size:1.5rem;font-weight:700;color:${grandNet>=0?'#1e8449':'#922b21'}">${grandNet>=0?'+':''}$${fmt(grandNet)}</div></div>
+        </div>
+        ${weeklyTableHTML}${groupsHTML}
+        </body></html>`);
+        win.document.close();
     }
 
     driveSync() {
@@ -9828,6 +10047,10 @@ document.addEventListener('click', function(e) {
         <button onclick="app.loadProductionFromDrive()" style="padding:8px 16px;background:#3498db;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">🔄 Recargar Drive</button>
         <button onclick="app.loadProductionLocal()" style="padding:8px 16px;background:#27ae60;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">📱 QuikTrack Local</button>
         <button onclick="app.loadProductionDemo()" style="padding:8px 16px;background:#e67e22;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">🧪 Datos demo</button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button onclick="app.exportProductionCSV()" style="padding:8px 16px;background:#6f42c1;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">📥 Exportar CSV</button>
+          <button onclick="app.printProductionPDF()" style="padding:8px 16px;background:#0e7490;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">🖨️ Imprimir PDF</button>
+        </div>
       </div>
       <div id="prodStatus" style="font-size:0.85rem;color:#888;margin-bottom:12px"></div>
       <div id="prodContent"></div>
