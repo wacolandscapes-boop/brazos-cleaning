@@ -8385,7 +8385,12 @@ class Scheduler {
                     // Group assignment from col L
                     const groupName = (group||'').toString().trim();
 
-                    const exists = this.clis.find(c => c.name.trim().toLowerCase() === name.trim().toLowerCase());
+                    // Para clientes con propId distinto (multi-propiedad), no son duplicados
+                    const propIdNorm = propId ? propId.trim() : name.trim();
+                    const exists = this.clis.find(c =>
+                        c.name.trim().toLowerCase() === name.trim().toLowerCase() &&
+                        (c.propId||'').trim().toLowerCase() === propIdNorm.toLowerCase()
+                    );
                     if (!exists) {
                         // Create group if it doesn't exist yet
                         if (groupName && this.grupos[groupName] === undefined) {
