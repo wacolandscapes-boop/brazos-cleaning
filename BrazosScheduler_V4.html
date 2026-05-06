@@ -1418,7 +1418,8 @@ class Scheduler {
         setTimeout(() => this.updateRemindersBadge(), 600);
         // Actualizar badge cada hora
         setInterval(() => this.updateRemindersBadge(), 60 * 60 * 1000);
-
+        // Cargar lista de clientes en sidebar flotante
+        setTimeout(() => this.renderClientsSidebar(), 800);
     }
     
     // 🔔 RECORDATORIOS — Servicios mensuales en 2 días
@@ -1654,7 +1655,7 @@ class Scheduler {
         // 🔔 Actualizar badge de recordatorios
         this.updateRemindersBadge();
         // Habilitar drop en celdas para sidebar flotante
-        setTimeout(() => this.enableDropOnCells(), 50);
+        setTimeout(() => this.enableDropOnCells(), 300);
     }
 
     // ── Vista SEMANA / DÍA ──────────────────────────────────────────
@@ -1700,6 +1701,7 @@ class Scheduler {
                 const dStr = day.toLocaleDateString('en-CA');
                 const cell = document.createElement('div');
                 cell.className = `time-cell ${dStr===todayStr?'today':''}`;
+                cell.dataset.date = dStr;
                 cell.onclick = () => this.openModal(null, dStr, nombreGrupo);
                 this._fillCell(cell, dStr, nombreGrupo, fCli);
                 cellsRow.appendChild(cell);
@@ -1753,6 +1755,7 @@ class Scheduler {
                 const isTodayCell = dStr === todayStr;
 
                 cell.className = 'month-day-cell' + (isTodayCell ? ' today' : '') + (!isCurrentMonth ? ' other-month' : '');
+                if (isCurrentMonth) cell.dataset.date = dStr;
 
                 if(isCurrentMonth) {
                     // Número del día
