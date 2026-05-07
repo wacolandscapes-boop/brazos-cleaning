@@ -41,7 +41,7 @@
         .toolbar { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; border: 1px solid #eee; gap: 15px; }
         
         /* Grid */
-        .grid-header-row { display: grid; grid-template-columns: var(--emp-col-width) 1fr; background: #eee; }
+        .grid-header-row { display: flex; flex-direction: row; background: #eee; }
         .day-header { background: #f5f5f5; padding: 4px 6px; text-align: center; font-weight: 600; font-size: 0.8rem; border-bottom: 2px solid #ddd; position: sticky; top: 0; z-index: 5; }
         .day-name { font-size: 0.7rem; font-weight: 800; color: #666; text-transform: uppercase; }
         .day-num { font-size: 1.3rem; font-weight: 900; color: #222; }
@@ -51,7 +51,7 @@
         .group-row { display: flex; flex-direction: row; border-bottom: 2px solid #ddd; background: white; }
         .group-row.sidebar-collapsed { }
         .grid-header-row.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width) 1fr; }
-        .days-header-row.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width) 1fr; }
+        .days-header-row.sidebar-collapsed { }
 
         /* Sidebar con Acordeón de Miembros */
         .sidebar-group { background: #f9f9f9; border-right: 2px solid #ddd; display: flex; flex-direction: column; overflow: hidden; }
@@ -619,8 +619,8 @@
         
         /* Fila 3: Headers de días */
         .days-header-row {
-            display: grid;
-            grid-template-columns: var(--emp-col-width) 1fr;
+            display: flex;
+            flex-direction: row;
             background: #f5f5f5;
             border-bottom: 2px solid #ddd;
         }
