@@ -58,6 +58,11 @@
         .group-title-bar { padding: 5px 8px; background: #eef1f3; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 0.85rem; color: var(--primary); border-bottom: 1px solid #ddd; cursor: pointer; }
         .group-members-preview { padding: 3px 8px 5px; font-size: 0.7rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; flex-wrap: wrap; gap: 3px; }
         .member-chip { background: #e8eaf6; color: #3949ab; padding: 1px 5px; border-radius: 8px; font-size: 0.68rem; font-weight: 500; }
+        .grupos-bar { display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px; background:#f8f9fa; border-top:2px solid #e9ecef; }
+        .grupo-bar-chip { display:flex; flex-direction:column; align-items:center; padding:8px 16px; border-radius:10px; color:white; cursor:pointer; transition:all 0.2s; min-width:80px; }
+        .grupo-bar-chip:hover { filter: brightness(0.85); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .grupo-bar-chip .chip-title { font-weight: 800; font-size: 0.85rem; }
+        .grupo-bar-chip .chip-members { font-size: 0.68rem; opacity: 0.85; margin-top: 2px; white-space: nowrap; }
         .member-chip.vacant { background: #f5f5f5; color: #bbb; }
         .members-panel { padding: 6px; display: none; background: #fff; flex-direction: column; gap: 3px; }
         .members-panel.expanded { display: flex; }
@@ -884,6 +889,18 @@
                         <label style="font-size:0.8rem; color:#555;">Propiedad</label>
                         <select id="mPropId" onchange="app.onPropChange();" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; margin-top:3px;"></select>
                     </div>
+                    <div id="airbnbNoteWrap" style="display:none; margin-top:6px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:8px;">
+                        <label style="font-size:0.8rem; font-weight:700; color:#e65100;">🏠 Nota Huéspedes AirBnB</label>
+                        <select id="mAirbnbNote" style="width:100%; padding:6px; border:1px solid #ffca28; border-radius:4px; margin-top:4px; font-size:0.85rem;">
+                            <option value="">— Sin nota especial —</option>
+                            <option value="checkout">🧳 Solo Checkout (huéspedes salen hoy)</option>
+                            <option value="checkin">🔑 Solo Checkin (huéspedes llegan hoy)</option>
+                            <option value="same_day">🔄 Checkout + Checkin mismo día</option>
+                            <option value="checkout_later">📅 Checkout hoy, Checkin fecha posterior</option>
+                            <option value="checkin_later">📅 Checkout fecha anterior, Checkin hoy</option>
+                        </select>
+                        <input type="text" id="mAirbnbNoteCustom" placeholder="Nota adicional (opcional)..." style="width:100%;margin-top:4px;padding:6px;border:1px solid #ffca28;border-radius:4px;font-size:0.82rem;box-sizing:border-box;">
+                    </div>
                     <div id="clientType" style="display:none; margin-top:8px; padding:8px; background:#e8f5e9; border-left:3px solid #4caf50; border-radius:4px">
                         <span style="font-size:0.85rem; color:#2e7d32">
                             <b>Tipo de recurrencia:</b> <span id="clientTypeText" style="font-weight:bold"></span>
@@ -901,9 +918,18 @@
                     <div id="groupSuggestion" style="display:none; margin-top:5px; padding:6px 10px; border-radius:6px; font-size:0.78rem; border:1px solid #a5d6a7;"></div>
                 </div>
                 <div style="grid-column: span 2"><label>Tarea Específica</label><input type="text" id="taskName"></div>
-                <div><label>Prioridad (orden)</label>
-                    <input type="number" id="mPriority" value="1" min="1" max="99" style="width:100px">
+                <div><label>Prioridad (orden) <span style="color:#999;font-weight:400;font-size:0.78rem;">— opcional</span></label>
+                    <input type="number" id="mPriority" min="1" max="99" placeholder="—" style="width:100px">
                     <small style="color:#666; display:block; margin-top:4px">1=primero, 2=segundo, 3=tercero...</small>
+                    <div id="priorityApplyWrap" style="display:none;margin-top:6px;background:#f0f7ff;border:1px solid #c5d8ff;border-radius:6px;padding:8px;">
+                        <div style="font-size:0.78rem;font-weight:700;color:#0D2B8E;margin-bottom:4px;">Aplicar cambio de prioridad a:</div>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;margin-bottom:4px;">
+                            <input type="radio" name="priorityApply" id="priorityApplyOne" value="one" checked> Solo este servicio
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;">
+                            <input type="radio" name="priorityApply" id="priorityApplySerie" value="serie"> Toda la serie futura
+                        </label>
+                    </div>
                 </div>
                 <div style="grid-column: span 2; display:grid; grid-template-columns:1fr 1fr; gap:10px; background:#f0f7ff; padding:12px; border-radius:8px; border:1px solid #c5d8ff;">
                     <div>
@@ -1655,6 +1681,11 @@ class Scheduler {
         // 🔔 Actualizar badge de recordatorios
         this.updateRemindersBadge();
         // Habilitar drop en celdas para sidebar flotante
+        // Barra de grupos horizontal (semana y mes)
+        if (this.view === 'week' || this.view === 'month') {
+            this._renderGruposBar(grid);
+        }
+
         setTimeout(() => this.enableDropOnCells(), 300);
     }
 
@@ -1674,11 +1705,8 @@ class Scheduler {
                 const isToday = d.toLocaleDateString('en-CA') === todayStr;
                 return `<div class="day-col-inline" style="${isToday?'background:#fff3cd;font-weight:700;':''}">${dayName}<br>${d.getDate()}</div>`;
             }).join('');
-            const collapsed = this.sidebarCollapsed;
-            const spacerW = collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--emp-col-width)';
-            daysHeader.innerHTML = `<div class="days-spacer" style="width:${spacerW}; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:800; color:#2c3e50; letter-spacing:2px;">GRUPOS</div><div class="days-grid-container">${daysHtml}</div>`;
-            if (collapsed) daysHeader.classList.add('sidebar-collapsed');
-            else daysHeader.classList.remove('sidebar-collapsed');
+            daysHeader.innerHTML = `<div class="days-grid-container" style="display:grid;grid-template-columns:repeat(${daysCount},1fr);width:100%;">${daysHtml}</div>`;
+            daysHeader.classList.remove('sidebar-collapsed');
         }
 
         const fCli = document.getElementById('searchCli').value;
@@ -1689,13 +1717,19 @@ class Scheduler {
             if(groupObj && !selectedGrps.includes('all') && !selectedGrps.includes(groupObj.id.toString())) return;
 
             const row = document.createElement('div');
-            row.className = 'group-row' + (this.sidebarCollapsed ? ' sidebar-collapsed' : '');
-            const sidebar = this._buildSidebar(nombreGrupo);
-            row.appendChild(sidebar);
+            row.style.cssText = 'display:grid;grid-template-columns:1fr;position:relative;overflow:hidden;border-bottom:2px solid #ddd;background:white;';
+
+            // Marca de agua con letra del grupo
+            const gwLetra = nombreGrupo.replace(/Grupo /i, '').trim();
+            const gwColor = this.getGrupoColor(nombreGrupo);
+            const watermark = document.createElement('div');
+            watermark.style.cssText = `position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:3rem;font-weight:900;color:${gwColor};opacity:0.18;pointer-events:none;z-index:2;user-select:none;line-height:1;mix-blend-mode:multiply;`;
+            watermark.textContent = gwLetra;
+            row.appendChild(watermark);
 
             const cellsRow = document.createElement('div');
             cellsRow.className = 'cells-container';
-            cellsRow.style.gridTemplateColumns = `repeat(${dates.length}, 1fr)`;
+            cellsRow.style.cssText = `display:grid;grid-template-columns:repeat(${dates.length},1fr);position:relative;z-index:1;`;
 
             dates.forEach(day => {
                 const dStr = day.toLocaleDateString('en-CA');
@@ -1747,6 +1781,19 @@ class Scheduler {
         let dayNum = 1 - firstDay; // puede empezar negativo (días del mes anterior)
         while(dayNum <= totalDays) {
             const weekRow = document.createElement('div'); weekRow.className = 'month-week-row';
+            // Watermark letras de grupo en fila de semana
+            if(activeGroups.length) {
+                weekRow.style.position = 'relative'; weekRow.style.overflow = 'hidden';
+                const wmDiv = document.createElement('div');
+                wmDiv.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;gap:2px;pointer-events:none;z-index:1;opacity:0.12;user-select:none;';
+                activeGroups.slice(0,3).forEach(g => {
+                    const l = document.createElement('span');
+                    l.style.cssText = `font-size:2.5rem;font-weight:900;color:${this.getGrupoColor(g)};line-height:1;`;
+                    l.textContent = g.replace(/Grupo /i,'').trim();
+                    wmDiv.appendChild(l);
+                });
+                weekRow.appendChild(wmDiv);
+            }
             for(let dow = 0; dow < 7; dow++) {
                 const cell = document.createElement('div');
                 const isCurrentMonth = dayNum >= 1 && dayNum <= totalDays;
@@ -1807,7 +1854,13 @@ class Scheduler {
                             const textModeM = this.getTextMode(typeKeyM);
                             ev.style.color = textModeM === 'auto' ? getTextColor(bgColor) : (textModeM === 'white' ? '#fff' : '#000');
                             const showPropIdM = (c.type === 'airbnb' || c.type === 'unico');
-                            ev.textContent = prioPrefixM + c.name + (c.city ? ' - ' + c.city : '') + (showPropIdM && c.propId ? ' / ' + c.propId : '');
+                            const lblM = prioPrefixM + c.name + (c.city ? ' - ' + c.city : '') + (showPropIdM && c.propId ? ' / ' + c.propId : '');
+                            // Badge de grupo
+                            const evGrp = s.grupo || Object.keys(this.grupos).find(g => this.grupos[g].includes(s.empId.toString())) || '';
+                            const evLetra = evGrp.replace(/Grupo /i,'').trim();
+                            const evColor = this.getGrupoColor(evGrp);
+                            const badge = evLetra ? `<span style="display:inline-block;background:${evColor};color:white;border-radius:50%;width:13px;height:13px;font-size:0.55rem;font-weight:900;text-align:center;line-height:13px;margin-right:3px;vertical-align:middle;flex-shrink:0;">${evLetra}</span>` : '';
+                            ev.innerHTML = `${badge}<span>${lblM}</span>`;
                         }
                         ev.title = `${c.city ? c.city + ' · ' : ''}${c.name} — ${s.grupo}`;
                         ev.onclick = (e) => { e.stopPropagation(); this.openModal(s); };
@@ -1845,6 +1898,80 @@ class Scheduler {
             wrapper.appendChild(weekRow);
         }
         grid.appendChild(wrapper);
+    }
+
+    _renderGruposBar(grid) {
+        const bar = document.createElement('div');
+        bar.className = 'grupos-bar';
+        Object.keys(this.grupos).forEach(gName => {
+            const memberIds = (this.grupos[gName] || []).filter(id => id && id !== '');
+            const members = memberIds.map(id => this.emps.find(e => e.id == id)).filter(Boolean);
+            const membersText = members.map(e => e.name.split(' ')[0]).join(' · ') || 'Sin miembros';
+            const grupoLetra = gName.replace(/grupo\s*/i, '').trim();
+            const chip = document.createElement('div');
+            chip.className = 'grupo-bar-chip';
+            chip.style.background = this.getGrupoColor(gName);
+            chip.title = `${gName} — Click para editar`;
+            chip.innerHTML = `<span class="chip-title">Grupo ${grupoLetra}</span><span class="chip-members">${membersText}</span>`;
+            chip.onclick = () => this.openGrupoEditModal(gName);
+            bar.appendChild(chip);
+        });
+        grid.appendChild(bar);
+    }
+
+    openGrupoEditModal(nombreGrupo) {
+        const existing = document.getElementById('grupoEditModal');
+        if (existing) existing.remove();
+        const slots = this.grupos[nombreGrupo] || [];
+        const assignedElsewhere = new Set();
+        Object.entries(this.grupos).forEach(([gName, members]) => {
+            if (gName === nombreGrupo) return;
+            members.forEach(id => { if (id) assignedElsewhere.add(String(id)); });
+        });
+        const assignedIds = new Set();
+        Object.values(this.grupos).forEach(ms => ms.forEach(id => { if (id) assignedIds.add(String(id)); }));
+        const unassigned = this.emps.filter(e => !assignedIds.has(String(e.id)));
+        const selects = Array.from({length:5}, (_,i) => {
+            const currentId = String(slots[i] || '');
+            const opts = `<option value="">— Vacante —</option>` +
+                this.emps.filter(e => !assignedElsewhere.has(String(e.id)) || String(e.id) === currentId)
+                .map(e => `<option value="${e.id}" ${String(e.id)===currentId?'selected':''}>${e.name}</option>`).join('');
+            return `<div style="margin-bottom:8px;"><label style="font-size:0.8rem;color:#666;">Posición ${i+1}:</label><select id="gEditSlot_${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;">${opts}</select></div>`;
+        }).join('');
+        const unassignedHtml = unassigned.length > 0
+            ? `<div style="background:#fff3cd;border-radius:8px;padding:10px;margin-top:10px;"><div style="font-size:0.8rem;font-weight:700;color:#856404;margin-bottom:4px;">⚠️ Sin grupo:</div>${unassigned.map(e=>`<span style="font-size:0.78rem;color:#856404;">• ${e.name}</span><br>`).join('')}</div>` : '';
+        const gColor = this.getGrupoColor(nombreGrupo);
+        const modal = document.createElement('div');
+        modal.id = 'grupoEditModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        modal.innerHTML = `<div style="background:white;border-radius:12px;padding:24px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;color:${gColor};">👥 ${nombreGrupo}</h3>
+                <button onclick="document.getElementById('grupoEditModal').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#999;">✕</button>
+            </div>
+            ${selects}${unassignedHtml}
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+                <button onclick="document.getElementById('grupoEditModal').remove()" style="background:#95a5a6;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:bold;">Cancelar</button>
+                <button onclick="app.saveGrupoFromModal('${nombreGrupo}')" style="background:${gColor};color:white;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-weight:bold;">💾 Guardar</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    }
+
+    saveGrupoFromModal(nombreGrupo) {
+        for (let i = 0; i < 5; i++) {
+            const sel = document.getElementById(`gEditSlot_${i}`);
+            if (sel) this.grupos[nombreGrupo][i] = sel.value;
+        }
+        this.save();
+        document.getElementById('grupoEditModal')?.remove();
+        this.render();
+    }
+
+    getGrupoColor(nombreGrupo) {
+        const colors = { 'Grupo A':'#2980b9','Grupo B':'#27ae60','Grupo C':'#8e44ad','Grupo D':'#e67e22','Grupo E':'#e74c3c' };
+        return colors[nombreGrupo] || '#7f8c8d';
     }
 
     // ── Helper: construir sidebar de grupo ──────────────────────────
@@ -1979,6 +2106,17 @@ class Scheduler {
                     ? `<div class="ev-time">${this.fmt12(s.timeStart)}${s.timeEnd ? ' - ' + this.fmt12(s.timeEnd) : ''}</div>`
                     : '';
                 div.innerHTML = `<div class="ev-prop">${mainLine}</div>${timeLine}`;
+            }
+            // Mostrar nota AirBnb si existe
+            if(s.airbnbNote) {
+                const noteLabels = {
+                    'checkout':'🧳 Checkout','checkin':'🔑 Checkin',
+                    'same_day':'🔄 C+C mismo día','checkout_later':'📅 Checkin posterior','checkin_later':'📅 Checkout anterior'
+                };
+                const noteDiv = document.createElement('div');
+                noteDiv.style.cssText = 'font-size:0.65rem;background:rgba(0,0,0,0.15);border-radius:3px;padding:1px 4px;margin-top:2px;';
+                noteDiv.textContent = (noteLabels[s.airbnbNote] || s.airbnbNote) + (s.airbnbNoteCustom ? ' · ' + s.airbnbNoteCustom : '');
+                div.appendChild(noteDiv);
             }
             div.onclick = (e) => { e.stopPropagation(); this.openModal(s); };
             cell.appendChild(div);
@@ -2198,6 +2336,7 @@ class Scheduler {
         const props = this.clis.filter(c => c.name.trim().toLowerCase() === cli.name.trim().toLowerCase());
         const wrap = document.getElementById('propSelectWrap');
         const propSel = document.getElementById('mPropId');
+        const airbnbWrap = document.getElementById('airbnbNoteWrap');
         if (props.length > 1 && wrap && propSel) {
             propSel.innerHTML = props.map(p => {
                 const hp = p.propId && p.propId.trim() && p.propId.trim().toLowerCase() !== p.name.trim().toLowerCase();
@@ -2216,6 +2355,11 @@ class Scheduler {
             ct.style.display = 'block';
         } else if (ct) {
             ct.style.display = 'none';
+        }
+        // Mostrar nota AirBnb si el cliente es de tipo airbnb/unico
+        if(airbnbWrap) {
+            const selCli = this.clis.find(c => c.id == document.getElementById('mCli').value);
+            airbnbWrap.style.display = (selCli && (selCli.type === 'airbnb' || selCli.type === 'unico')) ? 'block' : 'none';
         }
         this.suggestGroup();
     }
@@ -2261,10 +2405,20 @@ class Scheduler {
             const suggBadgeE = document.getElementById('groupSuggestion');
             if(suggBadgeE) suggBadgeE.style.display = 'none'; 
             document.getElementById('taskName').value = s.name || ''; 
-            if(document.getElementById('mPriority')) document.getElementById('mPriority').value = s.priority || '3';
+            if(document.getElementById('mPriority')) {
+                document.getElementById('mPriority').value = s.priority || '';
+                // Mostrar opción de aplicar a serie solo si tiene serieId
+                const pWrap = document.getElementById('priorityApplyWrap');
+                if(pWrap) pWrap.style.display = s.serieId ? 'block' : 'none';
+                const pOne = document.getElementById('priorityApplyOne');
+                if(pOne) pOne.checked = true;
+            }
             document.getElementById('mTimeStart').value = s.timeStart || '';
             document.getElementById('mTimeEnd').value = s.timeEnd || '';
             document.getElementById('mCancelled').checked = s.cancelled || false;
+            // Cargar nota AirBnb
+            if(document.getElementById('mAirbnbNote')) document.getElementById('mAirbnbNote').value = s.airbnbNote || '';
+            if(document.getElementById('mAirbnbNoteCustom')) document.getElementById('mAirbnbNoteCustom').value = s.airbnbNoteCustom || '';
             document.getElementById('btnDel').style.display = 'inline-block';
 
         } else {
@@ -2279,7 +2433,11 @@ class Scheduler {
             // Auto-sugerir cuando haya cliente seleccionado
             if(document.getElementById('mCli').value) setTimeout(() => this.suggestGroup(), 50); 
             document.getElementById('taskName').value = ''; 
-            if(document.getElementById('mPriority')) document.getElementById('mPriority').value = '1';
+            if(document.getElementById('mPriority')) {
+                document.getElementById('mPriority').value = '';
+                const pWrap = document.getElementById('priorityApplyWrap');
+                if(pWrap) pWrap.style.display = 'none';
+            }
             document.getElementById('mRep').value = 'no';
             document.getElementById('mUntil').value = '';
             document.getElementById('mCancelled').checked = false;
@@ -2481,11 +2639,23 @@ class Scheduler {
             timeStart: document.getElementById('mTimeStart').value || '',
             timeEnd: document.getElementById('mTimeEnd').value || '', 
             name: document.getElementById('taskName').value,
-            priority: document.getElementById('mPriority')?.value || '1',
+            priority: document.getElementById('mPriority')?.value || '',
+            airbnbNote: document.getElementById('mAirbnbNote')?.value || '',
+            airbnbNoteCustom: document.getElementById('mAirbnbNoteCustom')?.value || '',
             cancelled: isCancelled
         };
         if(this.editing) {
             this.servs[this.servs.findIndex(x=>x.id==this.editing.id)] = data;
+            // Aplicar prioridad a toda la serie futura si se seleccionó
+            const prioApply = document.querySelector('input[name="priorityApply"]:checked');
+            if(prioApply && prioApply.value === 'serie' && data.priority && this.editing.serieId) {
+                const today = new Date().toLocaleDateString('en-CA');
+                this.servs.forEach(sv => {
+                    if(sv.serieId === this.editing.serieId && sv.date >= today && sv.id !== data.id) {
+                        sv.priority = data.priority;
+                    }
+                });
+            }
             // Si se acaba de cancelar (no estaba cancelado antes)
             if (isCancelled && !wasAlreadyCancelled) {
                 const cli = this.clis.find(c => c.id == data.cliId);
