@@ -2422,6 +2422,10 @@ class Scheduler {
             // Cargar nota AirBnb
             if(document.getElementById('mAirbnbNote')) document.getElementById('mAirbnbNote').value = s.airbnbNote || '';
             if(document.getElementById('mAirbnbNoteCustom')) document.getElementById('mAirbnbNoteCustom').value = s.airbnbNoteCustom || '';
+            // Mostrar panel AirBnb si el cliente es tipo airbnb/unico
+            const _sCli = this.clis.find(c => c.id == s.cliId);
+            const _airbnbWrap = document.getElementById('airbnbNoteWrap');
+            if(_airbnbWrap) _airbnbWrap.style.display = (_sCli && (_sCli.type==='airbnb'||_sCli.type==='unico')) ? 'block' : 'none';
             document.getElementById('btnDel').style.display = 'inline-block';
 
         } else {
