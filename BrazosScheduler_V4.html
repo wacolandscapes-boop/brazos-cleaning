@@ -48,8 +48,8 @@
 
         /* Sidebar toggle global */
         :root { --sidebar-collapsed-width: 110px; }
-        .group-row { display: grid; grid-template-columns: var(--emp-col-width) 1fr; border-bottom: 2px solid #ddd; background: white; transition: grid-template-columns 0.2s; }
-        .group-row.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width) 1fr; }
+        .group-row { display: flex; flex-direction: row; border-bottom: 2px solid #ddd; background: white; }
+        .group-row.sidebar-collapsed { }
         .grid-header-row.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width) 1fr; }
         .days-header-row.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed-width) 1fr; }
 
