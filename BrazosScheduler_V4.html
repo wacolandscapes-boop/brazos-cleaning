@@ -768,6 +768,10 @@
                 <button class="btn-action btn-dark" onclick="app.importar()">📂 Importar</button>
                 <button class="btn-action" onclick="app.importClientsFromExcel()" style="background:#27ae60; color:white;">📊 Importar Clientes Excel</button>
                 <button class="btn-action" id="driveSyncBtn" onclick="app.driveSync()" style="background:#4285f4; color:white;">☁️ <span id="driveSyncLabel">Drive</span></button>
+                <button onclick="app.openEmergencyModal()" title="Crear Servicio de Emergencia"
+                    style="background:#e74c3c; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; white-space:nowrap; flex-shrink:0;">
+                    🚨 Emergency
+                </button>
                         <button class="btn-action" onclick="app.openProductionReport()" style="background:#0e7490; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">📊 Producción</button>
             </div>
         </div>
@@ -1700,14 +1704,14 @@ class Scheduler {
         // Header de días — sin columna de grupos
         const daysHeader = document.getElementById('daysHeaderInline');
         if(daysHeader) {
-            daysHeader.style.display = '';
-            daysHeader.style.gridTemplateColumns = '1fr';
+            daysHeader.style.display = 'flex';
+            daysHeader.style.flexDirection = 'row';
             const daysHtml = dates.map(d => {
                 const dayName = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'][d.getDay()];
                 const isToday = d.toLocaleDateString('en-CA') === todayStr;
                 return `<div class="day-col-inline" style="${isToday?'background:#fff3cd;font-weight:700;':''}">${dayName}<br>${d.getDate()}</div>`;
             }).join('');
-            daysHeader.innerHTML = `<div style="display:grid;grid-template-columns:repeat(${dates.length},1fr);width:100%;">${daysHtml}</div>`;
+            daysHeader.innerHTML = `<div style="width:32px;min-width:32px;flex-shrink:0;"></div><div style="display:grid;grid-template-columns:repeat(${dates.length},1fr);flex:1;">${daysHtml}</div>`;
             daysHeader.classList.remove('sidebar-collapsed');
         }
 
@@ -1719,7 +1723,7 @@ class Scheduler {
             if(groupObj && !selectedGrps.includes('all') && !selectedGrps.includes(groupObj.id.toString())) return;
 
             const row = document.createElement('div');
-            row.style.cssText = 'display:grid;grid-template-columns:1fr;position:relative;overflow:hidden;border-bottom:2px solid #ddd;background:white;';
+            row.style.cssText = 'display:flex;flex-direction:row;position:relative;overflow:hidden;border-bottom:2px solid #ddd;background:white;';
 
             // Marca de agua con letra del grupo
             const gwLetra = nombreGrupo.replace(/Grupo /i, '').trim();
@@ -1729,9 +1733,15 @@ class Scheduler {
             watermark.textContent = gwLetra;
             row.appendChild(watermark);
 
+            // Columna delgada con letra del grupo
+            const grpCol = document.createElement('div');
+            grpCol.style.cssText = `width:32px;min-width:32px;display:flex;align-items:center;justify-content:center;background:${gwColor};color:white;font-size:1.1rem;font-weight:900;border-right:2px solid rgba(0,0,0,0.1);letter-spacing:0;flex-shrink:0;`;
+            grpCol.textContent = gwLetra;
+            row.appendChild(grpCol);
+
             const cellsRow = document.createElement('div');
             cellsRow.className = 'cells-container';
-            cellsRow.style.cssText = `display:grid;grid-template-columns:repeat(${dates.length},1fr);position:relative;z-index:1;`;
+            cellsRow.style.cssText = `display:grid;grid-template-columns:repeat(${dates.length},1fr);position:relative;z-index:1;flex:1;`;
 
             dates.forEach(day => {
                 const dStr = day.toLocaleDateString('en-CA');
@@ -2137,6 +2147,63 @@ class Scheduler {
     }
 
     // ── Sidebar flotante de clientes ──────────────────────────────────
+    openEmergencyModal() {
+        const grpSel = document.getElementById('emergGrpSel');
+        if (grpSel) {
+            grpSel.innerHTML = Object.keys(this.grupos).map(g =>
+                `<label style="display:flex; align-items:center; gap:6px; padding:5px 0; cursor:pointer;">
+                    <input type="checkbox" value="${g}" style="width:14px; height:14px;"> <strong>${g}</strong>
+                    <span style="color:#aaa; font-size:0.8rem;">(${(this.grupos[g]||[]).length} emp.)</span>
+                </label>`
+            ).join('');
+        }
+        const today = new Date();
+        const todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+        const dateEl = document.getElementById('emergDate');
+        if (dateEl) dateEl.value = todayStr;
+        const cliSel = document.getElementById('emergClient');
+        if (cliSel) {
+            cliSel.innerHTML = '<option value="">-- Seleccionar cliente --</option>' +
+                this.clis.map(c => `<option value="${c.id}">${c.name} — ${c.city||c.address||''}</option>`).join('');
+        }
+        document.getElementById('emergencyModal').style.display = 'flex';
+    }
+
+    closeEmergencyModal() {
+        document.getElementById('emergencyModal').style.display = 'none';
+    }
+
+    createEmergencyService() {
+        const clientId = document.getElementById('emergClient').value;
+        const date     = document.getElementById('emergDate').value;
+        const note     = document.getElementById('emergNote').value.trim();
+        const time     = document.getElementById('emergTime').value;
+        if (!clientId || !date) { alert('Selecciona cliente y fecha.'); return; }
+        const selectedGroups = [...document.querySelectorAll('#emergGrpSel input:checked')].map(cb => cb.value);
+        if (!selectedGroups.length) { alert('Selecciona al menos un grupo.'); return; }
+        const cli = this.clis.find(c => String(c.id) === String(clientId));
+        if (!cli) return;
+        let created = 0;
+        selectedGroups.forEach(grpName => {
+            this.servs.push({
+                id: Date.now() + Math.random() + created,
+                cliId: cli.id, date, status: 'pending',
+                grupo: grpName, emergency: true,
+                timeStart: time || '', timeEnd: '',
+                name: note || 'Servicio de Emergencia',
+                price: parseFloat(cli.price) || 0,
+                propId: '', type: 'unico'
+            });
+            created++;
+        });
+        this.save(); this.render(); this.closeEmergencyModal();
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#e74c3c;color:white;padding:12px 22px;border-radius:10px;z-index:9999;font-size:0.95rem;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
+        toast.textContent = `🚨 Servicio de emergencia creado para ${selectedGroups.join(', ')}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+
     toggleClientsSidebar() {
         const sb = document.getElementById('clientsSidebar');
         if (!sb) return;
@@ -10248,6 +10315,47 @@ document.addEventListener('click', function(e) {
       <div id="prodContent"></div>
     </div>
   </div>
+</div>
+
+<!-- Emergency Service Modal -->
+<div id="emergencyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:white; border-radius:14px; width:100%; max-width:520px; box-shadow:0 10px 40px rgba(0,0,0,0.4); overflow:hidden;">
+        <div style="background:#e74c3c; color:white; padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:1.1rem;">🚨 Servicio de Emergencia</h3>
+            <button onclick="app.closeEmergencyModal()" style="background:rgba(255,255,255,0.2); color:white; border:none; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:1rem; font-weight:bold;">✕</button>
+        </div>
+        <div style="padding:20px; display:grid; gap:14px;">
+            <div>
+                <label style="font-size:0.8rem; font-weight:700; color:#555; display:block; margin-bottom:5px;">Cliente *</label>
+                <select id="emergClient" style="width:100%; padding:9px; border:1.5px solid #ddd; border-radius:7px; font-size:0.9rem; color:#2c3e50;"></select>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:0.8rem; font-weight:700; color:#555; display:block; margin-bottom:5px;">Fecha *</label>
+                    <input type="date" id="emergDate" style="width:100%; padding:9px; border:1.5px solid #ddd; border-radius:7px; font-size:0.9rem; color:#2c3e50; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.8rem; font-weight:700; color:#555; display:block; margin-bottom:5px;">Hora</label>
+                    <input type="time" id="emergTime" style="width:100%; padding:9px; border:1.5px solid #ddd; border-radius:7px; font-size:0.9rem; color:#2c3e50; box-sizing:border-box;">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:0.8rem; font-weight:700; color:#555; display:block; margin-bottom:5px;">Nota / Descripción</label>
+                <input type="text" id="emergNote" placeholder="Servicio de Emergencia" style="width:100%; padding:9px; border:1.5px solid #ddd; border-radius:7px; font-size:0.9rem; color:#2c3e50; box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="font-size:0.8rem; font-weight:700; color:#e74c3c; display:block; margin-bottom:8px;">Asignar Grupos * <span style="color:#aaa; font-weight:400; font-size:0.75rem;">(selecciona uno o más)</span></label>
+                <div id="emergGrpSel" style="background:#fef9f9; border:1.5px solid #fadbd8; border-radius:8px; padding:10px 14px; max-height:160px; overflow-y:auto;"></div>
+            </div>
+            <div style="background:#fef3cd; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:0.82rem; color:#856404;">
+                ⚡ Este servicio aparecerá inmediatamente en QuikTrack para los grupos seleccionados.
+            </div>
+        </div>
+        <div style="padding:0 20px 20px; display:flex; gap:10px; justify-content:flex-end;">
+            <button onclick="app.closeEmergencyModal()" style="background:#95a5a6; color:white; border:none; padding:11px 22px; border-radius:8px; cursor:pointer; font-weight:bold;">Cancelar</button>
+            <button onclick="app.createEmergencyService()" style="background:#e74c3c; color:white; border:none; padding:11px 22px; border-radius:8px; cursor:pointer; font-weight:bold;">🚨 Crear Servicio</button>
+        </div>
+    </div>
 </div>
 
 </body>
