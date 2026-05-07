@@ -958,7 +958,16 @@
                 <select id="mRep" onchange="app.toggleRep()" style="margin-top:5px">
                     <option value="no">Solo esta fecha</option><option value="yes">Crear serie completa</option>
                 </select>
-                <div id="untilContainer" style="display:none; margin-top:10px"><label>Hasta:</label><input type="date" id="mUntil"></div>
+                <div id="untilContainer" style="display:none; margin-top:10px">
+                    <label>Hasta:</label><input type="date" id="mUntil">
+                    <div style="margin-top:10px; padding:10px 12px; background:#fff8e1; border:1px solid #ffc107; border-radius:8px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:600; color:#856404;">
+                            <input type="checkbox" id="mRetroactive" style="width:15px; height:15px; accent-color:#e67e22;">
+                            📅 Crear servicios retroactivos (desde la fecha seleccionada hasta hoy)
+                        </label>
+                        <div style="font-size:0.75rem; color:#aaa; margin-top:4px; margin-left:23px;">Solo para historial/referencia — no aparecen en el calendario activo</div>
+                    </div>
+                </div>
                 
                 <!-- Selectores para 2x Semana -->
                 <div id="days2xContainer" style="display:none; margin-top:15px; padding:10px; background:white; border-radius:8px; border:1px solid #ddd">
@@ -2782,6 +2791,40 @@ class Scheduler {
                 this.genSerie(data, c.type, untilDate, days2x, monthlyType);
             }
         }
+        // ── RETROACTIVOS ──
+        const retroactive = document.getElementById('mRetroactive')?.checked;
+        const rep = document.getElementById('mRep')?.value;
+        if (retroactive && rep === 'yes') {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const refDate = new Date(data.date + 'T12:00:00');
+            const tipo = this.clis.find(c=>c.id==data.cliId)?.type || 'semanal';
+            const stepBack = (d) => {
+                const nd = new Date(d);
+                if (tipo==='semanal') nd.setDate(d.getDate()-7);
+                else if (tipo==='quincenal') nd.setDate(d.getDate()-14);
+                else if (tipo==='cada3semanas') nd.setDate(d.getDate()-21);
+                else if (tipo==='mensual') nd.setMonth(d.getMonth()-1);
+                else nd.setDate(d.getDate()-7);
+                return nd;
+            };
+            const maxBack = new Date(today); maxBack.setFullYear(maxBack.getFullYear()-3);
+            let retCur = stepBack(refDate);
+            let retCount = 0;
+            while (retCur >= maxBack && retCur < today) {
+                const ds = retCur.getFullYear()+'-'+String(retCur.getMonth()+1).padStart(2,'0')+'-'+String(retCur.getDate()).padStart(2,'0');
+                this.servs.push({
+                    id: Date.now()+Math.random(),
+                    cliId: data.cliId, propId: data.propId||'', date: ds,
+                    empId: data.empId, grupo: data.empId, name: data.name||'',
+                    priority: data.priority, timeStart:'', timeEnd:'',
+                    cancelled: false, retroactive: true, status:'completed'
+                });
+                retCur = stepBack(retCur);
+                retCount++;
+            }
+            console.log(`📅 ${retCount} servicios retroactivos creados`);
+        }
+
         this.save(); 
         this.closeModal(); 
         this.render();
@@ -5676,7 +5719,11 @@ class Scheduler {
                     cliId: updatedCli.id,
                     date: regenFrom,
                     name: updatedCli.serviceType || 'Cleaning Service',
-                    priority: '1',
+                    priority: document.getElementById('mPriority')?.value || '1',
+                    empId: document.getElementById('mEmp')?.value || '',
+                    grupo: document.getElementById('mEmp')?.value || '',
+                    timeStart: document.getElementById('mTimeStart')?.value || '',
+                    timeEnd: document.getElementById('mTimeEnd')?.value || '',
                     cancelled: false
                 };
                 this.servs.push(baseData);
