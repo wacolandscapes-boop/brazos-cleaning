@@ -1697,15 +1697,17 @@ class Scheduler {
             let d = new Date(start); d.setDate(start.getDate()+i); return d;
         });
 
-        // Header de días
+        // Header de días — sin columna de grupos
         const daysHeader = document.getElementById('daysHeaderInline');
         if(daysHeader) {
+            daysHeader.style.display = '';
+            daysHeader.style.gridTemplateColumns = '1fr';
             const daysHtml = dates.map(d => {
                 const dayName = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'][d.getDay()];
                 const isToday = d.toLocaleDateString('en-CA') === todayStr;
                 return `<div class="day-col-inline" style="${isToday?'background:#fff3cd;font-weight:700;':''}">${dayName}<br>${d.getDate()}</div>`;
             }).join('');
-            daysHeader.innerHTML = `<div class="days-grid-container" style="display:grid;grid-template-columns:repeat(${daysCount},1fr);width:100%;">${daysHtml}</div>`;
+            daysHeader.innerHTML = `<div style="display:grid;grid-template-columns:repeat(${dates.length},1fr);width:100%;">${daysHtml}</div>`;
             daysHeader.classList.remove('sidebar-collapsed');
         }
 
@@ -1762,13 +1764,14 @@ class Scheduler {
         wrapper.className = 'month-grid-wrapper';
 
         // Header Dom→Sáb
-        const dayNames = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+        const dayNames = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
         const hdr = document.createElement('div'); hdr.className = 'month-grid-header';
         dayNames.forEach(n => { const c = document.createElement('div'); c.className='month-grid-header-cell'; c.textContent=n; hdr.appendChild(c); });
         wrapper.appendChild(hdr);
 
         // Primer día del mes y total de días
-        const firstDay = new Date(yr, mo, 1).getDay(); // 0=Dom
+        const firstDayRaw = new Date(yr, mo, 1).getDay(); // 0=Dom
+        const firstDay = (firstDayRaw === 0) ? 6 : firstDayRaw - 1; // Ajuste: Lun=0, Mar=1...Dom=6
         const totalDays = new Date(yr, mo+1, 0).getDate();
 
         // Filtrar grupos activos
