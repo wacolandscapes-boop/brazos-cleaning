@@ -5665,6 +5665,26 @@ class Scheduler {
         }
     }
 
+    quickAddProp(clientName, clientType) {
+        const propId = prompt(`Nueva propiedad para "${clientName}":
+(Ej: 123 Main St, Proyecto Norte, etc.)`);
+        if (!propId || !propId.trim()) return;
+        const base = this.clis.find(c => c.name === clientName);
+        if (!base) return;
+        const exists = this.clis.some(c => c.name === clientName && c.propId === propId.trim());
+        if (exists) { alert('Esa propiedad ya existe para este cliente'); return; }
+        this.clis.push({
+            id: Date.now(),
+            name: base.name, propId: propId.trim(),
+            price: base.price, tel: base.tel,
+            address: base.address, city: base.city, zip: base.zip,
+            type: clientType || base.type,
+            serviceType: base.serviceType, billingPeriod: base.billingPeriod,
+            invoicingType: base.invoicingType
+        });
+        this.save(); this.renderCat(); this.refreshSels();
+    }
+
     addPropField(value='') {
         const list = document.getElementById('propFieldsList');
         if (!list) return;
@@ -6061,20 +6081,50 @@ class Scheduler {
             </div>
         `).join('');
         
-        document.getElementById('listC').innerHTML = sortedClis.map(c => {
-            const showPropId = (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion');
+        // Agrupar clientes multi-propiedad por nombre
+        const cliGroups = {};
+        sortedClis.forEach(c => {
+            if (!cliGroups[c.name]) cliGroups[c.name] = [];
+            cliGroups[c.name].push(c);
+        });
+
+        document.getElementById('listC').innerHTML = Object.entries(cliGroups).map(([name, props]) => {
+            const first = props[0];
+            const isMulti = props[0].type === 'airbnb' || props[0].type === 'unico' || props[0].type === 'construccion';
+            const hasMultiple = props.length > 1;
+            const expandId = 'exp_' + name.replace(/[^a-z0-9]/gi,'_');
+
+            const propsHTML = hasMultiple ? props.map(p => {
+                const hasProp = p.propId && p.propId.trim() && p.propId.trim().toLowerCase() !== p.name.trim().toLowerCase();
+                const propLabel = hasProp ? p.propId : (p.address || p.name);
+                return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px 4px 24px;border-left:3px solid #0e7490;margin:3px 0;background:#f0f9ff;border-radius:0 4px 4px 0;">
+                    <span style="font-size:0.85rem;">
+                        <b style="color:#0e7490;">${propLabel}</b>
+                        <small style="color:#888;"> · ${p.city||''} · $${p.price||0} · ${p.type||''}</small>
+                    </span>
+                    <div>
+                        <button onclick="app.editCli('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
+                        <button onclick="app.delCli('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
+                    </div>
+                </div>`;
+            }).join('') : '';
+
             return `
-            <div class="list-item">
-                <span>
-                    <b>${c.name}</b>${showPropId ? ' - ' + c.propId : ''}<br>
-                    <small style="color:#666">${c.tel || 'Sin tel'} | ${c.address || 'Sin dirección'} | ${c.type}</small>
-                </span>
-                <div>
-                    <button onclick="app.editCli('${c.id}')" style="background:none; border:none; cursor:pointer; font-size:1.2rem" title="Editar">✏️</button>
-                    <button onclick="app.delCli('${c.id}')" style="background:none; border:none; cursor:pointer; font-size:1.2rem" title="Eliminar">❌</button>
+            <div class="list-item" style="flex-direction:column;align-items:stretch;padding:8px 10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="cursor:${hasMultiple?'pointer':'default'}" onclick="${hasMultiple?`document.getElementById('${expandId}').style.display=document.getElementById('${expandId}').style.display==='none'?'block':'none'`:''}" >
+                        <b>${name}</b>${hasMultiple ? ` <span style="background:#0e7490;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px;margin-left:4px;">${props.length} ▼</span>` : (isMulti && first.propId && first.propId.toLowerCase()!==name.toLowerCase() ? ' - '+first.propId : '')}
+                        <br><small style="color:#666">${first.tel||'Sin tel'} · ${first.address||'Sin dirección'} · ${first.type||''}</small>
+                    </span>
+                    <div style="display:flex;gap:4px;align-items:center;">
+                        ${isMulti ? `<button onclick="app.quickAddProp('${name}','${first.type}')" style="background:#27ae60;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;" title="Agregar propiedad">+ Prop</button>` : ''}
+                        <button onclick="app.editCli('${first.id}')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
+                        ${!hasMultiple ? `<button onclick="app.delCli('${first.id}')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
+                    </div>
                 </div>
-            </div>
-        `;
+                <div id="${expandId}" style="display:none;">${propsHTML}</div>
+            </div>`;
         }).join('');
     }
 
@@ -7817,7 +7867,7 @@ class Scheduler {
                     doc.setTextColor(0,0,0);
                     doc.text(String(idx+1), 21, y_a+5.5);
                     let svcName = s.name || 'Cleaning Service';
-                    if ((client.type==='airbnb'||client.type==='unico') && s.propId) svcName = s.propId+' - '+svcName;
+                    if ((client.type==='airbnb'||client.type==='unico'||client.type==='construccion') && s.propId) svcName = s.propId+' - '+svcName;
                     doc.text(svcName.substring(0,38), 29, y_a+5.5);
                     doc.text('', 119, y_a+5.5);
                     doc.text(dateFmt, 130, y_a+5.5);
