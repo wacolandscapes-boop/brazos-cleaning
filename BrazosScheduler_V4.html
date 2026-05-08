@@ -767,7 +767,7 @@
                 <button class="btn-action btn-dark" onclick="app.exportar()">📥 Exportar</button>
                 <button class="btn-action btn-dark" onclick="app.importar()">📂 Importar</button>
                 <button class="btn-action" onclick="app.importClientsFromExcel()" style="background:#27ae60; color:white;">📊 Importar Clientes Excel</button>
-                <button class="btn-action" id="driveSyncBtn" onclick="app.driveSync()" style="background:#4285f4; color:white;">☁️ <span id="driveSyncLabel">Drive</span></button>
+                <button class="btn-action" id="driveSyncBtn" onclick="app.driveSync()" title="Auto-sync cada 30 min. Click para sincronizar ahora." style="background:#4285f4; color:white;">☁️ <span id="driveSyncLabel">Drive</span></button>
                 <button onclick="app.openEmergencyModal()" title="Crear Servicio de Emergencia"
                     style="background:#e74c3c; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; white-space:nowrap; flex-shrink:0;">
                     🚨 Emergency
@@ -1383,7 +1383,7 @@ class Scheduler {
         this.clis = this.clis.map(c => {
             if(!c.propId || c.propId === '') {
                 // Solo es crítico para AirBnB/Único
-                if(c.type === 'airbnb' || c.type === 'unico') {
+                if(c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion') {
                     console.warn('Cliente AirBnB/Único sin propId:', c.name);
                     c.propId = c.name + '-PROP1';
                 } else {
@@ -1398,7 +1398,7 @@ class Scheduler {
         this.clis = this.clis.map(c => {
             if(!c.serviceType) {
                 // Asignar por defecto según el tipo de recurrencia
-                if(c.type === 'airbnb') {
+                if(c.type === 'airbnb' || c.type === 'construccion') {
                     c.serviceType = 'airbnb';
                 } else if(c.type === 'unico') {
                     c.serviceType = 'unico';
@@ -1457,6 +1457,10 @@ class Scheduler {
         setTimeout(() => this.updateRemindersBadge(), 600);
         // Actualizar badge cada hora
         setInterval(() => this.updateRemindersBadge(), 60 * 60 * 1000);
+        // ☁️ Auto-sync Drive cada 30 minutos
+        this._autoSyncInterval = setInterval(() => this._autoSync(), 30 * 60 * 1000);
+        // Actualizar contador "hace X min" cada minuto
+        setInterval(() => this._updateSyncAge(), 60 * 1000);
         // Cargar lista de clientes en sidebar flotante
         setTimeout(() => this.renderClientsSidebar(), 800);
     }
@@ -1875,7 +1879,7 @@ class Scheduler {
                             ev.style.backgroundColor = bgColor;
                             const textModeM = this.getTextMode(typeKeyM);
                             ev.style.color = textModeM === 'auto' ? getTextColor(bgColor) : (textModeM === 'white' ? '#fff' : '#000');
-                            const showPropIdM = (c.type === 'airbnb' || c.type === 'unico');
+                            const showPropIdM = (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion');
                             const lblM = prioPrefixM + c.name + (c.city ? ' - ' + c.city : '') + (showPropIdM && c.propId ? ' / ' + c.propId : '');
                             // Badge de grupo
                             const evGrp = s.grupo || Object.keys(this.grupos).find(g => this.grupos[g].includes(s.empId.toString())) || '';
@@ -1903,7 +1907,7 @@ class Scheduler {
                                 ev.style.backgroundColor = bgColorH;
                                 const textModeH = this.getTextMode(typeKeyH);
                                 ev.style.color = textModeH === 'auto' ? getTextColor(bgColorH) : (textModeH === 'white' ? '#fff' : '#000');
-                                const showPropH = (c.type === 'airbnb' || c.type === 'unico'); ev.textContent = (s.priority ? `${s.priority}. ` : '') + c.name + (c.city ? ' - ' + c.city : '') + (showPropH && c.propId ? ' / ' + c.propId : '');
+                                const showPropH = (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion'); ev.textContent = (s.priority ? `${s.priority}. ` : '') + c.name + (c.city ? ' - ' + c.city : '') + (showPropH && c.propId ? ' / ' + c.propId : '');
                                 ev.onclick = (e2) => { e2.stopPropagation(); this.openModal(s); };
                                 cell.insertBefore(ev, more);
                             });
@@ -2107,7 +2111,7 @@ class Scheduler {
             const div = document.createElement('div'); div.className = 'service-event';
             const prioNum = s.priority || '';
             const prioPrefix = prioNum ? `<b>${prioNum}.</b> ` : '';
-            const showPropId = (c.type === 'airbnb' || c.type === 'unico');
+            const showPropId = (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion');
             if (s.cancelled) {
                 div.style.backgroundColor = '#ffffff';
                 div.style.color = '#bbb';
@@ -2438,7 +2442,7 @@ class Scheduler {
         // Mostrar nota AirBnb si el cliente es de tipo airbnb/unico
         if(airbnbWrap) {
             const selCli = this.clis.find(c => c.id == document.getElementById('mCli').value);
-            airbnbWrap.style.display = (selCli && (selCli.type === 'airbnb' || selCli.type === 'unico')) ? 'block' : 'none';
+            airbnbWrap.style.display = (selCli && (selCli.type === 'airbnb' || selCli.type === 'unico' || selCli.type === 'construccion')) ? 'block' : 'none';
         }
         this.suggestGroup();
     }
@@ -2501,7 +2505,7 @@ class Scheduler {
             // Mostrar panel AirBnb si el cliente es tipo airbnb/unico
             const _sCli = this.clis.find(c => c.id == s.cliId);
             const _airbnbWrap = document.getElementById('airbnbNoteWrap');
-            if(_airbnbWrap) _airbnbWrap.style.display = (_sCli && (_sCli.type==='airbnb'||_sCli.type==='unico')) ? 'block' : 'none';
+            if(_airbnbWrap) _airbnbWrap.style.display = (_sCli && (_sCli.type==='airbnb'||_sCli.type==='unico'||_sCli.type==='construccion')) ? 'block' : 'none';
             document.getElementById('btnDel').style.display = 'inline-block';
 
         } else {
@@ -4029,7 +4033,7 @@ class Scheduler {
                 const selectedCli = this.clis.find(c => c.id == cliFilter);
                 if(!selectedCli) return false;
                 
-                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico') {
+                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico' || selectedCli.type === 'construccion') {
                     if(serviceCli.name !== selectedCli.name) return false;
                 } else {
                     if(s.cliId != cliFilter) return false;
@@ -4158,7 +4162,7 @@ class Scheduler {
                 const selectedCli = this.clis.find(c => c.id == cliFilter);
                 if(!selectedCli) return false;
                 
-                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico') {
+                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico' || selectedCli.type === 'construccion') {
                     if(serviceCli.name !== selectedCli.name) return false;
                 } else {
                     if(s.cliId != cliFilter) return false;
@@ -5185,7 +5189,7 @@ class Scheduler {
                 const selectedCli = this.clis.find(c => c.id == cliFilter);
                 if(!selectedCli) return false;
                 
-                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico') {
+                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico' || selectedCli.type === 'construccion') {
                     if(serviceCli.name !== selectedCli.name) return false;
                 } else {
                     if(s.cliId != cliFilter) return false;
@@ -5758,7 +5762,7 @@ class Scheduler {
         }
         
         // Sistema de propiedades múltiples para AirBnB/Único
-        if(type === 'airbnb' || type === 'unico') {
+        if(type === 'airbnb' || type === 'unico' || type === 'construccion') {
             // Verificar si la propiedad ya existe
             const propExists = this.clis.some(c => c.name === name && c.propId === propId);
             
@@ -5987,7 +5991,7 @@ class Scheduler {
         `).join('');
         
         document.getElementById('listC').innerHTML = sortedClis.map(c => {
-            const showPropId = (c.type === 'airbnb' || c.type === 'unico');
+            const showPropId = (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion');
             return `
             <div class="list-item">
                 <span>
@@ -6075,7 +6079,7 @@ class Scheduler {
                 if(!selectedCli) return false;
                 
                 // Si es AirBnB o Único, filtrar por NOMBRE (todas las propiedades)
-                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico') {
+                if(selectedCli.type === 'airbnb' || selectedCli.type === 'unico' || selectedCli.type === 'construccion') {
                     if(serviceCli.name !== selectedCli.name) return false;
                 } else {
                     // Para otros tipos, filtrar por ID exacto
@@ -6986,7 +6990,7 @@ class Scheduler {
         if (client.type === 'airbnb' || client.type === 'unico') {
             const allClients = this.clis.filter(c => 
                 c.name === client.name && 
-                (c.type === 'airbnb' || c.type === 'unico')
+                (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion')
             );
             
             allClients.forEach(c => {
@@ -7194,7 +7198,7 @@ class Scheduler {
         if (client.type === 'airbnb' || client.type === 'unico') {
             allClients = this.clis.filter(c => 
                 c.name === client.name && 
-                (c.type === 'airbnb' || c.type === 'unico')
+                (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion')
             );
             
             allClients.forEach(c => {
@@ -7397,7 +7401,7 @@ class Scheduler {
             // Buscar TODOS los clientes con el mismo nombre
             allClients = this.clis.filter(c => 
                 c.name === client.name && 
-                (c.type === 'airbnb' || c.type === 'unico')
+                (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion')
             );
             
             // Obtener servicios de TODAS las propiedades
@@ -9190,6 +9194,33 @@ class Scheduler {
         win.document.close();
     }
 
+    _autoSync() {
+        // Solo sincroniza si Drive está conectado y hay sesión activa
+        if (!this.driveConnected || !this.tokenClient) return;
+        if (!gapi?.client?.getToken()?.access_token) return;
+        console.log('☁️ Auto-sync Drive...');
+        this.driveSyncNow().catch(() => {});
+    }
+
+    _updateSyncAge() {
+        const btn = document.getElementById('driveSyncBtn');
+        const lbl = document.getElementById('driveSyncLabel');
+        if (!btn || !lbl) return;
+        // Solo actualiza si el label tiene "Sync HH:MM"
+        const txt = lbl.textContent || '';
+        if (!txt.startsWith('Sync ') || !this.driveConnected) return;
+        const lastSync = this._lastSyncTime;
+        if (!lastSync) return;
+        const mins = Math.round((Date.now() - lastSync) / 60000);
+        if (mins < 1) return;
+        if (mins < 60) {
+            lbl.textContent = `☁️ hace ${mins}min`;
+        } else {
+            const hrs = Math.floor(mins/60);
+            lbl.textContent = `☁️ hace ${hrs}h`;
+        }
+    }
+
     driveSync() {
         if (this.driveConnected) {
             this.driveSyncNow();
@@ -9310,6 +9341,7 @@ class Scheduler {
             const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
             localStorage.setItem('anaCS_lastSavedAt', new Date().toISOString());
             this.localDirty = false; // Cambios subidos exitosamente
+            this._lastSyncTime = Date.now();
             document.getElementById('driveSyncLabel').textContent = `Sync ${now}`;
             document.getElementById('driveSyncBtn').style.background = '#27ae60';
         } catch(err) {
