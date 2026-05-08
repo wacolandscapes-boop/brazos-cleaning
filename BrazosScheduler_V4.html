@@ -5726,20 +5726,48 @@ class Scheduler {
             if(idx !== -1) {
                 const oldType = this.clis[idx].type;
                 const invoicingType = document.getElementById('cliInvoicingType') ? document.getElementById('cliInvoicingType').value : (this.clis[idx].invoicingType || 'monthly');
-                this.clis[idx] = {
-                    id: this.clis[idx].id,
-                    name: name,
-                    propId: propId,
-                    price: price,
-                    tel: tel,
-                    address: address,
-                    city: city,
-                    zip: zip,
-                    type: type,
-                    serviceType: serviceType,
-                    billingPeriod: billingPeriod,
-                    invoicingType: invoicingType
-                };
+                const payTerms = document.getElementById('cliPaymentTerms') ? parseInt(document.getElementById('cliPaymentTerms').value) : 15;
+
+                if(isMulti) {
+                    // Para multi-propiedad: actualizar datos base y agregar/quitar propiedades
+                    const existingProps = this.clis.filter(c => c.name === this.clis[idx].name &&
+                        (c.type==='airbnb'||c.type==='unico'||c.type==='construccion'));
+                    const existingPropIds = existingProps.map(c => c.propId);
+                    const fieldProps = this.getPropsFromFields();
+
+                    // Actualizar datos base en todos los registros existentes
+                    existingProps.forEach(c => {
+                        c.name = name; c.price = price; c.tel = tel;
+                        c.address = address; c.city = city; c.zip = zip;
+                        c.type = type; c.serviceType = serviceType;
+                        c.billingPeriod = billingPeriod; c.invoicingType = invoicingType;
+                    });
+
+                    // Agregar propiedades nuevas
+                    fieldProps.forEach((pId, i) => {
+                        if(!existingPropIds.includes(pId) && pId) {
+                            this.clis.push({
+                                id: Date.now()+i, name, propId: pId,
+                                price, tel, address, city, zip, type,
+                                serviceType, billingPeriod, invoicingType
+                            });
+                        }
+                    });
+
+                    // Eliminar propiedades removidas en el formulario
+                    this.clis = this.clis.filter(c => {
+                        if(c.name !== name) return true;
+                        if(c.type!=='airbnb'&&c.type!=='unico'&&c.type!=='construccion') return true;
+                        return fieldProps.includes(c.propId);
+                    });
+
+                } else {
+                    this.clis[idx] = {
+                        id: this.clis[idx].id,
+                        name, propId, price, tel, address, city, zip,
+                        type, serviceType, billingPeriod, invoicingType
+                    };
+                }
                 if (oldType !== type) {
                     console.log(`Tipo cambiado: ${oldType} → ${type}`);
                 }
