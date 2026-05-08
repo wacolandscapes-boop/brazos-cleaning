@@ -12,7 +12,7 @@
             --today-bg: #fff9c4;
             --color-unico: #95a5a6; --color-diario: #e67e22; --color-2xsemana: #d35400; --color-3xsemana: #e84393; 
             --color-semanal: #0D2B8E; --color-quincenal: #9b59b6; --color-mensual: #27ae60;
-            --color-airbnb: #FF5A5F; --color-cada3semanas: #16a085;
+            --color-airbnb: #FF5A5F; --color-cada3semanas: #16a085; --color-construccion: #e67e22;
             --emp-col-width: 150px; 
         }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -2487,7 +2487,8 @@ class Scheduler {
         
         if(s) { 
             // EDITAR servicio existente
-            document.getElementById('mCli').value = s.cliId; 
+            document.getElementById('mCli').value = s.cliId;
+        setTimeout(() => this.onCliChange(), 50); 
             document.getElementById('mEmp').value = s.empId; 
             document.getElementById('mDate').value = s.date;
             const suggBadgeE = document.getElementById('groupSuggestion');
@@ -3035,7 +3036,8 @@ class Scheduler {
             {key: 'cada3semanas', name: 'Cada 3 Semanas', default: '#16a085'},
             {key: 'quincenal', name: 'Quincenal', default: '#9b59b6'},
             {key: 'mensual', name: 'Mensual', default: '#27ae60'},
-            {key: 'airbnb', name: 'AirBnB', default: '#FF5A5F'}
+            {key: 'airbnb', name: 'AirBnB', default: '#FF5A5F'},
+            {key: 'construccion', name: 'Construcción', default: '#e67e22'}
         ];
         
         // Paleta de 24 colores
@@ -3160,7 +3162,8 @@ class Scheduler {
             'cada3semanas': '#16a085',
             'quincenal': '#9b59b6',
             'mensual': '#27ae60',
-            'airbnb': '#FF5A5F'
+            'airbnb': '#FF5A5F',
+            'construccion': '#e67e22'
         };
         
         return defaults[type] || '#95a5a6';
@@ -3203,7 +3206,8 @@ class Scheduler {
             'cada3semanas': '#16a085',
             'quincenal': '#9b59b6',
             'mensual': '#27ae60',
-            'airbnb': '#FF5A5F'
+            'airbnb': '#FF5A5F',
+            'construccion': '#e67e22'
         };
         
         Object.keys(defaults).forEach(key => {
@@ -5524,7 +5528,8 @@ class Scheduler {
             {key: 'cada3semanas', name: 'Cada 3 Semanas', icon: '📆', desc: 'Cada tres semanas'},
             {key: 'quincenal', name: 'Quincenal', icon: '🗓️', desc: 'Cada dos semanas'},
             {key: 'mensual', name: 'Mensual', icon: '📆', desc: 'Una vez al mes'},
-            {key: 'airbnb', name: 'AirBnB', icon: '🏠', desc: 'Propiedades de alquiler temporal'}
+            {key: 'airbnb', name: 'AirBnB', icon: '🏠', desc: 'Propiedades de alquiler temporal'},
+            {key: 'construccion', name: 'Construcción', icon: '🏗️', desc: 'Proyectos en múltiples propiedades'}
         ];
         
         const palette = [
@@ -5718,6 +5723,23 @@ class Scheduler {
     cancelCliForm() {
         document.getElementById('cliFormContainer').style.display = 'none';
         document.getElementById('btnToggleCliForm').textContent = '➕ Nuevo Cliente';
+        // Limpiar todos los campos
+        ['nc','np','pc','tc','dc','dci','dzip'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.value = '';
+        });
+        document.getElementById('editCliId').value = '';
+        document.getElementById('ntype').value = 'unico';
+        if(document.getElementById('cliServiceType')) document.getElementById('cliServiceType').value = 'residencial';
+        if(document.getElementById('cliBillingPeriod')) document.getElementById('cliBillingPeriod').value = 'monthly';
+        if(document.getElementById('cliInvoicingType')) document.getElementById('cliInvoicingType').value = 'monthly';
+        if(document.getElementById('cliPaymentTerms')) document.getElementById('cliPaymentTerms').value = '15';
+        if(document.getElementById('regenBlock')) document.getElementById('regenBlock').style.display = 'none';
+        if(document.getElementById('cliFormTitle')) document.getElementById('cliFormTitle').textContent = '➕ Nuevo Cliente';
+        // Limpiar propiedades
+        const propList = document.getElementById('propFieldsList');
+        if(propList) propList.innerHTML = '';
+        const propWrap = document.getElementById('propIdWrap');
+        if(propWrap) propWrap.style.display = 'none';
     }
 
     saveCli() {
@@ -6114,7 +6136,7 @@ class Scheduler {
             <div class="list-item" style="flex-direction:column;align-items:stretch;padding:8px 10px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <span style="cursor:${hasMultiple?'pointer':'default'}" onclick="${hasMultiple?`document.getElementById('${expandId}').style.display=document.getElementById('${expandId}').style.display==='none'?'block':'none'`:''}" >
-                        <b>${name}</b>${hasMultiple ? ` <span style="background:#0e7490;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px;margin-left:4px;">${props.length} ▼</span>` : (isMulti && first.propId && first.propId.toLowerCase()!==name.toLowerCase() ? ' - '+first.propId : '')}
+                        <b>${name}</b>${hasMultiple ? ` <span style="background:#0e7490;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px;margin-left:4px;">${props.length} ▼</span>` : ''}
                         <br><small style="color:#666">${first.tel||'Sin tel'} · ${first.address||'Sin dirección'} · ${first.type||''}</small>
                     </span>
                     <div style="display:flex;gap:4px;align-items:center;">
@@ -6142,10 +6164,38 @@ class Scheduler {
             return nameA.localeCompare(nameB);
         });
         
-        const cO = sortedClis.map(c => `<option value="${c.id}">${c.name} - ${c.propId}</option>`).join('');
-        document.getElementById('mCli').innerHTML = cO;
-        document.getElementById('searchCli').innerHTML = '<option value="all">TODOS LOS CLIENTES</option>' + cO;
-        document.getElementById('finCli').innerHTML = '<option value="all">TODOS LOS CLIENTES</option>' + cO;
+        // mCli: una opción por nombre — onCliChange maneja las propiedades múltiples
+        const nameGroups = {};
+        sortedClis.forEach(cl => {
+            const key = cl.name.trim().toLowerCase();
+            if (!nameGroups[key]) nameGroups[key] = cl;
+        });
+        let mCliHTML = '';
+        Object.values(nameGroups).forEach(cl => {
+            mCliHTML += `<option value="${cl.id}">${cl.name}${cl.city ? ' · ' + cl.city : ''}</option>`;
+        });
+
+        // searchCli y finCli: con optgroup para propiedades múltiples
+        let filterHTML = '<option value="all">TODOS LOS CLIENTES</option>';
+        const uniqueNames = [...new Set(sortedClis.map(c => c.name))];
+        uniqueNames.forEach(name => {
+            const props = sortedClis.filter(c => c.name === name);
+            if (props.length > 1) {
+                filterHTML += `<optgroup label="${name}">`;
+                props.forEach(p => {
+                    const hasProp = p.propId && p.propId.trim() && p.propId.trim().toLowerCase() !== p.name.trim().toLowerCase();
+                    filterHTML += `<option value="${p.id}">${hasProp ? p.propId : p.name}${p.city ? ' · ' + p.city : ''}</option>`;
+                });
+                filterHTML += `</optgroup>`;
+            } else {
+                const p = props[0];
+                filterHTML += `<option value="${p.id}">${p.name}${p.city ? ' · ' + p.city : ''}</option>`;
+            }
+        });
+
+        document.getElementById('mCli').innerHTML = mCliHTML;
+        document.getElementById('searchCli').innerHTML = filterHTML;
+        document.getElementById('finCli').innerHTML = filterHTML;
     }
 
     refreshFinance() {
