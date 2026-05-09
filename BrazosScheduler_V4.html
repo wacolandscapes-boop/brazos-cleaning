@@ -6031,13 +6031,15 @@ class Scheduler {
     }
 
     editCli(id) {
-        // Asegurar que la sección de clientes esté visible
+        const cli = this.clis.find(c => c.id == id); if(!cli) return;
+        // Asegurar que el modal y sección de clientes estén visibles
+        const catModal = document.getElementById('catalogModal');
+        if(catModal) catModal.style.display = 'flex';
         this.showSec('secCli');
         const form = document.getElementById('cliFormContainer');
         form.style.display = 'block';
         document.getElementById('cliFormTitle').textContent = '✏️ Editar Cliente';
         document.getElementById('btnToggleCliForm').textContent = '✕ Cerrar';
-        const cli = this.clis.find(c => c.id == id); if(!cli) return;
         // Scroll al formulario
         setTimeout(() => form.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
         
@@ -6083,6 +6085,21 @@ class Scheduler {
             document.getElementById('cliInvoicingType').value = cli.invoicingType || 'monthly';
         }
         document.getElementById('editCliId').value = cli.id;
+        // Cargar propiedades múltiples si aplica
+        this.togglePropIdWrap(cli.type || '');
+        const propList = document.getElementById('propFieldsList');
+        if (propList) {
+            propList.innerHTML = '';
+            const isMulti = cli.type==='airbnb'||cli.type==='unico'||cli.type==='construccion';
+            if(isMulti) {
+                const allProps = this.clis.filter(c => c.name.trim().toLowerCase() === cli.name.trim().toLowerCase() && (c.type==='airbnb'||c.type==='unico'||c.type==='construccion'));
+                if(allProps.length > 0) {
+                    allProps.forEach(p => this.addPropField(p.propId || ''));
+                } else if(cli.propId) {
+                    this.addPropField(cli.propId);
+                }
+            }
+        }
         // Mostrar bloque de regeneración
         document.getElementById('regenBlock').style.display = 'block';
         document.getElementById('regenCheck').checked = false;
