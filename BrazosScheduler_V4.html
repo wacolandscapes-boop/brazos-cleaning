@@ -5855,8 +5855,8 @@ class Scheduler {
         if(document.getElementById('regenBlock')) document.getElementById('regenBlock').style.display = 'none';
         if(document.getElementById('cliFormTitle')) document.getElementById('cliFormTitle').textContent = '➕ Nuevo Cliente';
         // Limpiar propiedades
-        const propList = document.getElementById('propFieldsList');
-        if(propList) propList.innerHTML = '';
+        const _cancelPropList = document.getElementById('propFieldsList');
+        if(_cancelPropList) _cancelPropList.innerHTML = '';
         const propWrap = document.getElementById('propIdWrap');
         if(propWrap) propWrap.style.display = 'none';
     }
@@ -6032,9 +6032,7 @@ class Scheduler {
 
     editCli(id) {
         const cli = this.clis.find(c => c.id == id); if(!cli) return;
-        // Asegurar que el modal y sección de clientes estén visibles
-        const catModal = document.getElementById('catalogModal');
-        if(catModal) catModal.style.display = 'flex';
+        // Asegurar que la sección de clientes esté visible
         this.showSec('secCli');
         const form = document.getElementById('cliFormContainer');
         form.style.display = 'block';
@@ -6060,19 +6058,6 @@ class Scheduler {
         
         document.getElementById('nc').value = cli.name || '';
         document.getElementById('np').value = cli.propId || '';
-        // Show multi-property fields if applicable
-        this.togglePropIdWrap(cli.type || '');
-        const propList = document.getElementById('propFieldsList');
-        if (propList) {
-            propList.innerHTML = '';
-            // Load all properties for this client
-            const allProps = this.clis.filter(c => c.name === cli.name && (c.type === 'airbnb' || c.type === 'unico' || c.type === 'construccion'));
-            if (allProps.length > 0) {
-                allProps.forEach(p => this.addPropField(p.propId || ''));
-            } else if (cli.propId) {
-                this.addPropField(cli.propId);
-            }
-        }
         document.getElementById('pc').value = cli.price || '';
         document.getElementById('tc').value = cli.tel || '';
         document.getElementById('dc').value = cli.address || '';
@@ -6087,9 +6072,9 @@ class Scheduler {
         document.getElementById('editCliId').value = cli.id;
         // Cargar propiedades múltiples si aplica
         this.togglePropIdWrap(cli.type || '');
-        const propList = document.getElementById('propFieldsList');
-        if (propList) {
-            propList.innerHTML = '';
+        const _editPropList = document.getElementById('propFieldsList');
+        if (_editPropList) {
+            _editPropList.innerHTML = '';
             const isMulti = cli.type==='airbnb'||cli.type==='unico'||cli.type==='construccion';
             if(isMulti) {
                 const allProps = this.clis.filter(c => c.name.trim().toLowerCase() === cli.name.trim().toLowerCase() && (c.type==='airbnb'||c.type==='unico'||c.type==='construccion'));
