@@ -1006,15 +1006,52 @@
     
 
 <div id="customizeModal" class="modal">
-    <div class="modal-content" style="max-width:800px">
-        <h2>🎨 Personalizar Colores</h2>
-        <p style="color:#666; margin-bottom:20px">Selecciona un color para cada tipo de recurrencia</p>
-        
+    <div class="modal-content" style="max-width:480px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h2 style="margin:0;">🎨 Personalizar Colores</h2>
+            <button onclick="app.closeCustomize()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#999;">✕</button>
+        </div>
+
+        <!-- Selector de tipo -->
+        <div style="margin-bottom:16px;">
+            <label style="font-size:0.85rem; font-weight:600; color:#555; display:block; margin-bottom:6px;">Tipo de serie</label>
+            <select id="colorTypeSelect" onchange="app.renderColorEditor()"
+                style="width:100%; padding:10px; border:2px solid var(--primary); border-radius:8px; font-size:0.95rem; font-weight:600;">
+                <option value="">— Selecciona un tipo —</option>
+                <option value="unico">Único</option>
+                <option value="diario">Diario</option>
+                <option value="2xsemana">2x Semana</option>
+                <option value="3xsemana">3x Semana</option>
+                <option value="semanal">Semanal</option>
+                <option value="cada3semanas">Cada 3 Semanas</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+                <option value="airbnb">AirBnB</option>
+                <option value="construccion">🏗️ Construcción</option>
+            </select>
+        </div>
+
+        <!-- Editor de color -->
         <div id="colorCustomization"></div>
-        
+
         <div style="display:flex; gap:6px; margin-top:20px">
-            <button class="btn" onclick="app.resetColors()" style="background:#95a5a6; flex:1">↺ Restaurar Colores por Defecto</button>
+            <button class="btn" onclick="app.resetColors()" style="background:#95a5a6; flex:1">↺ Restaurar Colores</button>
             <button class="btn" onclick="app.closeCustomize()" style="background:var(--primary); flex:1">✓ Cerrar</button>
+        </div>
+        <div style="margin-top:24px; padding:16px; background:#fff5f5; border:2px solid #e74c3c; border-radius:10px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <span style="font-size:1.3rem;">⚠️</span>
+                <strong style="color:#c0392b; font-size:0.95rem;">ZONA DE PELIGRO</strong>
+            </div>
+            <p style="color:#666; font-size:0.82rem; margin-bottom:10px;">
+                Esta acción eliminará <strong>TODOS los servicios</strong> registrados en el calendario.<br>
+                Los clientes, empleados y grupos <strong>no se verán afectados</strong>.<br>
+                <strong>Esta operación NO se puede deshacer.</strong>
+            </p>
+            <button class="btn" onclick="app.clearAllServices()"
+                style="background:#e74c3c; color:white; width:100%; font-weight:700;">
+                🗑️ Borrar TODOS los Servicios del Calendario
+            </button>
         </div>
     </div>
 </div>
@@ -2724,9 +2761,15 @@ class Scheduler {
         e.preventDefault();
         const isCancelled = document.getElementById('mCancelled').checked || false;
         const wasAlreadyCancelled = this.editing ? (this.editing.cancelled || false) : false;
+        // Si hay selector de propiedad visible, usar ese ID como cliId
+        const _propWrap = document.getElementById('propSelectWrap');
+        const _propSel = document.getElementById('mPropId');
+        const _resolvedCliId = (_propWrap && _propWrap.style.display !== 'none' && _propSel && _propSel.value)
+            ? _propSel.value
+            : document.getElementById('mCli').value;
         const data = { 
             id: this.editing?this.editing.id:Date.now(), 
-            cliId: document.getElementById('mCli').value, 
+            cliId: _resolvedCliId, 
             empId: document.getElementById('mEmp').value, 
             date: document.getElementById('mDate').value,
             timeStart: document.getElementById('mTimeStart').value || '',
@@ -3017,16 +3060,92 @@ class Scheduler {
     }
 
     // Personalización de Colores
+    clearAllServices() {
+        const first = confirm(
+            '⚠️ ATENCIÓN\n\n' +
+            'Estás a punto de eliminar TODOS los servicios del calendario.\n\n' +
+            'Los clientes, empleados y grupos NO se verán afectados.\n\n' +
+            '¿Deseas continuar?'
+        );
+        if (!first) return;
+        const second = confirm(
+            '🛑 CONFIRMACIÓN FINAL\n\n' +
+            'Esta es tu ÚLTIMA oportunidad para cancelar.\n\n' +
+            'Se eliminarán ' + this.servs.length + ' servicio(s) permanentemente.\n\n' +
+            '¿Estás COMPLETAMENTE SEGURO?'
+        );
+        if (!second) return;
+        this.servs = [];
+        this.save();
+        this.render();
+        this.closeCustomize();
+        alert('✅ Todos los servicios han sido eliminados.\nYa puedes empezar a crear las series.');
+    }
+
     openCustomize() {
         document.getElementById('customizeModal').style.display = 'block';
-        this.renderColorCustomization();
+        this.renderColorEditor();
     }
     
     closeCustomize() {
         document.getElementById('customizeModal').style.display = 'none';
     }
     
+    renderColorEditor() {
+        const sel = document.getElementById('colorTypeSelect');
+        const container = document.getElementById('colorCustomization');
+        if (!sel || !container) return;
+        const typeKey = sel.value;
+        if (!typeKey) {
+            container.innerHTML = '<p style="color:#aaa; text-align:center; padding:20px 0; font-size:0.88rem;">Selecciona un tipo de serie para configurar sus colores.</p>';
+            return;
+        }
+        const typeNames = {
+            unico:'Único', diario:'Diario', '2xsemana':'2x Semana',
+            '3xsemana':'3x Semana', semanal:'Semanal',
+            cada3semanas:'Cada 3 Semanas', quincenal:'Quincenal',
+            mensual:'Mensual', airbnb:'AirBnB', construccion:'Construcción'
+        };
+        const palette = [
+            '#e74c3c','#c0392b','#d35400','#e67e22',
+            '#f39c12','#f1c40f','#27ae60','#2ecc71',
+            '#16a085','#1abc9c','#0D2B8E','#1A4FCC',
+            '#8e44ad','#9b59b6','#34495e','#2c3e50',
+            '#e84393','#fd79a8','#00b894','#00cec9',
+            '#0984e3','#6c5ce7','#95a5a6','#7f8c8d'
+        ];
+        const currentColor = this.getColor(typeKey);
+        const currentTextMode = this.getTextMode(typeKey);
+        const autoTextColor = getTextColor(currentColor);
+        const previewTextColor = currentTextMode === 'auto' ? autoTextColor : (currentTextMode === 'white' ? '#fff' : '#000');
+        const paletteHtml = palette.map(color => {
+            const selected = currentColor.toLowerCase() === color.toLowerCase();
+            return `<div onclick="app.updateColorAndRefresh('${typeKey}','${color}')"
+                        title="${color}"
+                        style="width:32px;height:32px;border-radius:6px;cursor:pointer;background:${color};
+                               border:${selected?'3px solid #000':'2px solid transparent'};
+                               transform:${selected?'scale(1.2)':'scale(1)'};transition:all .15s;"></div>`;
+        }).join('');
+        container.innerHTML = `
+            <div style="background:${currentColor};color:${previewTextColor};border-radius:8px;padding:12px 16px;margin-bottom:12px;font-weight:700;text-align:center;border-left:4px solid rgba(0,0,0,0.2);">
+                ${typeNames[typeKey]||typeKey} — Cliente Ejemplo
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px;">${paletteHtml}</div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:8px;">
+                <span style="font-size:0.78rem;color:#666;font-weight:600;">Color texto:</span>
+                ${['auto','white','black'].map(m => `<button onclick="app.updateTextMode('${typeKey}','${m}')"
+                    style="padding:4px 10px;font-size:0.75rem;border-radius:4px;cursor:pointer;font-weight:600;
+                    border:2px solid ${currentTextMode===m?'#1A4FCC':'#ddd'};
+                    background:${currentTextMode===m?'#1A4FCC':'white'};color:${currentTextMode===m?'white':'#333'};">
+                    ${m==='auto'?'Auto':m==='white'?'Blanco':'Negro'}</button>`).join('')}
+            </div>`;
+    }
+
     renderColorCustomization() {
+        this.renderColorEditor();
+    }
+
+    _OLD_renderColorCustomization() {
         const types = [
             {key: 'unico', name: 'Único', default: '#95a5a6'},
             {key: 'diario', name: 'Diario', default: '#e67e22'},
