@@ -76,6 +76,9 @@
         .clients-sidebar-search{padding:8px;border-bottom:1px solid #eee;flex-shrink:0;}
         .clients-sidebar-search input{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;box-sizing:border-box;}
         .clients-sidebar-list{flex:1;overflow-y:auto;padding:4px;}
+        .time-cell.drag-over, .month-day-cell.drag-over { background:#e0f7fa !important; outline:2px dashed #0e7490; }
+        .service-event:active { cursor:grabbing; }
+        .service-event.dragging { cursor:grabbing; }
         .client-drag-item{padding:6px 10px;border-radius:6px;margin-bottom:3px;cursor:grab;font-size:.78rem;font-weight:600;border-left:3px solid #00b5ad;background:#f8f9fa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
         .client-drag-item:hover{background:#e8f4f8;}
         .toggle-clients-btn{position:fixed;left:12px;bottom:20px;z-index:9998;background:var(--primary);color:white;border:none;border-radius:50px;padding:10px 16px;cursor:pointer;font-size:.8rem;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.25);}
@@ -123,7 +126,7 @@
             font-weight: 600; 
             border-left: 3px solid rgba(0,0,0,0.25); 
             margin-bottom: 3px; 
-            cursor: pointer;
+            cursor: default;
             box-shadow: 0 1px 4px rgba(0,0,0,0.18); 
             line-height: 1.3;
             text-shadow: 0 1px 1px rgba(0,0,0,0.2);
@@ -143,7 +146,8 @@
         .ev-name-col { font-size: 0.68rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 
         /* Modales */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); pointer-events: all; }
+        .modal.show { display: flex !important; align-items: center; justify-content: center; }
         .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 15px; width: 700px; box-shadow: 0 25px 50px rgba(0,0,0,0.3); }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         input, select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; width: 100%; }
@@ -881,7 +885,7 @@
 </div>
 
 <div id="serviceModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-height:92vh;overflow-y:auto;">
         <h2 id="modalTitle" style="margin-top:0">Detalle del Servicio</h2>
         <form onsubmit="app.saveService(event)">
             <div class="form-grid">
@@ -1058,7 +1062,7 @@
 </div>
 </div>
 
-<div id="catalogModal" class="modal">
+<div id="catalogModal" class="modal" onclick="event.stopPropagation()" style="z-index:9000;">
     <div class="modal-content" style="width:900px">
         <div style="position: relative;">
             <button onclick="app.closeCatalog()" style="position: absolute; top: 0; right: 0; background: #e74c3c; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 1.1rem; font-weight: bold; cursor: pointer; line-height: 1; z-index: 10;">✕</button>
@@ -1173,12 +1177,60 @@
 
             <div id="secConfig" style="display:none">
                 <h3 style="margin-top:0; color:var(--primary)">🎨 Configuración de Colores por Tipo de Serie</h3>
-                <p style="color:#666; margin-bottom:20px">Personaliza el color que se mostrará en el calendario para cada tipo de recurrencia</p>
-                
+                <p style="color:#666; margin-bottom:12px">Selecciona un tipo de serie para personalizar sus colores</p>
+                <div style="margin-bottom:16px;">
+                    <select id="seriesTypeSelect" onchange="app.renderSeriesConfig()"
+                        style="width:100%; padding:10px; border:2px solid var(--primary); border-radius:8px; font-size:0.95rem; font-weight:600; color:#333;">
+                        <option value="">— Selecciona un tipo de serie —</option>
+                        <option value="unico">⚪ Único</option>
+                        <option value="diario">📅 Diario</option>
+                        <option value="2xsemana">📆 2x Semana</option>
+                        <option value="3xsemana">📆 3x Semana</option>
+                        <option value="semanal">📅 Semanal</option>
+                        <option value="cada3semanas">📆 Cada 3 Semanas</option>
+                        <option value="quincenal">🗓️ Quincenal</option>
+                        <option value="mensual">📆 Mensual</option>
+                        <option value="airbnb">🏠 AirBnB</option>
+                        <option value="construccion">🏗️ Construcción</option>
+                    </select>
+                </div>
                 <div id="seriesConfigList"></div>
+                <!-- Zona de peligro -->
+                <div style="margin-top:24px; padding:16px; background:#fff5f5; border:2px solid #e74c3c; border-radius:10px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <span style="font-size:1.3rem;">⚠️</span>
+                        <strong style="color:#c0392b; font-size:0.95rem;">ZONA DE PELIGRO</strong>
+                    </div>
+                    <p style="color:#666; font-size:0.82rem; margin-bottom:10px;">
+                        Elimina <strong>TODOS los servicios</strong> del calendario.<br>
+                        Clientes, empleados y grupos <strong>no se verán afectados</strong>.<br>
+                        <strong>Esta operación NO se puede deshacer.</strong>
+                    </p>
+                    <button class="btn" onclick="app.clearAllServices()"
+                        style="background:#e74c3c; color:white; width:100%; font-weight:700;">
+                        🗑️ Borrar TODOS los Servicios del Calendario
+                    </button>
+                </div>
             </div>
         </div>
-        <button class="btn" onclick="app.closeCatalog()" style="width:100%; margin-top:20px; background:#2c3e50; color:white">CERRAR</button>
+        <!-- Respaldo Local -->
+        <div style="margin-top:16px; padding:14px; background:#f0f4f8; border-radius:10px; border:1px solid #dee2e6;">
+            <div style="font-size:0.85rem; font-weight:700; color:#2c3e50; margin-bottom:10px;">💾 Respaldo Local</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" onclick="app.backupLocal()"
+                    style="flex:1; background:#2980b9; color:white; font-weight:600;">
+                    💾 Respaldar Datos
+                </button>
+                <button class="btn" onclick="app.restoreLocal()"
+                    style="flex:1; background:#8e44ad; color:white; font-weight:600;">
+                    📂 Restaurar Respaldo
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#888; margin-top:6px;">
+                Guarda o restaura todos tus datos localmente (clientes, empleados, servicios, grupos).
+            </div>
+        </div>
+        <button class="btn" onclick="app.closeCatalog()" style="width:100%; margin-top:16px; background:#2c3e50; color:white">CERRAR</button>
     </div>
 </div>
 
@@ -1803,6 +1855,7 @@ class Scheduler {
                 const cell = document.createElement('div');
                 cell.className = `time-cell ${dStr===todayStr?'today':''}`;
                 cell.dataset.date = dStr;
+                cell.dataset.grupo = nombreGrupo;
                 cell.onclick = () => this.openModal(null, dStr, nombreGrupo);
                 this._fillCell(cell, dStr, nombreGrupo, fCli);
                 cellsRow.appendChild(cell);
@@ -2187,6 +2240,19 @@ class Scheduler {
                 div.appendChild(noteDiv);
             }
             div.onclick = (e) => { e.stopPropagation(); this.openModal(s); };
+            // Drag & Drop para mover servicios existentes
+            div.draggable = true;
+            div.addEventListener('mousedown', () => { div.style.cursor = 'grab'; });
+            div.addEventListener('mouseup', () => { div.style.cursor = 'default'; });
+            div.addEventListener('mouseleave', () => { div.style.cursor = 'default'; });
+            div.addEventListener('dragstart', e => {
+                e.stopPropagation();
+                e.dataTransfer.setData('svcId', String(s.id));
+                e.dataTransfer.setData('svcGrupo', nombreGrupo);
+                div.style.opacity = '0.5';
+                div.style.cursor = 'grabbing';
+            });
+            div.addEventListener('dragend', () => { div.style.opacity = '1'; div.style.cursor = 'default'; });
             cell.appendChild(div);
         });
     }
@@ -2372,8 +2438,18 @@ class Scheduler {
             cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
             cell.addEventListener('drop', e => {
                 e.preventDefault(); cell.classList.remove('drag-over');
-                const id = e.dataTransfer.getData('cliId');
-                if (id && cell.dataset.date) this.openDropModal(id, cell.dataset.date);
+                const svcId = e.dataTransfer.getData('svcId');
+                const cliId = e.dataTransfer.getData('cliId');
+                const fromGrupo = e.dataTransfer.getData('svcGrupo');
+                const toDate = cell.dataset.date;
+                const toGrupo = cell.dataset.grupo || fromGrupo;
+                if (svcId && toDate) {
+                    // Mover servicio existente
+                    this.openMoveSvcModal(svcId, toDate, toGrupo, fromGrupo);
+                } else if (cliId && toDate) {
+                    // Nuevo servicio desde sidebar
+                    this.openDropModal(cliId, toDate);
+                }
             });
         });
     }
@@ -2417,6 +2493,87 @@ class Scheduler {
         const t = document.getElementById('dropTipo')?.value;
         const f = document.getElementById('dropSerieFields');
         if (f) f.style.display = (t==='unico'||t==='airbnb') ? 'none' : 'block';
+    }
+
+    openMoveSvcModal(svcId, toDate, toGrupo, fromGrupo) {
+        const svc = this.servs.find(s => String(s.id) === String(svcId));
+        if (!svc) return;
+        const cli = this.clis.find(c => String(c.id) === String(svc.cliId));
+        const cliName = cli ? cli.name + (cli.propId && cli.propId !== cli.name ? ' — ' + cli.propId : '') : 'Servicio';
+        const [y,m,d] = toDate.split('-');
+        const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'], meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const dObj = new Date(+y,+m-1,+d);
+        const dateLabel = `${dias[dObj.getDay()]} ${+d} de ${meses[+m-1]} ${y}`;
+
+        const modal = document.createElement('div');
+        modal.id = 'moveSvcModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        const grupoChanged = toGrupo !== fromGrupo;
+        const dateChanged = toDate !== svc.date;
+        const changeDesc = [];
+        if (dateChanged) changeDesc.push(`📅 ${dateLabel}`);
+        if (grupoChanged) changeDesc.push(`👥 ${toGrupo}`);
+
+        modal.innerHTML = `<div style="background:white;border-radius:14px;padding:24px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <h3 style="margin:0 0 8px;color:#0e7490;">✋ Mover Servicio</h3>
+            <p style="margin:0 0 6px;font-weight:700;color:#333;">${cliName}</p>
+            <p style="margin:0 0 16px;font-size:0.85rem;color:#666;">Mover a: ${changeDesc.join(' · ')}</p>
+            <div style="display:grid;gap:8px;margin-bottom:16px;">
+                <button onclick="app._moveSvc('${svcId}','${toDate}','${toGrupo}','one')"
+                    style="background:#0e7490;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.9rem;">
+                    📌 Solo este servicio
+                </button>
+                ${(svc.serieId || this.servs.filter(sv => sv.cliId == svc.cliId && sv.empId == svc.empId && sv.date > svc.date).length > 0) ? `<button onclick="app._moveSvc('${svcId}','${toDate}','${toGrupo}','future')""
+                    style="background:#27ae60;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.9rem;">
+                    📅 Este y futuros de la serie
+                </button>` : ''}
+            </div>
+            <button onclick="document.getElementById('moveSvcModal').remove()"
+                style="width:100%;background:#95a5a6;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;">
+                Cancelar
+            </button>
+        </div>`;
+        modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
+        document.body.appendChild(modal);
+    }
+
+    _moveSvc(svcId, toDate, toGrupo, mode) {
+        document.getElementById('moveSvcModal')?.remove();
+        const svc = this.servs.find(s => String(s.id) === String(svcId));
+        if (!svc) return;
+        const fromDate = svc.date;
+        const fromGrupo = svc.empId;
+
+        if (mode === 'one') {
+            svc.date = toDate;
+            svc.empId = toGrupo;
+            svc.grupo = toGrupo;
+        } else if (mode === 'future') {
+            // Mover este y todos los futuros — por serieId o por mismo cliente+grupo
+            const diffDays = (new Date(toDate) - new Date(fromDate)) / 86400000;
+            this.servs.forEach(s => {
+                const isSameSerie = svc.serieId ? s.serieId === svc.serieId : (s.cliId == svc.cliId && s.empId == svc.empId);
+                if (isSameSerie && s.date >= fromDate) {
+                    if (diffDays !== 0) {
+                        const d = new Date(s.date);
+                        d.setDate(d.getDate() + diffDays);
+                        s.date = d.toLocaleDateString('en-CA');
+                    }
+                    if (toGrupo !== fromGrupo) {
+                        s.empId = toGrupo;
+                        s.grupo = toGrupo;
+                    }
+                }
+            });
+        }
+        this.save(); this.render();
+        const msg = mode === 'one' ? '✅ Servicio movido' : '✅ Serie movida';
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#0e7490;color:white;padding:12px 22px;border-radius:10px;z-index:9999;font-size:0.95rem;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
     }
 
     closeDropModal() { document.getElementById('dropModal').classList.remove('show'); this._dropData=null; }
@@ -2524,8 +2681,26 @@ class Scheduler {
         
         if(s) { 
             // EDITAR servicio existente
-            document.getElementById('mCli').value = s.cliId;
-        setTimeout(() => this.onCliChange(), 50); 
+            // Si el cliId no está en mCli (propiedad 2da, 3ra...), buscar por nombre
+            const _mCli = document.getElementById('mCli');
+            _mCli.value = s.cliId;
+            if (!_mCli.value || _mCli.value !== String(s.cliId)) {
+                // Buscar el cliente por nombre usando el primer registro del grupo
+                const _thisCli = this.clis.find(c => String(c.id) === String(s.cliId));
+                if (_thisCli) {
+                    const _firstOfGroup = this.clis.find(c => c.name.trim().toLowerCase() === _thisCli.name.trim().toLowerCase());
+                    if (_firstOfGroup) _mCli.value = String(_firstOfGroup.id);
+                }
+            }
+            setTimeout(() => {
+                this.onCliChange();
+                // Seleccionar la propiedad correcta después de onCliChange
+                const _propSel = document.getElementById('mPropId');
+                if (_propSel) {
+                    _propSel.value = s.cliId;
+                    this.onPropChange();
+                }
+            }, 50); 
             document.getElementById('mEmp').value = s.empId; 
             document.getElementById('mDate').value = s.date;
             const suggBadgeE = document.getElementById('groupSuggestion');
@@ -2841,7 +3016,9 @@ class Scheduler {
                     monthlyType = document.getElementById('monthlyType').value;
                 }
                 
-                this.genSerie(data, c.type, untilDate, days2x, monthlyType);
+                // Asignar serieId si no tiene uno
+        if (!data.serieId) data.serieId = 'serie_' + Date.now();
+        this.genSerie(data, c.type, untilDate, days2x, monthlyType);
             }
         }
         // ── RETROACTIVOS ──
@@ -2983,13 +3160,13 @@ class Scheduler {
             else break;
             if(curr > limit) break;
             if(type==='diario' && (curr.getDay()===0 || curr.getDay()===6)) continue;
-            this.servs.push({...base, id: Date.now() + (i*100), date: curr.toLocaleDateString('en-CA')});
+            this.servs.push({...base, id: Date.now() + (i*100), date: curr.toLocaleDateString('en-CA'), serieId: base.serieId});
             i++;
         }
     }
 
     // Modales Adicionales
-    openCatalog() { document.getElementById('catalogModal').style.display='block'; this.renderCat(); }
+    openCatalog() { const m=document.getElementById('catalogModal'); m.style.display='flex'; m.style.alignItems='center'; m.style.justifyContent='center'; this.renderCat(); }
     closeCatalog() { document.getElementById('catalogModal').style.display='none'; }
     openFinance() {
         document.getElementById('financeModal').style.display='block';
@@ -5638,31 +5815,44 @@ class Scheduler {
 
     // Catálogos
     renderSeriesConfig() {
+        const sel = document.getElementById('seriesTypeSelect');
+        const container = document.getElementById('seriesConfigList');
+        if (!container) return;
+
+        const typeKey = sel ? sel.value : '';
+        if (!typeKey) {
+            container.innerHTML = '<p style="color:#aaa; text-align:center; padding:30px 0; font-size:0.9rem;">Selecciona un tipo de serie arriba para configurar sus colores.</p>';
+            return;
+        }
+
         const types = [
-            {key: 'unico', name: 'Único', icon: '⚪', desc: 'Servicios sin repetición'},
-            {key: 'diario', name: 'Diario', icon: '📅', desc: 'De lunes a viernes'},
-            {key: '2xsemana', name: '2x Semana', icon: '📆', desc: 'Dos veces por semana'},
-            {key: '3xsemana', name: '3x Semana', icon: '📆', desc: 'Tres veces por semana'},
-            {key: 'semanal', name: 'Semanal', icon: '📅', desc: 'Una vez por semana'},
-            {key: 'cada3semanas', name: 'Cada 3 Semanas', icon: '📆', desc: 'Cada tres semanas'},
-            {key: 'quincenal', name: 'Quincenal', icon: '🗓️', desc: 'Cada dos semanas'},
-            {key: 'mensual', name: 'Mensual', icon: '📆', desc: 'Una vez al mes'},
-            {key: 'airbnb', name: 'AirBnB', icon: '🏠', desc: 'Propiedades de alquiler temporal'},
-            {key: 'construccion', name: 'Construcción', icon: '🏗️', desc: 'Proyectos en múltiples propiedades'}
+            {key: 'unico',        name: 'Único',          icon: '⚪', desc: 'Servicios sin repetición'},
+            {key: 'diario',       name: 'Diario',          icon: '📅', desc: 'De lunes a viernes'},
+            {key: '2xsemana',     name: '2x Semana',       icon: '📆', desc: 'Dos veces por semana'},
+            {key: '3xsemana',     name: '3x Semana',       icon: '📆', desc: 'Tres veces por semana'},
+            {key: 'semanal',      name: 'Semanal',         icon: '📅', desc: 'Una vez por semana'},
+            {key: 'cada3semanas', name: 'Cada 3 Semanas',  icon: '📆', desc: 'Cada tres semanas'},
+            {key: 'quincenal',    name: 'Quincenal',       icon: '🗓️', desc: 'Cada dos semanas'},
+            {key: 'mensual',      name: 'Mensual',         icon: '📆', desc: 'Una vez al mes'},
+            {key: 'airbnb',       name: 'AirBnB',          icon: '🏠', desc: 'Propiedades de alquiler temporal'},
+            {key: 'construccion', name: 'Construcción',    icon: '🏗️', desc: 'Proyectos en múltiples propiedades'}
         ];
+        const type = types.find(t => t.key === typeKey);
+        if (!type) return;
+        // usar solo el tipo seleccionado
+        const typesFiltered = [type];
         
         const palette = [
             '#e74c3c', '#c0392b', '#d35400', '#e67e22',
             '#f39c12', '#f1c40f', '#27ae60', '#2ecc71',
-            '#16a085', '#1abc9c', '#0D2B8E', '#1A4FCC',
+            '#16a085', '#1abc9c', '#2980b9', '#3498db',
             '#8e44ad', '#9b59b6', '#34495e', '#2c3e50',
             '#e84393', '#fd79a8', '#00b894', '#00cec9',
             '#0984e3', '#6c5ce7', '#95a5a6', '#7f8c8d'
         ];
         
-        let html = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:15px">';
-        
-        types.forEach(type => {
+        let html = '<div>';
+        typesFiltered.forEach(type => {
             const currentColor = this.getColor(type.key);
             const currentTextMode = this.getTextMode(type.key);
             const autoTextColor = getTextColor(currentColor);
@@ -5681,9 +5871,9 @@ class Scheduler {
                 const active = currentTextMode === mode;
                 return `<button onclick="app.updateTextMode('${type.key}','${mode}')"
                     style="padding:3px 9px; font-size:0.7rem; border-radius:4px; cursor:pointer; font-weight:600;
-                           border:2px solid ${active?'#1A4FCC':'#ddd'};
+                           border:2px solid ${active?'#3498db':'#ddd'};
                            background:${active?'#ebf5fb':'#fff'};
-                           color:${active?'#0D2B8E':'#666'}; ${extra}">${label}</button>`;
+                           color:${active?'#2980b9':'#666'}; ${extra}">${label}</button>`;
             };
 
             html += `
@@ -5717,17 +5907,34 @@ class Scheduler {
             `;
         });
         
-        html += '</div>';  // Cerrar grid de 2 columnas
-        
-        html += `
-            <div style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:8px; text-align:center">
-                <button class="btn" onclick="app.resetColors()" style="background:#95a5a6; color:white">
-                    ↺ Restaurar Colores por Defecto
-                </button>
-            </div>
-        `;
+        html += `<div style="margin-top:14px; text-align:right">
+            <button class="btn" onclick="app.resetColors()" style="background:#95a5a6; color:white; font-size:0.82rem; padding:6px 14px;">
+                ↺ Restaurar color por defecto
+            </button>
+        </div>`;
+        html += '</div>';
         
         document.getElementById('seriesConfigList').innerHTML = html;
+    }
+
+    resetColorSingle(type) {
+        let colors = {};
+        const stored = localStorage.getItem('customColors');
+        if(stored) colors = JSON.parse(stored);
+        delete colors[type];
+        localStorage.setItem('customColors', JSON.stringify(colors));
+        this.render();
+        this.renderSeriesConfig();
+    }
+
+        updateColorSeries(type, color) {
+        this.updateColor(type, color);
+        this.renderSeriesConfig();
+    }
+
+    updateTextModeSeries(type, mode) {
+        this.updateTextMode(type, mode);
+        this.renderSeriesConfig();
     }
     updateColorPreview() {
         const type = document.getElementById('ntype').value;
@@ -5798,8 +6005,8 @@ class Scheduler {
         const exists = this.clis.some(c => c.name === clientName && c.propId === propId.trim());
         if (exists) { alert('Esa propiedad ya existe para este cliente'); return; }
         this.clis.push({
-            id: Date.now(),
-            name: base.name, propId: propId.trim(),
+            id: String(Date.now()),
+            name: base.name.trim(), propId: propId.trim(),
             price: base.price, tel: base.tel,
             address: base.address, city: base.city, zip: base.zip,
             type: clientType || base.type,
@@ -5908,7 +6115,7 @@ class Scheduler {
                     fieldProps.forEach((pId, i) => {
                         if(!existingPropIds.includes(pId) && pId) {
                             this.clis.push({
-                                id: Date.now()+i, name, propId: pId,
+                                id: String(Date.now() + i * 100), name, propId: pId,
                                 price, tel, address, city, zip, type,
                                 serviceType, billingPeriod, invoicingType
                             });
@@ -6000,7 +6207,7 @@ class Scheduler {
                 const propExists = this.clis.some(c => c.name === name && c.propId === pId);
                 if(propExists) return;
                 this.clis.push({
-                    id: Date.now() + i,
+                    id: String(Date.now() + i * 100),
                     name, propId: pId, price, tel, address, city, zip,
                     type, serviceType, billingPeriod, invoicingType: invTypeProp
                 });
@@ -6031,7 +6238,9 @@ class Scheduler {
     }
 
     editCli(id) {
-        const cli = this.clis.find(c => c.id == id); if(!cli) return;
+        const cli = this.clis.find(c => String(c.id) === String(id)); if(!cli) { console.error('editCli: no encontró cliente con id:', id); return; }
+        console.log('editCli encontró:', {id: cli.id, name: cli.name, propId: cli.propId, type: cli.type});
+        console.log('nc antes del timeout:', document.getElementById('nc').value);
         // Asegurar que la sección de clientes esté visible
         this.showSec('secCli');
         const form = document.getElementById('cliFormContainer');
@@ -6056,42 +6265,47 @@ class Scheduler {
             type: cli.type
         });
         
-        document.getElementById('nc').value = cli.name || '';
-        document.getElementById('np').value = cli.propId || '';
-        document.getElementById('pc').value = cli.price || '';
-        document.getElementById('tc').value = cli.tel || '';
-        document.getElementById('dc').value = cli.address || '';
-        document.getElementById('dci').value = cli.city || '';
-        document.getElementById('dzip').value = cli.zip || '';
-        document.getElementById('ntype').value = cli.type || 'unico';
-        document.getElementById('cliServiceType').value = cli.serviceType || 'residencial';
-        document.getElementById('cliBillingPeriod').value = cli.billingPeriod || 'monthly';
-        if (document.getElementById('cliInvoicingType')) {
-            document.getElementById('cliInvoicingType').value = cli.invoicingType || 'monthly';
-        }
-        document.getElementById('editCliId').value = cli.id;
-        // Cargar propiedades múltiples si aplica
-        this.togglePropIdWrap(cli.type || '');
-        const _editPropList = document.getElementById('propFieldsList');
-        if (_editPropList) {
-            _editPropList.innerHTML = '';
-            const isMulti = cli.type==='airbnb'||cli.type==='unico'||cli.type==='construccion';
-            if(isMulti) {
-                const allProps = this.clis.filter(c => c.name.trim().toLowerCase() === cli.name.trim().toLowerCase() && (c.type==='airbnb'||c.type==='unico'||c.type==='construccion'));
-                if(allProps.length > 0) {
-                    allProps.forEach(p => this.addPropField(p.propId || ''));
-                } else if(cli.propId) {
-                    this.addPropField(cli.propId);
+        // Llenar todos los campos dentro del setTimeout para garantizar que el DOM esté listo
+        const _today = new Date().toLocaleDateString('en-CA');
+        const _endYear = new Date(new Date().getFullYear(), 11, 31).toLocaleDateString('en-CA');
+        setTimeout(() => {
+            console.log('dentro del timeout, cli.name=', cli.name);
+            document.getElementById('nc').value = cli.name || '';
+            console.log('nc después de asignar:', document.getElementById('nc').value);
+            document.getElementById('np').value = cli.propId || '';
+            document.getElementById('pc').value = cli.price || '';
+            document.getElementById('tc').value = cli.tel || '';
+            document.getElementById('dc').value = cli.address || '';
+            document.getElementById('dci').value = cli.city || '';
+            document.getElementById('dzip').value = cli.zip || '';
+            document.getElementById('ntype').value = cli.type || 'unico';
+            document.getElementById('cliServiceType').value = cli.serviceType || 'residencial';
+            document.getElementById('cliBillingPeriod').value = cli.billingPeriod || 'monthly';
+            if (document.getElementById('cliInvoicingType')) {
+                document.getElementById('cliInvoicingType').value = cli.invoicingType || 'monthly';
+            }
+            document.getElementById('editCliId').value = cli.id;
+            // Bloque de regeneración
+            document.getElementById('regenBlock').style.display = 'block';
+            document.getElementById('regenCheck').checked = false;
+            document.getElementById('regenFrom').value = _today;
+            document.getElementById('regenUntil').value = _endYear;
+            // Cargar propiedades múltiples si aplica
+            this.togglePropIdWrap(cli.type || '');
+            const _editPropList = document.getElementById('propFieldsList');
+            if (_editPropList) {
+                _editPropList.innerHTML = '';
+                const isMulti = cli.type==='airbnb'||cli.type==='unico'||cli.type==='construccion';
+                if(isMulti) {
+                    const allProps = this.clis.filter(c => c.name.trim().toLowerCase() === cli.name.trim().toLowerCase() && (c.type==='airbnb'||c.type==='unico'||c.type==='construccion'));
+                    if(allProps.length > 0) {
+                        allProps.forEach(p => this.addPropField(p.propId || ''));
+                    } else if(cli.propId) {
+                        this.addPropField(cli.propId);
+                    }
                 }
             }
-        }
-        // Mostrar bloque de regeneración
-        document.getElementById('regenBlock').style.display = 'block';
-        document.getElementById('regenCheck').checked = false;
-        const today = new Date().toLocaleDateString('en-CA');
-        document.getElementById('regenFrom').value = today;
-        const endYear = new Date(new Date().getFullYear(), 11, 31).toLocaleDateString('en-CA');
-        document.getElementById('regenUntil').value = endYear;
+        }, 150);
         
         const btn = document.querySelector('button[onclick="app.saveCli()"]');
         btn.textContent = '💾 ACTUALIZAR CLIENTE';
@@ -6231,44 +6445,63 @@ class Scheduler {
             cliGroups[c.name].push(c);
         });
 
+        // Event delegation for property buttons (avoids onclick propagation issues)
+        const listCEl = document.getElementById('listC');
+        listCEl._delegated = false;
+
         document.getElementById('listC').innerHTML = Object.entries(cliGroups).map(([name, props]) => {
             const first = props[0];
-            const isMulti = props[0].type === 'airbnb' || props[0].type === 'unico' || props[0].type === 'construccion';
+            const isMulti = first.type === 'airbnb' || first.type === 'unico' || first.type === 'construccion';
             const hasMultiple = props.length > 1;
             const expandId = 'exp_' + name.replace(/[^a-z0-9]/gi,'_');
 
             const propsHTML = hasMultiple ? props.map(p => {
                 const hasProp = p.propId && p.propId.trim() && p.propId.trim().toLowerCase() !== p.name.trim().toLowerCase();
                 const propLabel = hasProp ? p.propId : (p.address || p.name);
-                return `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px 4px 24px;border-left:3px solid #0e7490;margin:3px 0;background:#f0f9ff;border-radius:0 4px 4px 0;">
-                    <span style="font-size:0.85rem;">
-                        <b style="color:#0e7490;">${propLabel}</b>
-                        <small style="color:#888;"> · ${p.city||''} · $${p.price||0} · ${p.type||''}</small>
-                    </span>
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px 4px 24px;border-left:3px solid #0e7490;margin:3px 0;background:#f0f9ff;border-radius:0 4px 4px 0;">
+                    <span style="font-size:0.85rem;"><b style="color:#0e7490;">${propLabel}</b>
+                    <small style="color:#888;"> · ${p.city||''} · $${p.price||0}</small></span>
                     <div>
-                        <button onclick="app.editCli('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
-                        <button onclick="app.delCli('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
-                    </div>
-                </div>`;
+                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
+                        <button onclick="event.stopPropagation();app.delCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
+                    </div></div>`;
             }).join('') : '';
 
-            return `
-            <div class="list-item" style="flex-direction:column;align-items:stretch;padding:8px 10px;">
+            return `<div class="list-item" style="flex-direction:column;align-items:stretch;padding:8px 10px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="cursor:${hasMultiple?'pointer':'default'}" onclick="${hasMultiple?`document.getElementById('${expandId}').style.display=document.getElementById('${expandId}').style.display==='none'?'block':'none'`:''}" >
+                    <span style="cursor:${hasMultiple?'pointer':'default'}" onclick="event.stopPropagation();${hasMultiple?`var e=document.getElementById('${expandId}');e.style.display=e.style.display==='none'?'block':'none';`:''}" >
                         <b>${name}</b>${hasMultiple ? ` <span style="background:#0e7490;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px;margin-left:4px;">${props.length} ▼</span>` : ''}
                         <br><small style="color:#666">${first.tel||'Sin tel'} · ${first.address||'Sin dirección'} · ${first.type||''}</small>
                     </span>
                     <div style="display:flex;gap:4px;align-items:center;">
-                        ${isMulti ? `<button onclick="app.quickAddProp('${name}','${first.type}')" style="background:#27ae60;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;" title="Agregar propiedad">+ Prop</button>` : ''}
-                        <button onclick="app.editCli('${first.id}')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
-                        ${!hasMultiple ? `<button onclick="app.delCli('${first.id}')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
+                        ${isMulti ? `<button onclick="event.stopPropagation();app.quickAddProp(${JSON.stringify(name)},${JSON.stringify(first.type)})" style="background:#27ae60;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">+ Prop</button>` : ''}
+                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
+                        ${!hasMultiple ? `<button onclick="event.stopPropagation();app.delCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
                     </div>
                 </div>
                 <div id="${expandId}" style="display:none;">${propsHTML}</div>
             </div>`;
         }).join('');
+
+        // Attach delegated listener for prop edit/del buttons
+        setTimeout(() => {
+            const listEl = document.getElementById('listC');
+            if (listEl && !listEl._delegated) {
+                listEl._delegated = true;
+                listEl.addEventListener('click', (e) => {
+                    const btn = e.target.closest('button[data-mapkey]');
+                    if (!btn) return;
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const mapKey = btn.dataset.mapkey;
+                    const action = btn.dataset.action;
+                    const cliId = window._cliPropsMap && window._cliPropsMap[mapKey];
+                    if (!cliId) return;
+                    if (action === 'edit') app.editCli(cliId);
+                    else if (action === 'del') app.delCli(cliId);
+                });
+            }
+        }, 50);
     }
 
     refreshSels() {
@@ -6293,7 +6526,7 @@ class Scheduler {
         });
         let mCliHTML = '';
         Object.values(nameGroups).forEach(cl => {
-            mCliHTML += `<option value="${cl.id}">${cl.name}${cl.city ? ' · ' + cl.city : ''}</option>`;
+            mCliHTML += `<option value="${String(cl.id)}">${cl.name}${cl.city ? ' · ' + cl.city : ''}</option>`;
         });
 
         // searchCli y finCli: con optgroup para propiedades múltiples
