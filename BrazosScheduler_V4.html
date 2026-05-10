@@ -2693,8 +2693,10 @@ class Scheduler {
                 // Buscar el cliente por nombre usando el primer registro del grupo
                 const _thisCli = this.clis.find(c => String(c.id) === String(s.cliId));
                 if (_thisCli) {
-                    const _firstOfGroup = this.clis.find(c => c.name.trim().toLowerCase() === _thisCli.name.trim().toLowerCase());
-                    if (_firstOfGroup) _mCli.value = String(_firstOfGroup.id);
+                    // Usar el representante con ID más pequeño (igual que nameGroups en refreshSels)
+                    const _allOfGroup = this.clis.filter(c => c.name.trim().toLowerCase() === _thisCli.name.trim().toLowerCase());
+                    const _rep = _allOfGroup.reduce((min, c) => String(c.id) < String(min.id) ? c : min, _allOfGroup[0]);
+                    if (_rep) _mCli.value = String(_rep.id);
                 }
             }
             setTimeout(() => {
@@ -6527,7 +6529,15 @@ class Scheduler {
         const nameGroups = {};
         sortedClis.forEach(cl => {
             const key = cl.name.trim().toLowerCase();
-            if (!nameGroups[key]) nameGroups[key] = cl;
+            if (!nameGroups[key]) {
+                nameGroups[key] = cl;
+            } else {
+                // Siempre usar el registro con ID más pequeño (el original/primero importado)
+                const existing = nameGroups[key];
+                const existingId = String(existing.id);
+                const newId = String(cl.id);
+                if (newId < existingId) nameGroups[key] = cl;
+            }
         });
         let mCliHTML = '';
         Object.values(nameGroups).forEach(cl => {
