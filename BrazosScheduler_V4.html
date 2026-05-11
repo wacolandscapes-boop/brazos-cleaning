@@ -2955,6 +2955,9 @@ class Scheduler {
                 document.getElementById('mPriority').value = '';
                 const pWrap = document.getElementById('priorityApplyWrap');
                 if(pWrap) pWrap.style.display = 'none';
+                // Siempre resetear a "Solo este servicio"
+                const pOne = document.getElementById('priorityApplyOne');
+                if(pOne) pOne.checked = true;
             }
             document.getElementById('mRep').value = 'no';
             document.getElementById('mUntil').value = '';
@@ -3182,10 +3185,13 @@ class Scheduler {
             this.servs[this.servs.findIndex(x=>x.id==this.editing.id)] = data;
             // Aplicar prioridad a toda la serie futura si se seleccionó
             const prioApply = document.querySelector('input[name="priorityApply"]:checked');
-            if(prioApply && prioApply.value === 'serie' && data.priority && this.editing.serieId) {
+            if(prioApply && prioApply.value === 'serie' && data.priority) {
                 const today = new Date().toLocaleDateString('en-CA');
                 this.servs.forEach(sv => {
-                    if(sv.serieId === this.editing.serieId && sv.date >= today && sv.id !== data.id) {
+                    const isSame = this.editing.serieId
+                        ? sv.serieId === this.editing.serieId
+                        : (sv.cliId == this.editing.cliId && sv.empId == this.editing.empId);
+                    if(isSame && sv.date >= today && sv.id !== data.id) {
                         sv.priority = data.priority;
                     }
                 });
