@@ -79,6 +79,11 @@
         .time-cell.drag-over, .month-day-cell.drag-over { background:#e0f7fa !important; outline:2px dashed #0e7490; }
         .service-event:active { cursor:grabbing; }
         .service-event.dragging { cursor:grabbing; }
+        .cell-note-block { background:#1a1a1a; color:white; border-radius:4px; padding:3px 6px; margin-bottom:3px; font-size:0.75rem; font-weight:600; cursor:pointer; border-left:3px solid #555; line-height:1.3; display:flex; justify-content:space-between; align-items:flex-start; }
+        .cell-note-block:hover { background:#333; }
+        .cell-note-btn { background:rgba(255,255,255,0.15); border:none; color:white; cursor:pointer; font-size:0.7rem; padding:1px 5px; border-radius:3px; margin-left:4px; flex-shrink:0; }
+        .add-note-btn { background:none; border:1px dashed #ccc; color:#999; border-radius:4px; padding:2px 6px; font-size:0.7rem; cursor:pointer; width:100%; margin-top:2px; opacity:0; transition:opacity 0.2s; }
+        .time-cell:hover .add-note-btn, .month-day-cell:hover .add-note-btn { opacity:1; }
         .client-drag-item{padding:6px 10px;border-radius:6px;margin-bottom:3px;cursor:grab;font-size:.78rem;font-weight:600;border-left:3px solid #00b5ad;background:#f8f9fa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
         .client-drag-item:hover{background:#e8f4f8;}
         .toggle-clients-btn{position:fixed;left:12px;bottom:20px;z-index:9998;background:var(--primary);color:white;border:none;border-radius:50px;padding:10px 16px;cursor:pointer;font-size:.8rem;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.25);}
@@ -770,7 +775,7 @@
                 <button class="btn-action" onclick="app.showSMSModal()" style="background:#0D2B8E; color:white">📲 SMS Grupos</button>
                 <button class="btn-action btn-dark" onclick="app.exportar()">📥 Exportar</button>
                 <button class="btn-action btn-dark" onclick="app.importar()">📂 Importar</button>
-                <button class="btn-action" onclick="app.importClientsFromExcel()" style="background:#27ae60; color:white;">📊 Importar Clientes Excel</button>
+
                 <button class="btn-action" id="driveSyncBtn" onclick="app.driveSync()" style="background:#4285f4; color:white;">☁️ <span id="driveSyncLabel">Drive</span></button>
                 <button onclick="app.openEmergencyModal()" title="Crear Servicio de Emergencia"
                     style="background:#e74c3c; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; white-space:nowrap; flex-shrink:0;">
@@ -926,6 +931,17 @@
                     <div id="groupSuggestion" style="display:none; margin-top:5px; padding:6px 10px; border-radius:6px; font-size:0.78rem; border:1px solid #a5d6a7;"></div>
                 </div>
                 <div style="grid-column: span 2"><label>Tarea Específica</label><input type="text" id="taskName"></div>
+                <div>
+                    <label>Color del Servicio <span style="color:#999;font-weight:400;font-size:0.78rem;">— opcional, sobreescribe el color de la serie</span></label>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                        <input type="color" id="mCustomColor" value="#ffffff" style="width:40px;height:36px;border:2px solid #ddd;border-radius:6px;cursor:pointer;padding:2px;">
+                        <button type="button" onclick="document.getElementById('mCustomColor').value='#ffffff';document.getElementById('mCustomColorActive').checked=false;" style="background:#95a5a6;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem;">↺ Sin color</button>
+                        <label style="display:flex;align-items:center;gap:4px;font-size:0.8rem;cursor:pointer;">
+                            <input type="checkbox" id="mCustomColorActive" style="width:14px;height:14px;">
+                            Aplicar color
+                        </label>
+                    </div>
+                </div>
                 <div><label>Prioridad (orden) <span style="color:#999;font-weight:400;font-size:0.78rem;">— opcional</span></label>
                     <input type="number" id="mPriority" min="1" max="99" placeholder="—" style="width:100px">
                     <small style="color:#666; display:block; margin-top:4px">1=primero, 2=segundo, 3=tercero...</small>
@@ -1086,6 +1102,10 @@
                 <div id="listE" style="max-height:450px; overflow-y:auto"></div>
             </div>
             <div id="secCli" style="display:none">
+                <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                    <button onclick="app.importClientsFromExcel()" class="btn" style="background:#27ae60;color:white;flex:1;">📊 Importar Excel</button>
+                    <button onclick="app.exportClientsToExcel()" class="btn" style="background:#1a6b9a;color:white;flex:1;">📥 Exportar Excel</button>
+                </div>
                 <div style="margin-bottom:15px; display:flex; gap:8px;">
                     <button onclick="app.importClientsCSV()" class="btn" style="background:#1A4FCC; color:white; flex:1">📥 Importar CSV</button>
                     <button onclick="app.exportClientsCSV()" class="btn" style="background:#9b59b6; color:white; flex:1">📤 Exportar CSV</button>
@@ -2222,7 +2242,8 @@ class Scheduler {
                 div.innerHTML = `<div class="ev-prop">${cancelLabel}</div>${cancelProp}`;
             } else {
                 const typeKey4 = c.type.toLowerCase().replace(/ /g,'');
-                const bgColor4 = this.getColor(typeKey4);
+                // Color individual del servicio sobreescribe el color de la serie
+                const bgColor4 = s.customColor || this.getColor(typeKey4);
                 div.style.backgroundColor = bgColor4;
                 const textMode4 = this.getTextMode(typeKey4);
                 div.style.color = textMode4 === 'auto' ? getTextColor(bgColor4) : (textMode4 === 'white' ? '#fff' : '#000');
@@ -2260,6 +2281,59 @@ class Scheduler {
             div.addEventListener('dragend', () => { div.style.opacity = '1'; div.style.cursor = 'default'; });
             cell.appendChild(div);
         });
+
+        // ── Notas de celda ──
+        const noteKey = `${dStr}__${nombreGrupo}`;
+        const cellNotes = this._getCellNotes(noteKey);
+        cellNotes.forEach((note, ni) => {
+            const nb = document.createElement('div');
+            nb.className = 'cell-note-block';
+            nb.innerHTML = `<span style="flex:1">${note}</span>
+                <button class="cell-note-btn" onclick="event.stopPropagation();app._editCellNote('${noteKey}',${ni})" title="Editar">✏️</button>
+                <button class="cell-note-btn" onclick="event.stopPropagation();app._deleteCellNote('${noteKey}',${ni})" title="Eliminar">✕</button>`;
+            cell.appendChild(nb);
+        });
+        // Botón agregar nota
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-note-btn';
+        addBtn.textContent = '+ nota';
+        addBtn.onclick = (e) => { e.stopPropagation(); this._addCellNote(noteKey); };
+        cell.appendChild(addBtn);
+    }
+
+    // ── Cell Notes ─────────────────────────────────────────────────────
+    _getCellNotes(key) {
+        const all = JSON.parse(localStorage.getItem('brazos_cellNotes') || '{}');
+        return all[key] || [];
+    }
+    _saveCellNotes(key, notes) {
+        const all = JSON.parse(localStorage.getItem('brazos_cellNotes') || '{}');
+        if (notes.length === 0) delete all[key];
+        else all[key] = notes;
+        localStorage.setItem('brazos_cellNotes', JSON.stringify(all));
+    }
+    _addCellNote(key) {
+        const text = prompt('Nueva nota:');
+        if (!text || !text.trim()) return;
+        const notes = this._getCellNotes(key);
+        notes.push(text.trim());
+        this._saveCellNotes(key, notes);
+        this.render();
+    }
+    _editCellNote(key, idx) {
+        const notes = this._getCellNotes(key);
+        const text = prompt('Editar nota:', notes[idx] || '');
+        if (text === null) return;
+        if (!text.trim()) { this._deleteCellNote(key, idx); return; }
+        notes[idx] = text.trim();
+        this._saveCellNotes(key, notes);
+        this.render();
+    }
+    _deleteCellNote(key, idx) {
+        const notes = this._getCellNotes(key);
+        notes.splice(idx, 1);
+        this._saveCellNotes(key, notes);
+        this.render();
     }
 
     // ── Toggle sidebar global ───────────────────────────────────────
@@ -2725,6 +2799,14 @@ class Scheduler {
             document.getElementById('mTimeStart').value = s.timeStart || '';
             document.getElementById('mTimeEnd').value = s.timeEnd || '';
             document.getElementById('mCancelled').checked = s.cancelled || false;
+            // Cargar color individual
+            if(document.getElementById('mCustomColor') && s.customColor) {
+                document.getElementById('mCustomColor').value = s.customColor;
+                document.getElementById('mCustomColorActive').checked = true;
+            } else if(document.getElementById('mCustomColorActive')) {
+                document.getElementById('mCustomColorActive').checked = false;
+                document.getElementById('mCustomColor').value = '#ffffff';
+            }
             // Cargar nota AirBnb
             if(document.getElementById('mAirbnbNote')) document.getElementById('mAirbnbNote').value = s.airbnbNote || '';
             if(document.getElementById('mAirbnbNoteCustom')) document.getElementById('mAirbnbNoteCustom').value = s.airbnbNoteCustom || '';
@@ -2960,6 +3042,7 @@ class Scheduler {
             timeEnd: document.getElementById('mTimeEnd').value || '', 
             name: document.getElementById('taskName').value,
             priority: document.getElementById('mPriority')?.value || '',
+            customColor: (document.getElementById('mCustomColorActive')?.checked && document.getElementById('mCustomColor')?.value !== '#ffffff') ? document.getElementById('mCustomColor')?.value : null,
             airbnbNote: document.getElementById('mAirbnbNote')?.value || '',
             airbnbNoteCustom: document.getElementById('mAirbnbNoteCustom')?.value || '',
             cancelled: isCancelled
@@ -9162,6 +9245,42 @@ class Scheduler {
     // ═══════════════════════════════════════
     // GOOGLE DRIVE SYNC
     // ═══════════════════════════════════════
+
+    exportClientsToExcel() {
+        if (!this.clis.length) { alert('No hay clientes para exportar'); return; }
+        const headers = ['Nombre del Cliente','Dirección','Ciudad','Estado','ZIP','Teléfono','Email','Precio Servicio','Frecuencia','Tipo Servicio','Periodo Facturación','Grupo','ID Propiedad','Notas'];
+        const freqMap = {semanal:'Semanal',quincenal:'Quincenal',mensual:'Mensual',diario:'Diario','2xsemana':'2x Semana','3xsemana':'3x Semana',cada3semanas:'Cada 3 Semanas',airbnb:'airbnb',unico:'Unico',construccion:'construccion'};
+        const billingMap = {fixed_monthly:'Fijo',monthly:'Mensual',perservice:'PerService'};
+        const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
+
+        // Group by name to get grupo from grupos
+        const getGrupo = (cli) => {
+            const found = Object.entries(this.grupos).find(([g, ids]) => ids.some(id => String(id) === String(cli.id)));
+            return found ? found[0] : '';
+        };
+
+        const rows = [headers.map(h => esc(h)).join(',')];
+        this.clis.forEach(c => {
+            rows.push([
+                esc(c.name||''), esc(c.address||''), esc(c.city||''), esc(c.state||'TX'),
+                esc(c.zip||''), esc(c.tel||''), esc(c.email||''),
+                c.price||0,
+                esc(freqMap[c.type]||c.type||''),
+                esc(c.serviceType||'residencial'),
+                esc(billingMap[c.invoicingType]||c.billingPeriod||'Mensual'),
+                esc(getGrupo(c)),
+                esc(c.propId||c.name||''),
+                esc(c.notes||'')
+            ].join(','));
+        });
+
+        const csv = '\uFEFF' + rows.join('\n');
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `BrazosClientes_${new Date().toLocaleDateString('en-CA')}.csv`;
+        a.click();
+    }
 
     importClientsFromExcel() {
         const input = document.createElement('input');
