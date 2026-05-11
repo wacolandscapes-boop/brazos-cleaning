@@ -915,7 +915,7 @@
                         </span>
                     </div>
                 </div>
-                <div><label>Fecha</label><input type="date" id="mDate" required onchange="app.suggestGroup();"></div>
+                <div><label>Fecha</label><input type="date" id="mDate" required onchange="if(!app.editing) app.suggestGroup();"></div>
                 <div>
                     <label>Grupo</label>
                     <select id="mEmp" required onchange="document.getElementById('groupSuggestion').style.display='none'">
@@ -2648,7 +2648,8 @@ class Scheduler {
             const selCli = this.clis.find(c => c.id == document.getElementById('mCli').value);
             airbnbWrap.style.display = (selCli && (selCli.type === 'airbnb' || selCli.type === 'unico' || selCli.type === 'construccion')) ? 'block' : 'none';
         }
-        this.suggestGroup();
+        // Solo sugerir grupo en servicios NUEVOS, no al editar
+        if (!this.editing) this.suggestGroup();
     }
 
     onPropChange() {
@@ -2743,7 +2744,8 @@ class Scheduler {
             document.getElementById('mTimeStart').value = '';
             document.getElementById('mTimeEnd').value = '';
             // Auto-sugerir cuando haya cliente seleccionado
-            if(document.getElementById('mCli').value) setTimeout(() => this.suggestGroup(), 50); 
+            // No sugerir grupo al editar servicio existente - mantener grupo original
+            // if(document.getElementById('mCli').value) setTimeout(() => this.suggestGroup(), 50);
             document.getElementById('taskName').value = ''; 
             if(document.getElementById('mPriority')) {
                 document.getElementById('mPriority').value = '';
@@ -6093,7 +6095,6 @@ class Scheduler {
         const billingPeriod = document.getElementById('cliBillingPeriod').value;
         if(!name) { alert('Nombre es requerido'); return; }
         if(isMulti && this.getPropsFromFields().length === 0) { alert('Agrega al menos una propiedad'); return; }
-        if(!isMulti && !propId) { alert('Nombre y Propiedad son requeridos'); return; }
         
         // Si estamos editando, actualizar el existente
         if(editId) {
