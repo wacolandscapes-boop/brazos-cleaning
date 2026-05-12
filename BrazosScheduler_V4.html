@@ -6776,8 +6776,8 @@ class Scheduler {
                     <span style="font-size:0.85rem;"><b style="color:#0e7490;">${propLabel}</b>
                     <small style="color:#888;"> · ${p.city||''} · $${p.price||0}</small></span>
                     <div>
-                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
-                        <button onclick="event.stopPropagation();app.delCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
+                        <button data-action="edit" data-id="${p.id}" onclick="event.stopPropagation();app.editCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
+                        <button data-action="del" data-id="${p.id}" onclick="event.stopPropagation();app.delCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
                     </div></div>`;
             }).join('') : '';
 
@@ -6789,8 +6789,8 @@ class Scheduler {
                     </span>
                     <div style="display:flex;gap:4px;align-items:center;">
                         ${isMulti ? `<button onclick="event.stopPropagation();app.quickAddProp(${JSON.stringify(name)},${JSON.stringify(first.type)})" style="background:#27ae60;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">+ Prop</button>` : ''}
-                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
-                        ${!hasMultiple ? `<button onclick="event.stopPropagation();app.delCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
+                        <button data-action="edit" data-id="${first.id}" onclick="event.stopPropagation();app.editCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
+                        ${!hasMultiple ? `<button data-action="del" data-id="${first.id}" onclick="event.stopPropagation();app.delCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
                     </div>
                 </div>
                 <div id="${expandId}" style="display:none;">${propsHTML}</div>
