@@ -283,6 +283,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     </div>
     <button class="btn-outline" onclick="changeEmpFromSett()">👤 Cambiar empleado</button>
     <button class="btn-outline" onclick="refreshData();closeSett()">🔄 Actualizar datos</button>
+    <button class="btn-outline" onclick="disconnectDrive()" style="border-color:#e74c3c;color:#e74c3c;">🔌 Cambiar cuenta de Drive</button>
   </div>
 </div>
 
@@ -699,6 +700,15 @@ function goSetup(){
 /* ── SETTINGS ── */
 function openSett(){document.getElementById('sp').classList.add('open');}
 function closeSett(){document.getElementById('sp').classList.remove('open');}
+
+function disconnectDrive(){
+  localStorage.removeItem('brazos_drive_token');
+  localStorage.removeItem('brazos_drive_token_expiry');
+  S.driveToken=null; S.folderId=null; S.reportsFileId=null;
+  closeSett();
+  toast('🔌 Drive desconectado — reconecta para cambiar cuenta');
+  setTimeout(()=>goSetup(), 1200);
+}
 
 /* ── REFRESH ── */
 async function refreshData(){
