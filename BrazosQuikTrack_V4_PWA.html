@@ -147,6 +147,7 @@ textarea{width:100%;background:var(--s2);border:1px solid var(--border);color:va
         <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M6.28 3l5.72 9.9L6.28 3zm-3.7 6.42L.86 13.1c-.4.69-.4 1.53 0 2.22l2.97 5.14h5.94L6.28 15.2 2.58 9.42zm18.84 0L17.72 3l-5.72 9.9 3.44 5.95h5.94l2.97-5.14c.4-.69.4-1.53 0-2.22l-3.69-3.07zm-7.12 8.76H9l-2.22 3.84h10.44l-2.22-3.84z"/></svg>
         Conectar Drive
       </button>
+      <button id="btnDisconnect" onclick="disconnectDrive()" style="display:none;width:100%;padding:10px;border-radius:9px;background:none;border:1px solid #e74c3c;color:#e74c3c;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;">🔌 Cambiar cuenta de Drive</button>
       <h3 style="margin-top:4px">Grupo</h3>
       <select id="selGroup" disabled><option value="">— Conecta Drive primero —</option></select>
       <label>Fecha</label>
@@ -286,9 +287,21 @@ function connectDrive(){
     localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
     markConnected(); await loadSyncFile();
   }});
-  tc.requestAccessToken({prompt:''});
+  tc.requestAccessToken({prompt:'select_account'});
 }
-function markConnected(){const b=document.getElementById('btnDrive');b.classList.add('connected');b.innerHTML='✅ Drive conectado — recargar';}
+function markConnected(){const b=document.getElementById('btnDrive');b.classList.add('connected');b.innerHTML='✅ Drive conectado — recargar';const bd=document.getElementById('btnDisconnect');if(bd)bd.style.display='block';}
+
+function disconnectDrive(){
+  localStorage.removeItem('brazos_drive_token');
+  localStorage.removeItem('brazos_drive_token_expiry');
+  S.driveToken=null; S.folderId=null; S.reportsFileId=null;
+  const b=document.getElementById('btnDrive');
+  b.classList.remove('connected');
+  b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M6.28 3l5.72 9.9L6.28 3zm-3.7 6.42L.86 13.1c-.4.69-.4 1.53 0 2.22l2.97 5.14h5.94L6.28 15.2 2.58 9.42zm18.84 0L17.72 3l-5.72 9.9 3.44 5.95h5.94l2.97-5.14c.4-.69.4-1.53 0-2.22l-3.69-3.07zm-7.12 8.76H9l-2.22 3.84h10.44l-2.22-3.84z"/></svg> Conectar Drive';
+  const bd=document.getElementById('btnDisconnect');if(bd)bd.style.display='none';
+  document.getElementById('driveStatus').textContent='Sin conectar — toca para autenticar';
+  toast('🔌 Drive desconectado — selecciona otra cuenta');
+}
 
 async function loadSyncFile(){
   setDS('spin','Buscando carpeta…');
