@@ -327,6 +327,10 @@ function tryRestoreSession(){
       Object.assign(S, sess);
       if(S.emps && S.emps.length) buildEmpsList();
       launch(false);
+      // Si hay token válido, refrescar desde Drive automáticamente
+      const tok=localStorage.getItem(TKEY);
+      const exp=parseInt(localStorage.getItem(TEXP)||'0');
+      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); }
       return;
     }
   }catch(e){}
