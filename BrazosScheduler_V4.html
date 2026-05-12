@@ -990,7 +990,7 @@
     
                 </div>
             </div>
-            <div style="background:#f8f9fa; padding:15px; border-radius:10px; border:1px solid #eee; margin-bottom:20px">
+            <div id="repBlock" style="background:#f8f9fa; padding:15px; border-radius:10px; border:1px solid #eee; margin-bottom:20px">
                 <label><b>REPETICIÓN AUTOMÁTICA</b></label>
                 <select id="mRep" onchange="app.toggleRep()" style="margin-top:5px">
                     <option value="no">Solo esta fecha</option><option value="yes">Crear serie completa</option>
@@ -3021,6 +3021,9 @@ class Scheduler {
             document.getElementById('mUntil').value = '';
             document.getElementById('mCancelled').checked = false;
             document.getElementById('btnDel').style.display = 'none';
+            // Ocultar Repetición Automática en edición
+            const _repBlock = document.getElementById('repBlock');
+            if (_repBlock) _repBlock.style.display = this.editing ? 'none' : 'block';
             // Resetear recorrer serie
             const _shiftWrap = document.getElementById('shiftSerieWrap');
             if (_shiftWrap) _shiftWrap.style.display = 'none';
@@ -3316,10 +3319,10 @@ class Scheduler {
         this.genSerie(data, c.type, untilDate, days2x, monthlyType);
             }
         }
-        // ── RETROACTIVOS ──
+        // ── RETROACTIVOS ── solo para servicios NUEVOS, nunca en edición
         const retroactive = document.getElementById('mRetroactive')?.checked;
         const rep = document.getElementById('mRep')?.value;
-        if (retroactive && rep === 'yes') {
+        if (retroactive && rep === 'yes' && !this.editing) {
             const retroFromEl = document.getElementById('mRetroFrom');
             const retroToEl = document.getElementById('mRetroTo');
             const today = new Date(); today.setHours(0,0,0,0);
