@@ -931,7 +931,13 @@
                         </span>
                     </div>
                 </div>
-                <div><label>Fecha</label><input type="date" id="mDate" required onchange="if(!app.editing) app.suggestGroup();"></div>
+                <div><label>Fecha</label><input type="date" id="mDate" required onchange="if(!app.editing) app.suggestGroup(); app.checkDateChange();"></div>
+                <div id="shiftSerieWrap" style="display:none; margin-top:4px; padding:8px 12px; background:#fff8e1; border:1px solid #ffc107; border-radius:8px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:700; color:#856404;">
+                        <input type="checkbox" id="shiftSerie" style="width:15px; height:15px; accent-color:#e67e22;">
+                        📅 Recorrer toda la serie futura los mismos días
+                    </label>
+                </div>
                 <div>
                     <label>Grupo</label>
                     <select id="mEmp" required onchange="document.getElementById('groupSuggestion').style.display='none'">
@@ -3015,6 +3021,11 @@ class Scheduler {
             document.getElementById('mUntil').value = '';
             document.getElementById('mCancelled').checked = false;
             document.getElementById('btnDel').style.display = 'none';
+            // Resetear recorrer serie
+            const _shiftWrap = document.getElementById('shiftSerieWrap');
+            if (_shiftWrap) _shiftWrap.style.display = 'none';
+            const _shiftCb = document.getElementById('shiftSerie');
+            if (_shiftCb) _shiftCb.checked = false;
             
             // Ocultar contenedores de repetición
             document.getElementById('untilContainer').style.display = 'none';
@@ -3031,6 +3042,18 @@ class Scheduler {
         const rt = document.getElementById('mRetroTo');
         if(rf) rf.value = '';
         if(rt) rt.value = '';
+    }
+
+    checkDateChange() {
+        const wrap = document.getElementById('shiftSerieWrap');
+        if (!wrap) return;
+        if (this.editing) {
+            const newDate = document.getElementById('mDate').value;
+            wrap.style.display = (newDate && newDate !== this.editing.date) ? 'block' : 'none';
+            if (newDate === this.editing.date) document.getElementById('shiftSerie').checked = false;
+        } else {
+            wrap.style.display = 'none';
+        }
     }
 
     suggestGroup() {
@@ -3172,10 +3195,23 @@ class Scheduler {
         this.render();
         document.getElementById('serviceModal').style.display = 'none';
 
-        // Adelantar servicios futuros si aplica
-        const cli = this.clis.find(c => c.id == data.cliId);
-        if (cli && cli.type === 'quincenal' && reschedule) {
-            setTimeout(() => this.rescheduleQuincenal(data, rescheduleN), 200);
+        // Recorrer serie futura si aplica (funciona para cualquier tipo de recurrencia)
+        if (reschedule && rescheduleN !== 0) {
+            const futureServs = this.servs
+                .filter(x => String(x.cliId) === String(data.cliId) && x.date > data.date)
+                .sort((a,b) => a.date.localeCompare(b.date));
+            if (futureServs.length > 0) {
+                futureServs.forEach(x => {
+                    const d = new Date(x.date + 'T12:00:00');
+                    d.setDate(d.getDate() + rescheduleN);
+                    x.date = d.toLocaleDateString('en-CA');
+                });
+                this.save();
+                this.render();
+                alert(`✅ ${futureServs.length} servicios futuros recorridos ${rescheduleN > 0 ? '+' : ''}${rescheduleN} días.`);
+            } else {
+                alert('No hay servicios futuros para recorrer.');
+            }
         }
         this._pendingCancelData = null;
     }
@@ -3251,14 +3287,14 @@ class Scheduler {
             // Si se acaba de cancelar (no estaba cancelado antes)
             if (isCancelled && !wasAlreadyCancelled) {
                 const cli = this.clis.find(c => c.id == data.cliId);
-                const isQuincenal = cli && cli.type === 'quincenal';
+                const hasRecurrence = cli && cli.type && cli.type !== 'unico' && cli.type !== 'airbnb' && cli.type !== 'construccion';
                 this._pendingCancelData = data;
                 document.getElementById('cancelModalInfo').textContent = 
                     `${cli ? cli.name : ''} — ${data.date}`;
-                document.getElementById('cancelModalQuincenal').style.display = isQuincenal ? 'block' : 'none';
+                document.getElementById('cancelModalQuincenal').style.display = hasRecurrence ? 'block' : 'none';
                 document.querySelector('input[name="cancelDiscount"][value="no"]').checked = true;
-                document.querySelector('input[name="cancelReschedule"][value="yes"]').checked = true;
-                document.getElementById('cancelRescheduleN').value = '0';
+                document.querySelector('input[name="cancelReschedule"][value="no"]').checked = true;
+                document.getElementById('cancelRescheduleN').value = '7';
                 document.getElementById('cancelModal').style.display = 'flex';
                 return; // esperar confirmación del modal
             }
@@ -3267,14 +3303,14 @@ class Scheduler {
             // Si se acaba de cancelar (no estaba cancelado antes)
             if (isCancelled && !wasAlreadyCancelled) {
                 const cli = this.clis.find(c => c.id == data.cliId);
-                const isQuincenal = cli && cli.type === 'quincenal';
+                const hasRecurrence = cli && cli.type && cli.type !== 'unico' && cli.type !== 'airbnb' && cli.type !== 'construccion';
                 this._pendingCancelData = data;
                 document.getElementById('cancelModalInfo').textContent = 
                     `${cli ? cli.name : ''} — ${data.date}`;
-                document.getElementById('cancelModalQuincenal').style.display = isQuincenal ? 'block' : 'none';
+                document.getElementById('cancelModalQuincenal').style.display = hasRecurrence ? 'block' : 'none';
                 document.querySelector('input[name="cancelDiscount"][value="no"]').checked = true;
-                document.querySelector('input[name="cancelReschedule"][value="yes"]').checked = true;
-                document.getElementById('cancelRescheduleN').value = '0';
+                document.querySelector('input[name="cancelReschedule"][value="no"]').checked = true;
+                document.getElementById('cancelRescheduleN').value = '7';
                 document.getElementById('cancelModal').style.display = 'flex';
                 return; // esperar confirmación del modal
             }
@@ -3302,10 +3338,10 @@ class Scheduler {
         this.genSerie(data, c.type, untilDate, days2x, monthlyType);
             }
         }
-        // ── RETROACTIVOS ── solo para servicios NUEVOS, nunca en edición
+        // ── RETROACTIVOS ──
         const retroactive = document.getElementById('mRetroactive')?.checked;
         const rep = document.getElementById('mRep')?.value;
-        if (retroactive && rep === 'yes' && !this.editing) {
+        if (retroactive && rep === 'yes') {
             const retroFromEl = document.getElementById('mRetroFrom');
             const retroToEl = document.getElementById('mRetroTo');
             const today = new Date(); today.setHours(0,0,0,0);
@@ -3341,6 +3377,24 @@ class Scheduler {
                 retCount++;
             }
             console.log(`📅 ${retCount} servicios retroactivos creados (${retroFromEl?.value} → ${retroToEl?.value})`);
+        }
+
+        // ── RECORRER SERIE ── solo en edición cuando se cambia fecha
+        if (this.editing && document.getElementById('shiftSerie')?.checked) {
+            const oldDate = new Date(this.editing.date + 'T12:00:00');
+            const newDate = new Date(data.date + 'T12:00:00');
+            const diffMs = newDate - oldDate;
+            const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            if (diffDays !== 0) {
+                this.servs.forEach(sv => {
+                    if (String(sv.cliId) === String(data.cliId) && sv.id !== data.id && sv.date > this.editing.date) {
+                        const d = new Date(sv.date + 'T12:00:00');
+                        d.setDate(d.getDate() + diffDays);
+                        sv.date = d.toLocaleDateString('en-CA');
+                    }
+                });
+                alert(`✅ Serie recorrida ${diffDays > 0 ? '+' : ''}${diffDays} días en ${this.servs.filter(sv => String(sv.cliId) === String(data.cliId) && sv.date >= data.date).length} servicios futuros.`);
+            }
         }
 
         this.save(); 
@@ -11124,18 +11178,23 @@ document.addEventListener('click', function(e) {
         </div>
 
         <div id="cancelModalQuincenal" style="display:none; background:#e8f5e9; border-radius:8px; padding:14px; margin-bottom:16px; border:1px solid #a5d6a7;">
-            <p style="margin:0 0 10px; font-weight:600; color:#1b5e20;">¿Adelantar servicios futuros?</p>
+            <p style="margin:0 0 10px; font-weight:600; color:#1b5e20;">¿Recorrer la serie futura?</p>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:8px;">
-                <input type="radio" name="cancelReschedule" value="yes" checked style="width:16px; height:16px;">
-                <span style="font-size:0.9rem;"><strong>Sí</strong> — adelantar una semana los próximos servicios</span>
+                <input type="radio" name="cancelReschedule" value="yes" style="width:16px; height:16px;">
+                <span style="font-size:0.9rem;"><strong>Sí</strong> — recorrer todos los servicios futuros</span>
             </label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px;">
-                <input type="radio" name="cancelReschedule" value="no" style="width:16px; height:16px;">
+                <input type="radio" name="cancelReschedule" value="no" checked style="width:16px; height:16px;">
                 <span style="font-size:0.9rem;"><strong>No</strong> — mantener fechas establecidas</span>
             </label>
-            <div id="cancelRescheduleCount" style="margin-top:8px;">
-                <label style="font-size:0.85rem; color:#2e7d32;">¿Cuántos servicios adelantar? (0 = todos)</label>
-                <input type="number" id="cancelRescheduleN" value="0" min="0" style="width:80px; margin-left:8px; padding:4px 8px; border:1px solid #a5d6a7; border-radius:4px;">
+            <div id="cancelRescheduleCount" style="margin-top:10px; background:white; border-radius:6px; padding:10px; border:1px solid #a5d6a7;">
+                <label style="font-size:0.85rem; color:#2e7d32; font-weight:600; display:block; margin-bottom:6px;">Días a recorrer:</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button onclick="document.getElementById('cancelRescheduleN').value=Math.max(-365,parseInt(document.getElementById('cancelRescheduleN').value||0)-1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #a5d6a7;background:white;cursor:pointer;font-size:1rem;">−</button>
+                    <input type="number" id="cancelRescheduleN" value="7" style="width:70px; padding:4px 8px; border:1px solid #a5d6a7; border-radius:4px; text-align:center; font-size:1rem;">
+                    <button onclick="document.getElementById('cancelRescheduleN').value=Math.min(365,parseInt(document.getElementById('cancelRescheduleN').value||0)+1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #a5d6a7;background:white;cursor:pointer;font-size:1rem;">+</button>
+                </div>
+                <p style="font-size:0.78rem; color:#555; margin:6px 0 0;">Positivo = adelante &nbsp;·&nbsp; Negativo = atrás</p>
             </div>
         </div>
 
