@@ -343,7 +343,7 @@ function connectDrive(){
     localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
     markConnected(); await loadSyncFile();
   }});
-  tc.requestAccessToken({prompt:''});
+  tc.requestAccessToken({prompt:'select_account'});
 }
 function markConnected(){
   const b=document.getElementById('btnDrive');
