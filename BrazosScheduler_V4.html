@@ -3195,24 +3195,6 @@ class Scheduler {
         this.render();
         document.getElementById('serviceModal').style.display = 'none';
 
-        // Recorrer serie futura si aplica (funciona para cualquier tipo de recurrencia)
-        if (reschedule && rescheduleN !== 0) {
-            const futureServs = this.servs
-                .filter(x => String(x.cliId) === String(data.cliId) && x.date > data.date)
-                .sort((a,b) => a.date.localeCompare(b.date));
-            if (futureServs.length > 0) {
-                futureServs.forEach(x => {
-                    const d = new Date(x.date + 'T12:00:00');
-                    d.setDate(d.getDate() + rescheduleN);
-                    x.date = d.toLocaleDateString('en-CA');
-                });
-                this.save();
-                this.render();
-                alert(`✅ ${futureServs.length} servicios futuros recorridos ${rescheduleN > 0 ? '+' : ''}${rescheduleN} días.`);
-            } else {
-                alert('No hay servicios futuros para recorrer.');
-            }
-        }
         this._pendingCancelData = null;
     }
 
@@ -3291,10 +3273,8 @@ class Scheduler {
                 this._pendingCancelData = data;
                 document.getElementById('cancelModalInfo').textContent = 
                     `${cli ? cli.name : ''} — ${data.date}`;
-                document.getElementById('cancelModalQuincenal').style.display = hasRecurrence ? 'block' : 'none';
+                document.getElementById('cancelModalQuincenal').style.display = 'none';
                 document.querySelector('input[name="cancelDiscount"][value="no"]').checked = true;
-                document.querySelector('input[name="cancelReschedule"][value="no"]').checked = true;
-                document.getElementById('cancelRescheduleN').value = '7';
                 document.getElementById('cancelModal').style.display = 'flex';
                 return; // esperar confirmación del modal
             }
@@ -3307,10 +3287,8 @@ class Scheduler {
                 this._pendingCancelData = data;
                 document.getElementById('cancelModalInfo').textContent = 
                     `${cli ? cli.name : ''} — ${data.date}`;
-                document.getElementById('cancelModalQuincenal').style.display = hasRecurrence ? 'block' : 'none';
+                document.getElementById('cancelModalQuincenal').style.display = 'none';
                 document.querySelector('input[name="cancelDiscount"][value="no"]').checked = true;
-                document.querySelector('input[name="cancelReschedule"][value="no"]').checked = true;
-                document.getElementById('cancelRescheduleN').value = '7';
                 document.getElementById('cancelModal').style.display = 'flex';
                 return; // esperar confirmación del modal
             }
@@ -11188,13 +11166,9 @@ document.addEventListener('click', function(e) {
                 <span style="font-size:0.9rem;"><strong>No</strong> — mantener fechas establecidas</span>
             </label>
             <div id="cancelRescheduleCount" style="margin-top:10px; background:white; border-radius:6px; padding:10px; border:1px solid #a5d6a7;">
-                <label style="font-size:0.85rem; color:#2e7d32; font-weight:600; display:block; margin-bottom:6px;">Días a recorrer:</label>
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <button onclick="document.getElementById('cancelRescheduleN').value=Math.max(-365,parseInt(document.getElementById('cancelRescheduleN').value||0)-1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #a5d6a7;background:white;cursor:pointer;font-size:1rem;">−</button>
-                    <input type="number" id="cancelRescheduleN" value="7" style="width:70px; padding:4px 8px; border:1px solid #a5d6a7; border-radius:4px; text-align:center; font-size:1rem;">
-                    <button onclick="document.getElementById('cancelRescheduleN').value=Math.min(365,parseInt(document.getElementById('cancelRescheduleN').value||0)+1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #a5d6a7;background:white;cursor:pointer;font-size:1rem;">+</button>
-                </div>
-                <p style="font-size:0.78rem; color:#555; margin:6px 0 0;">Positivo = adelante &nbsp;·&nbsp; Negativo = atrás</p>
+                <label style="font-size:0.85rem; color:#2e7d32; font-weight:600; display:block; margin-bottom:8px;">¿Cuántos días recorrer?</label>
+                <div id="cancelShiftOptions" style="display:flex; flex-direction:column; gap:6px;"></div>
+                <input type="hidden" id="cancelRescheduleN" value="7">
             </div>
         </div>
 
