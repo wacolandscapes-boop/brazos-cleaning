@@ -185,7 +185,41 @@ textarea{width:100%;background:var(--s2);border:1px solid var(--border);color:va
 <div class="bnav" id="bnav"><div class="bnav-i">
   <div class="ni active" id="niAg" onclick="showTab('agenda')"><div class="ni-ic">📅</div><div class="ni-lb">AGENDA</div></div>
   <div class="ni" id="niSum" onclick="showTab('summary')"><div class="ni-ic">📊</div><div class="ni-lb">RESUMEN</div></div>
+  <div class="ni" id="niSup" onclick="openSupervisorPin()"><div class="ni-ic">🔐</div><div class="ni-lb">SUPERVISOR</div></div>
 </div></div>
+
+<!-- Supervisor PIN Modal -->
+<div id="supPinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2000;display:none;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:24px;max-width:320px;width:90%;text-align:center;">
+    <div style="font-size:2rem;margin-bottom:8px;">🔐</div>
+    <h3 style="margin:0 0 6px;color:#6c3483;">Modo Supervisor</h3>
+    <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Ingresa el PIN para acceder</p>
+    <input type="password" id="supPinInput" maxlength="6" placeholder="••••"
+      style="width:120px;padding:12px;border:2px solid #8e44ad;border-radius:10px;font-size:1.4rem;text-align:center;letter-spacing:6px;display:block;margin:0 auto 16px;">
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button onclick="closeSupervisorPin()" style="background:#95a5a6;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700;">Cancelar</button>
+      <button onclick="verifySupervisorPin()" style="background:#8e44ad;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700;">Entrar</button>
+    </div>
+    <div id="supPinError" style="color:#e74c3c;font-size:0.8rem;margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- Supervisor Screen -->
+<div id="scrSupervisor" class="screen" style="display:none;padding:16px;max-width:500px;margin:0 auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <h2 style="margin:0;color:#6c3483;">🔐 Supervisor</h2>
+    <button onclick="exitSupervisor()" style="background:#e74c3c;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:700;">✕ Salir</button>
+  </div>
+  <!-- Selector de fecha -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:#f9f0ff;border-radius:10px;padding:10px 12px;">
+    <button onclick="supChangeDay(-1)" style="background:#8e44ad;color:white;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1rem;font-weight:700;">◀</button>
+    <input type="date" id="supDatePicker" style="flex:1;padding:8px;border:2px solid #8e44ad;border-radius:8px;font-size:0.95rem;text-align:center;color:#6c3483;font-weight:700;"
+      onchange="supDateChanged(this.value)">
+    <button onclick="supChangeDay(1)" style="background:#8e44ad;color:white;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1rem;font-weight:700;">▶</button>
+    <button onclick="supGoToday()" style="background:#27ae60;color:white;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:700;">Hoy</button>
+  </div>
+  <div id="supervisorContent"></div>
+</div>
 
 <div id="sp" onclick="if(event.target.id==='sp')closeSett()"><div class="ssh">
   <h3>⚙ Configuración <button class="xb" onclick="closeSett()">✕</button></h3>
@@ -558,7 +592,16 @@ function copySummary(){
   navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('📋 Copiado'));
 }
 
-function showTab(t){document.getElementById('scrAgenda').classList.toggle('active',t==='agenda');document.getElementById('scrSummary').classList.toggle('active',t==='summary');document.getElementById('niAg').classList.toggle('active',t==='agenda');document.getElementById('niSum').classList.toggle('active',t==='summary');if(t==='summary')renderSummary();}
+function showTab(t){
+  document.getElementById('scrAgenda').classList.toggle('active',t==='agenda');
+  document.getElementById('scrSummary').classList.toggle('active',t==='summary');
+  document.getElementById('niAg').classList.toggle('active',t==='agenda');
+  document.getElementById('niSum').classList.toggle('active',t==='summary');
+  document.getElementById('niSup').classList.toggle('active',t==='supervisor');
+  document.getElementById('scrSupervisor').style.display = t==='supervisor' ? 'block' : 'none';
+  if(t==='summary') renderSummary();
+  if(t==='supervisor') renderSupervisor();
+}
 function goSetup(){
   ['scrAgenda','scrSummary'].forEach(id=>document.getElementById(id).classList.remove('active'));
   document.getElementById('scrSetup').classList.add('active');
@@ -828,6 +871,163 @@ function saveSess(){
   }catch(e){ console.warn('saveSess error:',e); }
 }
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+
+// ── Supervisor Mode ──
+let supDate = null;
+
+function openSupervisorPin() {
+  const modal = document.getElementById('supPinModal');
+  modal.style.display = 'flex';
+  document.getElementById('supPinInput').value = '';
+  document.getElementById('supPinError').textContent = '';
+  setTimeout(() => document.getElementById('supPinInput').focus(), 100);
+}
+
+function closeSupervisorPin() {
+  document.getElementById('supPinModal').style.display = 'none';
+}
+
+function verifySupervisorPin() {
+  const input = document.getElementById('supPinInput').value;
+  const stored = localStorage.getItem('brazos_supervisorPin') || '1234';
+  if (input === stored) {
+    closeSupervisorPin();
+    supDate = S.selectedDate || today();
+    document.getElementById('supDatePicker').value = supDate;
+    showTab('supervisor');
+  } else {
+    document.getElementById('supPinError').textContent = '❌ PIN incorrecto';
+    document.getElementById('supPinInput').value = '';
+  }
+}
+
+function exitSupervisor() { showTab('agenda'); }
+
+function supGoToday() {
+  supDate = today();
+  document.getElementById('supDatePicker').value = supDate;
+  renderSupervisor();
+}
+
+function supChangeDay(delta) {
+  const d = new Date((supDate || today()) + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  supDate = d.toLocaleDateString('en-CA');
+  document.getElementById('supDatePicker').value = supDate;
+  renderSupervisor();
+}
+
+function supDateChanged(val) {
+  supDate = val;
+  renderSupervisor();
+}
+
+function renderSupervisor() {
+  const el = document.getElementById('supervisorContent');
+  if (!el) return;
+  if (!supDate) supDate = today();
+  const picker = document.getElementById('supDatePicker');
+  if (picker) picker.value = supDate;
+
+  const allSvcs = (S.services || S.servs || []).filter(sv => sv.date === supDate);
+  const [sy,sm,sd] = supDate.split('-');
+  const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const dObj = new Date(+sy,+sm-1,+sd);
+  const dateLabel = `${dias[dObj.getDay()]} ${+sd} de ${meses[+sm-1]} ${sy}`;
+
+  if (!allSvcs.length) {
+    el.innerHTML = `<p style="color:#888;text-align:center;padding:30px;">Sin servicios para <strong>${dateLabel}</strong></p>`;
+    return;
+  }
+
+  // Group by grupo/empId
+  const byGroup = {};
+  allSvcs.forEach(sv => {
+    const g = sv.grupo || sv.empId || 'Sin grupo';
+    if (!byGroup[g]) byGroup[g] = [];
+    byGroup[g].push(sv);
+  });
+
+  // Get all available groups
+  const allGroups = [...new Set((S.services||S.servs||[]).map(s=>s.grupo||s.empId||'').filter(Boolean))].sort();
+
+  let html = `<div style="font-size:0.82rem;color:#6c3483;font-weight:700;margin-bottom:10px;text-align:center;">${dateLabel}</div>`;
+  Object.entries(byGroup).forEach(([grp, svcs]) => {
+    html += `<div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:10px;overflow:hidden;">
+      <div style="background:#6c3483;color:white;padding:10px 14px;font-weight:700;font-size:0.9rem;">👥 ${grp} <span style="opacity:.8;font-size:0.78rem;">(${svcs.length} servicios)</span></div>`;
+    svcs.forEach(svc => {
+      const rpt = S.reports[svc.id] || {status:'pending'};
+      const sc = rpt.status==='done'?'#27ae60':rpt.status==='active'?'#f39c12':rpt.status==='cancelled'?'#e74c3c':'#95a5a6';
+      const sl = rpt.status==='done'?'✅ Terminado':rpt.status==='active'?'⏳ En servicio':rpt.status==='cancelled'?'❌ Cancelado':'⏸ Pendiente';
+      html += `<div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:700;color:#333;font-size:0.92rem;">${svc.clientName}</div>
+            <div style="font-size:0.75rem;color:#888;">${svc.address||''}${svc.scheduledStart?' · ⏰ '+svc.scheduledStart:''}</div>
+          </div>
+          <span style="background:${sc};color:white;padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:700;white-space:nowrap;">${sl}</span>
+        </div>`;
+      if (rpt.status !== 'cancelled') {
+        html += `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="supMoveGroup('${svc.id}',${JSON.stringify(allGroups)})" style="background:#3498db;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">👥 Cambiar Grupo</button>
+          <button onclick="supChangeTime('${svc.id}')" style="background:#e67e22;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">⏰ Cambiar Hora</button>
+          <button onclick="supCancel('${svc.id}')" style="background:#e74c3c;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">❌ Cancelar</button>
+        </div>`;
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function supMoveGroup(svcId, groups) {
+  const svc = (S.services||S.servs||[]).find(s => s.id == svcId);
+  if (!svc) return;
+  const opts = (groups||[]).join(', ');
+  const newGroup = prompt(`Mover "${svc.clientName}" a qué grupo?
+
+Grupos: ${opts}`, svc.grupo||svc.empId||'');
+  if (!newGroup || !newGroup.trim()) return;
+  svc.grupo = newGroup.trim();
+  svc.empId = newGroup.trim();
+  if (!S.reports[svcId]) S.reports[svcId] = {};
+  S.reports[svcId].movedGroup = newGroup.trim();
+  S.reports[svcId].movedAt = new Date().toISOString();
+  saveReports('auto');
+  renderSupervisor();
+  toast('✅ Movido a ' + newGroup.trim());
+}
+
+function supChangeTime(svcId) {
+  const svc = (S.services||S.servs||[]).find(s => s.id == svcId);
+  if (!svc) return;
+  const newTime = prompt(`Nueva hora para "${svc.clientName}":
+(formato HH:MM, ej: 09:30)`, svc.scheduledStart||'');
+  if (!newTime || !newTime.trim()) return;
+  svc.scheduledStart = newTime.trim();
+  if (!S.reports[svcId]) S.reports[svcId] = {};
+  S.reports[svcId].timeChanged = newTime.trim();
+  S.reports[svcId].timeChangedAt = new Date().toISOString();
+  saveReports('auto');
+  renderSupervisor();
+  toast('✅ Hora: ' + newTime.trim());
+}
+
+function supCancel(svcId) {
+  const svc = (S.services||S.servs||[]).find(s => s.id == svcId);
+  if (!svc) return;
+  if (!confirm(`¿Cancelar el servicio de "${svc.clientName}"?`)) return;
+  if (!S.reports[svcId]) S.reports[svcId] = {};
+  S.reports[svcId].status = 'cancelled';
+  S.reports[svcId].cancelledAt = new Date().toISOString();
+  S.reports[svcId].cancelledBy = 'supervisor';
+  saveReports('auto');
+  renderSupervisor();
+  toast('✅ Servicio cancelado');
+}
+
 </script>
 </body>
 </html>
