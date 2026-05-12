@@ -3302,10 +3302,10 @@ class Scheduler {
         this.genSerie(data, c.type, untilDate, days2x, monthlyType);
             }
         }
-        // ── RETROACTIVOS ──
+        // ── RETROACTIVOS ── solo para servicios NUEVOS, nunca en edición
         const retroactive = document.getElementById('mRetroactive')?.checked;
         const rep = document.getElementById('mRep')?.value;
-        if (retroactive && rep === 'yes') {
+        if (retroactive && rep === 'yes' && !this.editing) {
             const retroFromEl = document.getElementById('mRetroFrom');
             const retroToEl = document.getElementById('mRetroTo');
             const today = new Date(); today.setHours(0,0,0,0);
@@ -6776,8 +6776,8 @@ class Scheduler {
                     <span style="font-size:0.85rem;"><b style="color:#0e7490;">${propLabel}</b>
                     <small style="color:#888;"> · ${p.city||''} · $${p.price||0}</small></span>
                     <div>
-                        <button data-action="edit" data-id="${p.id}" onclick="event.stopPropagation();app.editCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
-                        <button data-action="del" data-id="${p.id}" onclick="event.stopPropagation();app.delCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
+                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Editar">✏️</button>
+                        <button onclick="event.stopPropagation();app.delCli(${JSON.stringify(p.id)})" style="background:none;border:none;cursor:pointer;font-size:1rem;" title="Eliminar">❌</button>
                     </div></div>`;
             }).join('') : '';
 
@@ -6789,8 +6789,8 @@ class Scheduler {
                     </span>
                     <div style="display:flex;gap:4px;align-items:center;">
                         ${isMulti ? `<button onclick="event.stopPropagation();app.quickAddProp(${JSON.stringify(name)},${JSON.stringify(first.type)})" style="background:#27ae60;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">+ Prop</button>` : ''}
-                        <button data-action="edit" data-id="${first.id}" onclick="event.stopPropagation();app.editCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
-                        ${!hasMultiple ? `<button data-action="del" data-id="${first.id}" onclick="event.stopPropagation();app.delCli(this.dataset.id)" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
+                        <button onclick="event.stopPropagation();app.editCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Editar">✏️</button>
+                        ${!hasMultiple ? `<button onclick="event.stopPropagation();app.delCli(${JSON.stringify(first.id)})" style="background:none;border:none;cursor:pointer;font-size:1.2rem;" title="Eliminar">❌</button>` : ''}
                     </div>
                 </div>
                 <div id="${expandId}" style="display:none;">${propsHTML}</div>
