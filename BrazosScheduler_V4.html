@@ -1115,6 +1115,7 @@
                 <button class="btn" onclick="app.showSec('secCli')" style="background:#2c3e50; color:white">🏠 Clientes</button>
                 <button class="btn" onclick="app.showSec('secConfig')" style="background:#2c3e50; color:white">🎨 Config. Series</button>
                 <button class="btn" onclick="app.showSec('secGrupos')" style="background:#2c3e50; color:white">👥 Grupos</button>
+                <button class="btn" onclick="app.showSec('secSupervisor')" style="background:#6c3483; color:white">🔐 Supervisor</button>
             </div>
             <div id="secEmp">
                 <div style="margin-bottom:15px; display:flex; justify-content:flex-end; gap:8px;">
@@ -1221,6 +1222,37 @@
 
                 <!-- Resumen de grupos -->
                 <div id="gruposResumen" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;"></div>
+            </div>
+
+            <div id="secSupervisor" style="display:none">
+                <h3 style="margin-top:0; color:#6c3483">🔐 Configuración del Supervisor</h3>
+                <p style="color:#666; font-size:0.85rem; margin-bottom:16px;">Este PIN es el que usa el supervisor en <strong>QuikTrack</strong> para acceder al modo de gestión de servicios.</p>
+                <div style="background:#f8f0ff; border:2px solid #9b59b6; border-radius:12px; padding:20px; max-width:360px;">
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:0.82rem; font-weight:700; color:#6c3483; display:block; margin-bottom:6px;">🔢 PIN del Supervisor</label>
+                        <input type="password" id="supPinInput" placeholder="Ingresa el PIN (mín. 4 dígitos)"
+                            style="width:100%; padding:10px; border:2px solid #9b59b6; border-radius:8px; font-size:1rem; box-sizing:border-box; text-align:center; letter-spacing:4px;"
+                            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,8)">
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="font-size:0.82rem; font-weight:700; color:#6c3483; display:block; margin-bottom:6px;">🔢 Confirmar PIN</label>
+                        <input type="password" id="supPinConfirm" placeholder="Repite el PIN"
+                            style="width:100%; padding:10px; border:2px solid #9b59b6; border-radius:8px; font-size:1rem; box-sizing:border-box; text-align:center; letter-spacing:4px;"
+                            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,8)">
+                    </div>
+                    <button onclick="app.saveSupervisorPin()"
+                        style="width:100%; padding:12px; background:#6c3483; color:white; border:none; border-radius:8px; font-size:0.95rem; font-weight:700; cursor:pointer;">
+                        💾 Guardar PIN del Supervisor
+                    </button>
+                    <div id="supPinStatus" style="margin-top:10px; font-size:0.82rem; text-align:center; min-height:18px;"></div>
+                </div>
+                <div style="margin-top:16px; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:12px; max-width:360px;">
+                    <div style="font-size:0.8rem; color:#856404;">
+                        <strong>ℹ️ Nota:</strong> El PIN se guarda en <em>localStorage</em> con la clave <code>brazos_supervisorPin</code>.
+                        El valor por defecto es <strong>1234</strong> si nunca se ha configurado.<br><br>
+                        Para que el supervisor use el PIN actualizado en otro dispositivo, sincroniza Drive después de guardarlo.
+                    </div>
+                </div>
             </div>
 
             <div id="secConfig" style="display:none">
@@ -3473,6 +3505,28 @@ class Scheduler {
     }
 
     // Personalización de Colores
+    saveSupervisorPin() {
+        const pin = document.getElementById('supPinInput').value.trim();
+        const confirm2 = document.getElementById('supPinConfirm').value.trim();
+        const status = document.getElementById('supPinStatus');
+        if (!pin || pin.length < 4) {
+            status.style.color = '#e74c3c';
+            status.textContent = '⚠️ El PIN debe tener al menos 4 dígitos.';
+            return;
+        }
+        if (pin !== confirm2) {
+            status.style.color = '#e74c3c';
+            status.textContent = '⚠️ Los PINs no coinciden.';
+            return;
+        }
+        localStorage.setItem('brazos_supervisorPin', pin);
+        document.getElementById('supPinInput').value = '';
+        document.getElementById('supPinConfirm').value = '';
+        status.style.color = '#27ae60';
+        status.textContent = '✅ PIN guardado correctamente.';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    }
+
     clearAllServices() {
         const first = confirm(
             '⚠️ ATENCIÓN\n\n' +
@@ -5960,7 +6014,7 @@ class Scheduler {
 
     
     showSec(s) { 
-        ['secEmp','secCli','secConfig','secGrupos'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
+        ['secEmp','secCli','secConfig','secGrupos','secSupervisor'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
         if(s === 'secConfig') {
             this.renderSeriesConfig();
         }
@@ -10039,6 +10093,17 @@ class Scheduler {
                 toast.innerHTML = '☁️ Conectado a Google Drive<br><small>Datos sincronizados</small>';
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 3000);
+                // ☁️ Auto-sync cada 5 minutos
+                if (this._autoSyncInterval) clearInterval(this._autoSyncInterval);
+                this._autoSyncInterval = setInterval(async () => {
+                    if (this.driveConnected) {
+                        await this.driveSyncNow();
+                        const now = new Date();
+                        const t = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+                        document.getElementById('driveSyncLabel').textContent = 'Sync ' + t;
+                        document.getElementById('driveSyncBtn').style.background = '#27ae60';
+                    }
+                }, 5 * 60 * 1000);
             }
         });
         this.tokenClient.requestAccessToken({ prompt: '' });
@@ -10104,7 +10169,7 @@ class Scheduler {
                 companyLogo: localStorage.getItem('companyLogo'),
                 customColors: localStorage.getItem('customColors'),
             };
-            const fileName = 'anaCS_sync.json';
+            const fileName = 'brazosCS_sync.json';
             const searchRes = await fetch(
                 `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false`,
                 { headers: { Authorization: `Bearer ${this.driveToken}` } }
@@ -10234,7 +10299,7 @@ class Scheduler {
         }
         try {
             document.getElementById('driveSyncLabel').textContent = 'Verificando...';
-            const fileName = 'anaCS_sync.json';
+            const fileName = 'brazosCS_sync.json';
             const searchRes = await fetch(
                 `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false`,
                 { headers: { Authorization: `Bearer ${this.driveToken}` } }
