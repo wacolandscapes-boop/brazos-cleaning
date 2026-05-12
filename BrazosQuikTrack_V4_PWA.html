@@ -23,7 +23,7 @@ const _manifest={
 };
 const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
-const APP_VERSION='2.0.1';
+const APP_VERSION='2.0.3';
 if('serviceWorker' in navigator){
   const _sw=`const CACHE='quiktrack-brazos-v${APP_VERSION}';const ASSETS=['./'];self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('./'))));});`;
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([_sw],{type:'text/javascript'}))).then(reg=>{
@@ -270,6 +270,13 @@ const DAYS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MON=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 const S={driveToken:null,folderId:null,reportsFileId:null,grupos:{},servs:[],clis:[],emps:[],group:'',selectedDate:'',weekStart:'',view:'day',reports:{},pendingSync:false,demoMode:false};
+
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){
+    // App retomada del segundo plano — refrescar datos si hay token
+    setTimeout(()=>{ try{ refreshData() }catch(e){} }, 800);
+  }
+});
 
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('selDate').value=today();
