@@ -10122,6 +10122,24 @@ class Scheduler {
                 this._autoSyncInterval = setInterval(async () => {
                     if (this.driveConnected) {
                         await this.driveSyncNow();
+                        // También descargar quiktrack_reports.json
+                        try {
+                            const sr = await fetch(
+                                `https://www.googleapis.com/drive/v3/files?q=name='quiktrack_reports.json'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id)`,
+                                { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                            );
+                            const sd = await sr.json();
+                            if (sd.files && sd.files.length) {
+                                const fr = await fetch(
+                                    `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
+                                    { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                                );
+                                const rpts = await fr.json();
+                                this._prodReports = rpts;
+                                localStorage.setItem('qt_bra_reports', JSON.stringify(rpts));
+                                this.render();
+                            }
+                        } catch(e) {}
                         const now = new Date();
                         const t = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
                         document.getElementById('driveSyncLabel').textContent = 'Sync ' + t;
