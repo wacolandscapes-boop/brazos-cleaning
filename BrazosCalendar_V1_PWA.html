@@ -316,7 +316,27 @@ window.addEventListener('DOMContentLoaded',()=>{
       tryRestoreSession();
     });
   } else {
+    // Token expirado — restaurar sesión local primero, luego reconectar Drive
     tryRestoreSession();
+    // Si hubo sesión guardada, intentar reconectar Drive automáticamente
+    if(tok && typeof google !== 'undefined'){
+      setTimeout(()=>{
+        try{
+          const tc2=google.accounts.oauth2.initTokenClient({
+            client_id:CLIENT_ID, scope:SCOPES,
+            callback:async(r)=>{
+              if(r.error) return;
+              S.driveToken=r.access_token;
+              localStorage.setItem(TKEY,r.access_token);
+              localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
+              markConnected();
+              await loadSyncFile();
+            }
+          });
+          tc2.requestAccessToken({prompt:''});
+        }catch(e){}
+      }, 1000);
+    }
   }
 });
 
