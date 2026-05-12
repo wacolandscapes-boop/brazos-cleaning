@@ -230,6 +230,7 @@ textarea{width:100%;background:var(--s2);border:1px solid var(--border);color:va
   <input type="text" id="cfgDelay" placeholder="30" style="margin-bottom:6px">
   <div class="snote">Alerta automática cuando hay 30+ min de diferencia entre la salida y el horario programado del siguiente cliente.</div>
   <button class="btn" onclick="saveSett()">💾 GUARDAR</button>
+
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -289,6 +290,19 @@ function connectDrive(){
   }});
   tc.requestAccessToken({prompt:'select_account'});
 }
+function saveSupPin(){
+  const pin = document.getElementById('cfgSupPin').value.trim();
+  const confirm2 = document.getElementById('cfgSupPinConfirm').value.trim();
+  const msg = document.getElementById('supPinMsg');
+  if (!pin || pin.length < 4) { msg.style.color='#e74c3c'; msg.textContent='⚠️ Mínimo 4 dígitos.'; return; }
+  if (pin !== confirm2) { msg.style.color='#e74c3c'; msg.textContent='⚠️ Los PINs no coinciden.'; return; }
+  localStorage.setItem('brazos_supervisorPin', pin);
+  document.getElementById('cfgSupPin').value='';
+  document.getElementById('cfgSupPinConfirm').value='';
+  msg.style.color='#27ae60'; msg.textContent='✅ PIN guardado.';
+  setTimeout(()=>{ msg.textContent=''; }, 3000);
+}
+
 function markConnected(){const b=document.getElementById('btnDrive');b.classList.add('connected');b.innerHTML='✅ Drive conectado — recargar';const bd=document.getElementById('btnDisconnect');if(bd)bd.style.display='block';}
 
 function disconnectDrive(){
@@ -314,7 +328,8 @@ async function loadSyncFile(){
     if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado. Sincroniza el Scheduler primero.`);return;}
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
     if(!data||data.exportType!=='anaCS_sync'){setDS('err','⚠ Archivo inválido');return;}
-    S.grupos=data.grupos||{};S.servs=data.servs||[];S.clis=data.clis||[];S.emps=data.emps||[];
+    S.grupos=data.grupos||{};
+  if(data.supervisorPin){ S.supervisorPin=data.supervisorPin; localStorage.setItem('brazos_supervisorPin', data.supervisorPin); }S.servs=data.servs||[];S.clis=data.clis||[];S.emps=data.emps||[];
     const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${Object.keys(S.grupos).length} grupos · ${mod}`);
     const sel=document.getElementById('selGroup');
@@ -902,7 +917,7 @@ function closeSupervisorPin() {
 
 function verifySupervisorPin() {
   const input = document.getElementById('supPinInput').value;
-  const stored = localStorage.getItem('brazos_supervisorPin') || '1234';
+  const stored = S.supervisorPin || localStorage.getItem('brazos_supervisorPin') || '1234';
   if (input === stored) {
     closeSupervisorPin();
     supDate = S.selectedDate || today();
@@ -954,9 +969,17 @@ function renderSupervisor() {
     return;
   }
 
+  // Enriquecer servicios con clientName desde S.clis
+  const enriched = allSvcs.map(sv => {
+    const c = (S.clis||[]).find(x => String(x.id) === String(sv.cliId)) || {};
+    const showProp = (c.type==='airbnb'||c.type==='unico');
+    const clientName = (showProp && c.propId) ? (c.name||'') + ' / ' + c.propId : c.name || `Cliente ${sv.cliId}`;
+    return { ...sv, clientName, address: c.city||c.address||sv.address||'', phone: c.tel||c.phone||'' };
+  });
+
   // Group by grupo/empId
   const byGroup = {};
-  allSvcs.forEach(sv => {
+  enriched.forEach(sv => {
     const g = sv.grupo || sv.empId || 'Sin grupo';
     if (!byGroup[g]) byGroup[g] = [];
     byGroup[g].push(sv);
@@ -981,6 +1004,10 @@ function renderSupervisor() {
           </div>
           <span style="background:${sc};color:white;padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:700;white-space:nowrap;">${sl}</span>
         </div>`;
+      // Mostrar nota si existe
+      if (rpt.note) {
+        html += `<div style="margin-bottom:8px;padding:6px 8px;background:#fff8e1;border-radius:6px;border-left:3px solid #f39c12;font-size:0.78rem;color:#856404;">📝 ${rpt.note}</div>`;
+      }
       if (rpt.status !== 'cancelled') {
         html += `<div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button onclick="supMoveGroup('${svc.id}',${JSON.stringify(allGroups)})" style="background:#3498db;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">👥 Cambiar Grupo</button>

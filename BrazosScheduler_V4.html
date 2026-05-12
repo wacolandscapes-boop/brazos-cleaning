@@ -10245,6 +10245,7 @@ class Scheduler {
                 companyConfig: localStorage.getItem('companyConfig'),
                 companyLogo: localStorage.getItem('companyLogo'),
                 customColors: localStorage.getItem('customColors'),
+                supervisorPin: localStorage.getItem('brazos_supervisorPin') || '1234',
             };
             const fileName = 'brazosCS_sync.json';
             const searchRes = await fetch(
