@@ -243,6 +243,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     <div style="display:flex;gap:6px">
       <button class="hdr-btn" onclick="refreshData()" id="btnRefresh" title="Actualizar">🔄</button>
       <button class="hdr-btn" id="btnNotes" onclick="openNotesPanel()" title="Notas del supervisor" style="display:none;position:relative;">📝<span id="notesBadge" style="position:absolute;top:-4px;right:-4px;background:#e74c3c;color:white;border-radius:50%;width:14px;height:14px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;"></span></button>
+      <button class="hdr-btn" id="btnSuplente" onclick="openSuplenteModal()" title="Modo Suplente" style="display:none;">🔑</button>
       <button class="hdr-btn" onclick="openSett()">⚙</button>
     </div>
   </div>
@@ -303,6 +304,22 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal Modo Suplente -->
+<div id="suplenteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;width:90%;max-width:340px;padding:24px;">
+    <h3 style="margin:0 0 6px;color:#e67e22;">🔑 Modo Suplente</h3>
+    <p style="font-size:0.83rem;color:#666;margin:0 0 16px;">Ingresa la clave de 4 dígitos proporcionada por el supervisor.</p>
+    <input type="password" id="suplentePin" maxlength="4" placeholder="••••"
+      style="width:100%;padding:14px;border:2px solid #e67e22;border-radius:8px;font-size:1.8rem;text-align:center;letter-spacing:8px;box-sizing:border-box;margin-bottom:10px;"
+      oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+    <div id="suplenteError" style="color:#e74c3c;font-size:0.82rem;min-height:18px;margin-bottom:10px;text-align:center;"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeSuplenteModal()" style="flex:1;padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;cursor:pointer;font-weight:700;">Cancelar</button>
+      <button onclick="activarModoSuplente()" style="flex:2;padding:12px;background:#e67e22;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.95rem;">✅ Activar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Panel de Notas del Supervisor -->
 <div id="notesPanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:3000;align-items:flex-end;justify-content:center;">
   <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:75vh;overflow-y:auto;padding:20px;">
@@ -318,6 +335,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 const CLIENT_ID='1032764332702-uvnqg0ccaer5gp2hr12gmniqe38ria1t.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/drive.readonly';
 const FOLDER='BrazosCleaningApp', FILE='brazosCS_sync.json', RFILE='quiktrack_bra_reports.json';
+const RPTS_KEY='qt_bra_reports';
 const SESS='ac_bra_sess', TKEY='brazos_drive_token', TEXP='brazos_drive_token_expiry';
 const DAYS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MON=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -375,7 +393,7 @@ function tryRestoreSession(){
       // Si hay token válido, refrescar desde Drive automáticamente
       const tok=localStorage.getItem(TKEY);
       const exp=parseInt(localStorage.getItem(TEXP)||'0');
-      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); }
+      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); } try{checkBtnSuplente();}catch(e){}
       return;
     }
   }catch(e){}
@@ -411,7 +429,7 @@ async function loadSyncFile(){
     if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado`);return;}
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
     if(!data||data.exportType!=='anaCS_sync'){setDS('err','⚠ Archivo inválido');return;}
-    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[]; S.cellNotes=data.cellNotes||{};
+    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[]; S.cellNotes=data.cellNotes||{}; if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
     const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${mod}`);
     // also try to load reports
@@ -639,6 +657,21 @@ function renderAgenda(){
         </div>
       </div>
       <div class="sp">
+        ${checkSuplenteActivo()?`
+        <div class="tr2">
+          <div class="tb ${hasCheckin?'has':'empty'}">
+            <div class="tbl">🟡 Llegada</div>
+            <input type="time" value="${rpt.checkin||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckin?'var(--yellow)':'var(--border)'};color:${hasCheckin?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;" onchange="suplenteUpdTime('${svc.id}','checkin',this.value)">
+            <div class="tbs">${hasCheckin?'registrada':'toca para ingresar'}</div>
+          </div>
+          <div class="tb ${hasCheckout?'has':'empty'}">
+            <div class="tbl">🟢 Salida</div>
+            <input type="time" value="${rpt.checkout||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckout?'var(--green)':'var(--border)'};color:${hasCheckout?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;" onchange="suplenteUpdTime('${svc.id}','checkout',this.value)">
+            <div class="tbs">${hasCheckout?(dur||'—'):'toca para ingresar'}</div>
+          </div>
+        </div>
+        <textarea rows="2" placeholder="Notas…" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;" onchange="suplenteUpdNote('${svc.id}',this.value)">${rpt.note||''}</textarea>
+        ` : `
         <div class="tr2">
           <div class="tb ${hasCheckin?'has':'empty'}">
             <div class="tbl">🟡 Llegada</div>
@@ -653,6 +686,7 @@ function renderAgenda(){
         </div>
         ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
         ${rpt.note?`<div style="font-size:12px;color:var(--muted);padding:6px 8px;background:var(--s2);border-radius:7px;margin-top:6px">📝 ${rpt.note}</div>`:''}
+        `}
       </div>`;
 
     bc.appendChild(blk);
@@ -662,6 +696,33 @@ function renderAgenda(){
 }
 
 function tog(id){document.getElementById(`blk_${id}`)?.classList.toggle('open');}
+
+function suplenteGetReports(){
+  try{ return JSON.parse(localStorage.getItem(RPTS_KEY)||'{}'); }catch(e){ return {}; }
+}
+function suplenteUpdTime(id, field, val){
+  const allRpts = suplenteGetReports();
+  const date = S.selectedDate;
+  const group = S.group;
+  if(!allRpts[date]) allRpts[date]={};
+  if(!allRpts[date][group]) allRpts[date][group]={savedAt:new Date().toISOString(),group,date,services:[]};
+  let svc = allRpts[date][group].services.find(s=>String(s.id)===String(id));
+  if(!svc){
+    const orig = (S.servs||[]).find(s=>String(s.id)===String(id));
+    const cli = (S.clis||[]).find(c=>String(c.id)===String(orig?.cliId))||{};
+    svc = {id:String(id),clientName:cli.name||'',address:cli.city||'',checkin:'',checkout:'',status:'pending',note:''};
+    allRpts[date][group].services.push(svc);
+  }
+  svc[field]=val;
+  if(svc.checkin&&!svc.checkout) svc.status='active';
+  if(svc.checkin&&svc.checkout) svc.status='done';
+  allRpts[date][group].savedAt=new Date().toISOString();
+  localStorage.setItem(RPTS_KEY, JSON.stringify(allRpts));
+  S.reports[id]=svc;
+}
+function suplenteUpdNote(id, val){
+  suplenteUpdTime(id,'note',val);
+}
 
 /* ── WEEK VIEW ── */
 function renderWeek(){
@@ -802,7 +863,7 @@ async function refreshData(){
       document.getElementById('syncLbl').textContent='Datos locales actualizados';
       toast('✅ Actualizado desde Scheduler');
     }
-    saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){}
+    saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){}
   }catch(e){
     sdot('err','Error al actualizar');
     toast('⚠ Error: '+e.message);
@@ -826,6 +887,74 @@ function loadLocal(){
     buildEmpsList(); showEmpSection();
     toast('✅ Datos del Scheduler cargados');
   }catch(e){toast('⚠ Error leyendo localStorage');}
+}
+
+/* ── MODO SUPLENTE ── */
+function checkSuplenteActivo(){
+  const data = JSON.parse(localStorage.getItem('brazos_suplente_activo')||'null');
+  if(!data) return false;
+  // Verificar que sea del día actual y no haya pasado medianoche
+  if(data.fecha !== today()) {
+    localStorage.removeItem('brazos_suplente_activo');
+    return false;
+  }
+  return true;
+}
+
+function checkBtnSuplente(){
+  const btn = document.getElementById('btnSuplente');
+  if(!btn) return;
+  const claves = S.clavesSuplente || [];
+  const tieneClaves = claves.some(c => c.estado === 'activa');
+  // Mostrar botón solo si hay claves activas disponibles o ya está activo el modo
+  if(tieneClaves || checkSuplenteActivo()){
+    btn.style.display = 'flex';
+    if(checkSuplenteActivo()){
+      btn.style.background = '#e67e22';
+      btn.style.color = 'white';
+      btn.title = '✅ Modo Suplente Activo';
+    }
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function openSuplenteModal(){
+  if(checkSuplenteActivo()){
+    if(confirm('✅ Modo Suplente está activo para hoy.\n\n¿Deseas desactivarlo?')){
+      localStorage.removeItem('brazos_suplente_activo');
+      checkBtnSuplente();
+      renderView();
+      toast('🔑 Modo Suplente desactivado');
+    }
+    return;
+  }
+  document.getElementById('suplentePin').value='';
+  document.getElementById('suplenteError').textContent='';
+  document.getElementById('suplenteModal').style.display='flex';
+  setTimeout(()=>document.getElementById('suplentePin').focus(),100);
+}
+
+function closeSuplenteModal(){
+  document.getElementById('suplenteModal').style.display='none';
+}
+
+function activarModoSuplente(){
+  const pin = document.getElementById('suplentePin').value.trim();
+  const err = document.getElementById('suplenteError');
+  if(pin.length !== 4){ err.textContent='⚠️ Ingresa 4 dígitos.'; return; }
+  const claves = S.clavesSuplente || [];
+  const idx = claves.findIndex(c => c.clave === pin && c.estado === 'activa');
+  if(idx === -1){ err.textContent='❌ Clave incorrecta o ya utilizada.'; document.getElementById('suplentePin').value=''; return; }
+  // Marcar clave como usada
+  claves[idx].estado = 'usada';
+  claves[idx].usada = today();
+  S.clavesSuplente = claves;
+  localStorage.setItem('brazos_suplente_activo', JSON.stringify({ fecha: today(), activadaA: new Date().toLocaleTimeString('es-MX') }));
+  closeSuplenteModal();
+  checkBtnSuplente();
+  renderView();
+  toast('✅ Modo Suplente activado para hoy');
 }
 
 /* ── NOTAS SUPERVISOR ── */

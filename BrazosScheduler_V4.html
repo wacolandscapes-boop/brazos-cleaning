@@ -1123,6 +1123,7 @@
                 <button class="btn" onclick="app.showSec('secConfig')" style="background:#2c3e50; color:white">🎨 Config. Series</button>
                 <button class="btn" onclick="app.showSec('secGrupos')" style="background:#2c3e50; color:white">👥 Grupos</button>
                 <button class="btn" onclick="app.showSec('secSupervisor')" style="background:#6c3483; color:white">🔐 Supervisor</button>
+                <button class="btn" onclick="app.showSec('secClavesSuplente')" style="background:#e67e22; color:white">🔑 Claves Suplente</button>
             </div>
             <div id="secEmp">
                 <div style="margin-bottom:15px; display:flex; justify-content:flex-end; gap:8px;">
@@ -1258,6 +1259,22 @@
                         <strong>ℹ️ Nota:</strong> El PIN se guarda en <em>localStorage</em> con la clave <code>brazos_supervisorPin</code>.
                         El valor por defecto es <strong>1234</strong> si nunca se ha configurado.<br><br>
                         Para que el supervisor use el PIN actualizado en otro dispositivo, sincroniza Drive después de guardarlo.
+                    </div>
+                </div>
+            </div>
+
+            <div id="secClavesSuplente" style="display:none">
+                <h3 style="margin-top:0; color:#e67e22">🔑 Claves Suplente</h3>
+                <p style="color:#666; font-size:0.85rem; margin-bottom:16px;">Genera claves de un solo uso para que un líder suplente pueda registrar horarios en <strong>BrazosCalendar</strong> por un día.</p>
+                <div style="background:#fff8f0; border:2px solid #e67e22; border-radius:12px; padding:20px; max-width:420px;">
+                    <button onclick="app.generarClaveSuplente()" style="width:100%;padding:12px;background:#e67e22;color:white;border:none;border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-bottom:16px;">
+                        ⚡ Generar Nueva Clave
+                    </button>
+                    <div id="clavesSuplenteList" style="max-height:300px;overflow-y:auto;"></div>
+                </div>
+                <div style="margin-top:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;max-width:420px;">
+                    <div style="font-size:0.8rem;color:#856404;">
+                        <strong>ℹ️ Cómo usar:</strong> Genera una clave → comunícala por llamada o texto al líder suplente → el líder la ingresa en BrazosCalendar → queda activo por ese día hasta medianoche → la clave se descarta automáticamente.
                     </div>
                 </div>
             </div>
@@ -3560,6 +3577,49 @@ class Scheduler {
     }
 
     // Personalización de Colores
+    // ── CLAVES SUPLENTE ─────────────────────────────────────────────
+    _getClavesSuplente() {
+        return JSON.parse(localStorage.getItem('brazos_clavesSuplente') || '[]');
+    }
+    _saveClavesSuplente(claves) {
+        localStorage.setItem('brazos_clavesSuplente', JSON.stringify(claves));
+    }
+    generarClaveSuplente() {
+        const claves = this._getClavesSuplente();
+        let nueva;
+        do { nueva = String(Math.floor(1000 + Math.random() * 9000)); }
+        while (claves.some(c => c.clave === nueva && c.estado === 'activa'));
+        claves.push({ clave: nueva, estado: 'activa', creada: new Date().toLocaleDateString('es-MX') });
+        this._saveClavesSuplente(claves);
+        this.renderClavesSuplente();
+        this.save();
+        alert(`✅ Nueva clave generada:\n\n🔑  ${nueva}  🔑\n\nComunícala al líder suplente.\nSincroniza Drive para que esté disponible en Calendar.`);
+    }
+    eliminarClaveSuplente(idx) {
+        const claves = this._getClavesSuplente();
+        claves.splice(idx, 1);
+        this._saveClavesSuplente(claves);
+        this.renderClavesSuplente();
+        this.save();
+    }
+    renderClavesSuplente() {
+        const el = document.getElementById('clavesSuplenteList');
+        if (!el) return;
+        const claves = this._getClavesSuplente();
+        if (!claves.length) {
+            el.innerHTML = '<p style="color:#888;font-size:0.85rem;text-align:center;">Sin claves generadas.</p>';
+            return;
+        }
+        el.innerHTML = claves.map((c, i) => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:8px;border-radius:8px;background:${c.estado==='activa'?'#f0fff4':'#f8f9fa'};border:1px solid ${c.estado==='activa'?'#27ae60':'#dee2e6'};">
+                <div>
+                    <span style="font-size:1.4rem;font-weight:800;letter-spacing:6px;color:${c.estado==='activa'?'#1a5c30':'#999'};">${c.clave}</span>
+                    <div style="font-size:0.72rem;color:#888;margin-top:2px;">${c.estado==='activa'?'✅ Activa':'❌ Usada'} · ${c.creada}</div>
+                </div>
+                <button onclick="app.eliminarClaveSuplente(${i})" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75rem;">🗑</button>
+            </div>`).join('');
+    }
+
     saveSupervisorPin() {
         const pin = document.getElementById('supPinInput').value.trim();
         const confirm2 = document.getElementById('supPinConfirm').value.trim();
@@ -6069,12 +6129,15 @@ class Scheduler {
 
     
     showSec(s) { 
-        ['secEmp','secCli','secConfig','secGrupos','secSupervisor'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
+        ['secEmp','secCli','secConfig','secGrupos','secSupervisor','secClavesSuplente'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
         if(s === 'secConfig') {
             this.renderSeriesConfig();
         }
         if(s === 'secGrupos') {
             this.renderGruposSection();
+        }
+        if(s === 'secClavesSuplente') {
+            this.renderClavesSuplente();
         }
     }
 
@@ -10247,6 +10310,7 @@ class Scheduler {
                 customColors: localStorage.getItem('customColors'),
                 supervisorPin: localStorage.getItem('brazos_supervisorPin') || '1234',
                 cellNotes: JSON.parse(localStorage.getItem('brazos_cellNotes') || '{}'),
+                clavesSuplente: JSON.parse(localStorage.getItem('brazos_clavesSuplente') || '[]'),
             };
             const fileName = 'brazosCS_sync.json';
             const searchRes = await fetch(
