@@ -516,36 +516,60 @@ async function loadHorariosFromDrive(){
   if(!S.driveToken || !S.folderId || !S.group) return;
   try{
     const fname = horariosFile(S.group);
-    const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
-    if(!sr.files||!sr.files.length){ S.horariosFileId=null; return; } // primera vez, sin datos aún
-    S.horariosFileId=sr.files[0].id;
-    const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-    if(!data) return;
-    // Mezclar horarios de Drive con los locales — Drive gana solo si local no tiene esa fecha/servicio
     const localKey = horariosKey(S.group);
     const local = JSON.parse(localStorage.getItem(localKey)||'{}');
-    const merged = Object.assign({}, data);
-    Object.keys(local).forEach(date=>{
-      if(!merged[date]){ merged[date]=local[date]; return; }
-      // Mezclar servicios: local gana si su savedAt es más reciente
-      const localTime = new Date(local[date].savedAt||0).getTime();
-      const driveTime = new Date(merged[date].savedAt||0).getTime();
-      if(localTime >= driveTime){ merged[date]=local[date]; return; }
-      // Drive más reciente — mezclar servicio por servicio para no perder nada
-      local[date].services && local[date].services.forEach(ls=>{
-        const idx=merged[date].services.findIndex(s=>String(s.id)===String(ls.id));
-        if(idx>=0) merged[date].services[idx]=ls;
-        else merged[date].services.push(ls);
+
+    const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
+    if(!sr.files||!sr.files.length){
+      // Archivo no existe en Drive aún — subir local si tiene datos
+      S.horariosFileId=null;
+      if(Object.keys(local).length){ saveHorariosToDrive(); }
+      // Cargar local en S.reports
+      S.reports={};
+      Object.keys(local).forEach(date=>{
+        if(!S.reports[date]) S.reports[date]={};
+        S.reports[date][S.group]=local[date];
       });
+      return;
+    }
+    S.horariosFileId=sr.files[0].id;
+    const driveData=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
+    if(!driveData){ return; }
+
+    // Merge: local es la base — Drive solo aporta lo que local no tiene
+    const merged = Object.assign({}, local);
+    Object.keys(driveData).forEach(date=>{
+      if(!merged[date]){ merged[date]=driveData[date]; return; }
+      // Ambos tienen la fecha — gana el más reciente
+      const localTime = new Date(merged[date].savedAt||0).getTime();
+      const driveTime = new Date(driveData[date].savedAt||0).getTime();
+      if(driveTime > localTime){
+        // Drive más reciente — mezclar servicio por servicio para no perder registros locales
+        driveData[date].services && driveData[date].services.forEach(ds=>{
+          const idx=(merged[date].services||[]).findIndex(s=>String(s.id)===String(ds.id));
+          if(idx>=0){
+            // Conservar el local si tiene checkin/checkout, sino usar Drive
+            const ls=merged[date].services[idx];
+            if(!ls.checkin && !ls.checkout) merged[date].services[idx]=ds;
+          } else {
+            if(!merged[date].services) merged[date].services=[];
+            merged[date].services.push(ds);
+          }
+        });
+        // Conservar shopOut/shopBack local si existen
+        if(!merged[date].shopOut && driveData[date].shopOut) merged[date].shopOut=driveData[date].shopOut;
+        if(!merged[date].shopBack && driveData[date].shopBack) merged[date].shopBack=driveData[date].shopBack;
+      }
     });
+
     localStorage.setItem(localKey, JSON.stringify(merged));
-    // Convertir a S.reports[date][group]
+    // Cargar en S.reports
     S.reports={};
     Object.keys(merged).forEach(date=>{
       if(!S.reports[date]) S.reports[date]={};
       S.reports[date][S.group]=merged[date];
     });
-    toast('✅ Horarios del grupo cargados');
+    toast('✅ Horarios sincronizados');
   }catch(e){ console.warn('loadHorariosFromDrive:', e.message); }
 }
 
