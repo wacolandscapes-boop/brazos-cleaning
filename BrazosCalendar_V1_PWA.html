@@ -849,24 +849,7 @@ function renderAgenda(){
           <button onclick="supvMoveDate('${svc.id}')" style="flex:1;padding:6px;background:#0ea5e9;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;">📅 Cambiar Fecha</button>
         </div>
       `:''}
-      ${checkSuplenteActivo()?`
-        ${panelSvcHTML(svc.id, rpt)}
-        ` : `
-        <div class="tr2">
-          <div class="tb ${hasCheckin?'has':'empty'}">
-            <div class="tbl">🟡 Llegada</div>
-            <div class="tbv">${hasCheckin?fmt12(rpt.checkin):'—'}</div>
-            <div class="tbs">${hasCheckin?'registrada':'sin registrar'}</div>
-          </div>
-          <div class="tb ${hasCheckout?'has':'empty'}">
-            <div class="tbl">🟢 Salida</div>
-            <div class="tbv">${hasCheckout?fmt12(rpt.checkout):'—'}</div>
-            <div class="tbs">${hasCheckout?(dur||'—'):'sin registrar'}</div>
-          </div>
-        </div>
-        ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
-        ${rpt.note?`<div style="font-size:12px;color:var(--muted);padding:6px 8px;background:var(--s2);border-radius:7px;margin-top:6px">📝 ${rpt.note}</div>`:''}
-        `}
+      ${panelSvcHTML(svc.id, rpt)}
       </div>`;
 
     bc.appendChild(blk);
@@ -901,50 +884,61 @@ function registrarShop(campo){
 }
 
 
-// Registro global de IDs de servicios para evitar problemas de comillas en onclick
-window._svcReg = window._svcReg || {};
-function _svcIdx(id){ 
-  // Buscar si ya existe
-  for(const k in window._svcReg){ if(window._svcReg[k]===id) return k; }
-  const k = 'k'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-  window._svcReg[k]=id; 
-  return k;
-}
-function _svcId(k){ return window._svcReg[k]||k; }
-
-// Helper: genera HTML del panel de un servicio
+// Helper: genera HTML del panel de un servicio — concatenación simple, sin backticks anidados
 function panelSvcHTML(id, rpt){
-  const hasCheckin=!!(rpt.checkin);
-  const hasCheckout=!!(rpt.checkout);
-  const dur=(rpt.checkin&&rpt.checkout)?calcDur(rpt.checkin,rpt.checkout):null;
-  const k = _svcIdx(id);
+  var hasCheckin  = !!(rpt.checkin);
+  var hasCheckout = !!(rpt.checkout);
+  var dur = (rpt.checkin && rpt.checkout) ? calcDur(rpt.checkin, rpt.checkout) : null;
+  var sid = id.replace(/[^a-zA-Z0-9_]/g, '_'); // ID seguro para usar en HTML
 
-  const btnAhoraIN   = `<button style="width:100%;margin-top:6px;padding:12px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(_svcId('${k}'),'checkin')">⏱ Registrar Ahora</button>`;
-  const btnEditarIN  = `<button style="width:100%;margin-top:4px;padding:10px;background:none;border:2px solid #f59e0b;color:#f59e0b;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(_svcId('${k}'),'checkin')">✏️ Ingresar Hora</button>`;
-  const btnAhoraOUT  = `<button style="width:100%;margin-top:6px;padding:12px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(_svcId('${k}'),'checkout')">⏱ Registrar Ahora</button>`;
-  const btnEditarOUT = `<button style="width:100%;margin-top:4px;padding:10px;background:none;border:2px solid #22c55e;color:#22c55e;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(_svcId('${k}'),'checkout')">✏️ Ingresar Hora</button>`;
-  const btnBorrarIN  = `<button style="padding:5px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteUpdTime(_svcId('${k}'),'checkin','');suplenteRegistrar(_svcId('${k}'),'_refresh')">✕</button>`;
-  const btnBorrarOUT = `<button style="padding:5px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteUpdTime(_svcId('${k}'),'checkout','');suplenteRegistrar(_svcId('${k}'),'_refresh')">✕</button>`;
-  const btnEditIN2   = `<button style="padding:5px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteEditarHora(_svcId('${k}'),'checkin')">✏️</button>`;
-  const btnEditOUT2  = `<button style="padding:5px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteEditarHora(_svcId('${k}'),'checkout')">✏️</button>`;
+  // Guardar en registro global para recuperar desde onclick
+  window._rids = window._rids || {};
+  window._rids[sid] = id;
 
-  const cIN = hasCheckin
-    ? `<div class="tbv">${fmt12(rpt.checkin)}</div><div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">${btnEditIN2}${btnBorrarIN}</div>`
-    : btnAhoraIN + btnEditarIN;
+  var html = '<div class="tr2">';
 
-  const cOUT = hasCheckout
-    ? `<div class="tbv">${fmt12(rpt.checkout)}</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">${dur||''}</div><div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">${btnEditOUT2}${btnBorrarOUT}</div>`
-    : hasCheckin
-      ? btnAhoraOUT + btnEditarOUT
-      : `<button disabled style="width:100%;margin-top:6px;padding:12px;background:#ccc;color:white;border:none;border-radius:8px;font-size:1rem;cursor:not-allowed;">⏱ Registrar Ahora</button><div class="tbs">registra llegada primero</div>`;
+  // — Llegada —
+  html += '<div class="tb ' + (hasCheckin ? 'has' : 'empty') + '">';
+  html += '<div class="tbl">🟡 Llegada</div>';
+  if(hasCheckin){
+    html += '<div class="tbv">' + fmt12(rpt.checkin) + '</div>';
+    html += '<div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">';
+    html += '<button style="padding:6px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkin\')">✏️ Editar</button>';
+    html += '<button style="padding:6px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteUpdTime(window._rids[\'' + sid + '\'],\'checkin\',\'\');suplenteRegistrar(window._rids[\'' + sid + '\'],\'_refresh\')">✕</button>';
+    html += '</div>';
+  } else {
+    html += '<button style="width:100%;margin-top:8px;padding:13px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(window._rids[\'' + sid + '\'],\'checkin\')">⏱ Registrar Ahora</button>';
+    html += '<button style="width:100%;margin-top:5px;padding:10px;background:none;border:2px solid #f59e0b;color:#f59e0b;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkin\')">✏️ Ingresar Hora</button>';
+  }
+  html += '</div>';
 
-  return `<div class="tr2">
-    <div class="tb ${hasCheckin?'has':'empty'}"><div class="tbl">🟡 Llegada</div>${cIN}</div>
-    <div class="tb ${hasCheckout?'has':'empty'}"><div class="tbl">🟢 Salida</div>${cOUT}</div>
-  </div>
-  ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
-  <textarea rows="2" placeholder="Notas…" id="notaTxt_${k}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
-  <button style="width:100%;margin-top:6px;padding:9px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(_svcId('${k}'),document.getElementById('notaTxt_${k}').value)">💾 Guardar Nota</button>`;
+  // — Salida —
+  html += '<div class="tb ' + (hasCheckout ? 'has' : 'empty') + '">';
+  html += '<div class="tbl">🟢 Salida</div>';
+  if(hasCheckout){
+    html += '<div class="tbv">' + fmt12(rpt.checkout) + '</div>';
+    if(dur) html += '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + dur + '</div>';
+    html += '<div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">';
+    html += '<button style="padding:6px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkout\')">✏️ Editar</button>';
+    html += '<button style="padding:6px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteUpdTime(window._rids[\'' + sid + '\'],\'checkout\',\'\');suplenteRegistrar(window._rids[\'' + sid + '\'],\'_refresh\')">✕</button>';
+    html += '</div>';
+  } else if(hasCheckin){
+    html += '<button style="width:100%;margin-top:8px;padding:13px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(window._rids[\'' + sid + '\'],\'checkout\')">⏱ Registrar Ahora</button>';
+    html += '<button style="width:100%;margin-top:5px;padding:10px;background:none;border:2px solid #22c55e;color:#22c55e;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkout\')">✏️ Ingresar Hora</button>';
+  } else {
+    html += '<button disabled style="width:100%;margin-top:8px;padding:13px;background:#ccc;color:white;border:none;border-radius:8px;font-size:1rem;cursor:not-allowed;">⏱ Registrar Ahora</button>';
+    html += '<div class="tbs">registra llegada primero</div>';
+  }
+  html += '</div>';
+
+  html += '</div>'; // tr2
+
+  if(dur) html += '<div class="dur-row">⏱ Duración: <span>' + dur + '</span></div>';
+
+  html += '<textarea rows="2" placeholder="Notas…" id="notaTxt_' + sid + '" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:Barlow,sans-serif;font-size:13px;resize:none;box-sizing:border-box;">' + (rpt.note||'') + '</textarea>';
+  html += '<button style="width:100%;margin-top:6px;padding:10px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(window._rids[\'' + sid + '\'],document.getElementById(\'notaTxt_' + sid + '\').value)">💾 Guardar Nota</button>';
+
+  return html;
 }
 
 document.addEventListener('click', function(e){
