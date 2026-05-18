@@ -378,7 +378,7 @@ const MON=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Di
 
 // App state
 const S={
-  driveToken:null, folderId:null,
+  driveToken:null, folderId:null, reportsFileId:null,
   grupos:{}, servs:[], clis:[], emps:[], reports:{},
   empId:null, empName:'', group:'',
   selectedDate:'', weekStart:'', view:'day'
@@ -473,12 +473,35 @@ async function loadSyncFile(){
     if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado`);return;}
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
     if(!data||data.exportType!=='anaCS_sync'){setDS('err','⚠ Archivo inválido');return;}
-    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[];
-    S.cellNotes=data.cellNotes||{};
-    if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
-    if(data.supervisorPin)  S.supervisorPin=data.supervisorPin;
+    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[]; S.cellNotes=data.cellNotes||{}; if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente; if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
     const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${mod}`);
+    // also try to load reports
+    try{
+      const rr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${RFILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
+      if(rr.files&&rr.files.length){
+        S.reportsFileId=rr.files[0].id;
+        const rdata=await dGet(`https://www.googleapis.com/drive/v3/files/${rr.files[0].id}?alt=media`);
+        // Mezclar reportes de Drive con reportes locales (modo suplente)
+        const localRpts = suplenteGetReports();
+        const merged = rdata||{};
+        Object.keys(localRpts).forEach(date=>{
+          Object.keys(localRpts[date]).forEach(group=>{
+            if(!merged[date]) merged[date]={};
+            if(!merged[date][group]) merged[date][group]=localRpts[date][group];
+            else {
+              // Mezclar servicios
+              localRpts[date][group].services.forEach(ls=>{
+                const idx=merged[date][group].services.findIndex(s=>String(s.id)===String(ls.id));
+                if(idx>=0) merged[date][group].services[idx]=ls;
+                else merged[date][group].services.push(ls);
+              });
+            }
+          });
+        });
+        S.reports=merged;
+      }
+    }catch(e){}
     buildEmpsList();
     showEmpSection();
   }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
@@ -493,70 +516,85 @@ async function dGet(url){
 async function saveHorariosToDrive(){
   if(!S.driveToken||!S.folderId||!S.group) return;
   try{
-    const fname = horariosFile(S.group);
-    const key   = horariosKey(S.group);
-    const data  = JSON.parse(localStorage.getItem(key)||'{}');
+    var fname=horariosFile(S.group), key=horariosKey(S.group);
+    var data=JSON.parse(localStorage.getItem(key)||'{}');
     if(!Object.keys(data).length) return;
-    const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
-    const form = new FormData();
-    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-    let url, method;
+    var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
+    var form=new FormData(), blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    var url2,method;
     if(sr.files&&sr.files.length){
       form.append('metadata',new Blob([JSON.stringify({name:fname})],{type:'application/json'}));
       form.append('file',blob);
-      url=`https://www.googleapis.com/upload/drive/v3/files/${sr.files[0].id}?uploadType=multipart`;
+      url2='https://www.googleapis.com/upload/drive/v3/files/'+sr.files[0].id+'?uploadType=multipart';
       method='PATCH';
     } else {
       form.append('metadata',new Blob([JSON.stringify({name:fname,parents:[S.folderId]})],{type:'application/json'}));
       form.append('file',blob);
-      url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      url2='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
       method='POST';
     }
-    await fetch(url,{method,headers:{Authorization:`Bearer ${S.driveToken}`},body:form});
+    await fetch(url2,{method:method,headers:{Authorization:'Bearer '+S.driveToken},body:form});
     sdot('ok','Sync '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}));
-  }catch(e){ console.warn('saveHorariosToDrive:',e.message); }
+  }catch(e){console.warn('saveHorariosToDrive:',e.message);}
 }
 
-async function loadHorariosFromDrive(){
-  if(!S.driveToken||!S.folderId||!S.group) return;
-  try{
-    const fname = horariosFile(S.group);
-    const key   = horariosKey(S.group);
-    const local = JSON.parse(localStorage.getItem(key)||'{}');
-    const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
-    if(!sr.files||!sr.files.length){
-      // No existe en Drive — subir local si hay datos
-      if(Object.keys(local).length) saveHorariosToDrive();
-      S.reports={};
-      Object.keys(local).forEach(date=>{
-        if(!S.reports[date]) S.reports[date]={};
-        S.reports[date][S.group]=local[date];
-      });
-      return;
+async function saveReportsToDrive(){
+  if(!S.driveToken || !S.folderId) return;
+  try {
+    const localRpts = suplenteGetReports();
+    // Solo subir si hay datos locales para guardar
+    if(!localRpts || Object.keys(localRpts).length === 0) return;
+    // Mezclar con lo que ya está en Drive para no sobreescribir
+    const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='quiktrack_reports.json'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
+    let allRpts = localRpts;
+    if(sr.files && sr.files.length){
+      try {
+        const driveRpts = await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
+        // Mezclar Drive + local (local tiene prioridad)
+        allRpts = {...(driveRpts||{})};
+        Object.keys(localRpts).forEach(date=>{
+          if(!allRpts[date]) allRpts[date]={};
+          Object.keys(localRpts[date]).forEach(group=>{
+            if(!allRpts[date][group]) allRpts[date][group]=localRpts[date][group];
+            else {
+              localRpts[date][group].services.forEach(ls=>{
+                const idx=allRpts[date][group].services.findIndex(s=>String(s.id)===String(ls.id));
+                if(idx>=0) allRpts[date][group].services[idx]=ls;
+                else allRpts[date][group].services.push(ls);
+              });
+            }
+          });
+        });
+      } catch(e2){}
     }
-    const drive = await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-    // Merge: local gana sobre Drive para mismo fecha
-    const merged = Object.assign({},drive||{});
-    Object.keys(local).forEach(date=>{
-      const lt=new Date(local[date].savedAt||0).getTime();
-      const dt=new Date((merged[date]||{}).savedAt||0).getTime();
-      if(lt>=dt) merged[date]=local[date];
-    });
-    localStorage.setItem(key,JSON.stringify(merged));
-    S.reports={};
-    Object.keys(merged).forEach(date=>{
-      if(!S.reports[date]) S.reports[date]={};
-      S.reports[date][S.group]=merged[date];
-    });
-  }catch(e){ console.warn('loadHorariosFromDrive:',e.message); }
+    const blob = new Blob([JSON.stringify(allRpts)], {type:'application/json'});
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({name:'quiktrack_reports.json'})], {type:'application/json'}));
+    form.append('file', blob);
+    let url, method;
+    if(sr.files && sr.files.length){
+      url = `https://www.googleapis.com/upload/drive/v3/files/${sr.files[0].id}?uploadType=multipart`;
+      method = 'PATCH';
+    } else {
+      url = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      method = 'POST';
+      form.set('metadata', new Blob([JSON.stringify({name:'quiktrack_reports.json', parents:[S.folderId]})], {type:'application/json'}));
+    }
+    await fetch(url, {method, headers:{Authorization:`Bearer ${S.driveToken}`}, body:form});
+    toast('✅ Reporte guardado en Drive');
+  } catch(e) {
+    toast('⚠️ Error guardando reporte: ' + e.message);
+  }
 }
 
 async function saveSyncToDrive(){
-  if(!S.driveToken||!S.folderId){ toast('⚠️ Conecta Drive primero'); return false; }
-  try{
+  if(!S.driveToken || !S.folderId) { toast('⚠️ Conecta Drive primero'); return false; }
+  try {
+    // Buscar el archivo en Drive
     const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='brazosCS_sync.json'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
     if(!sr.files||!sr.files.length){ toast('⚠️ No se encontró brazosCS_sync.json'); return false; }
     const fileId = sr.files[0].id;
+    // Construir el JSON actualizado
     const data = {
       exportType: 'anaCS_sync',
       exportDate: new Date().toISOString(),
@@ -566,16 +604,19 @@ async function saveSyncToDrive(){
       supervisorPin: S.supervisorPin||'1234',
       clavesSuplente: S.clavesSuplente||[]
     };
-    const blob = new Blob([JSON.stringify(data)],{type:'application/json'});
+    const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
     const form = new FormData();
-    form.append('metadata',new Blob([JSON.stringify({name:'brazosCS_sync.json'})],{type:'application/json'}));
-    form.append('file',blob);
+    form.append('metadata', new Blob([JSON.stringify({name:'brazosCS_sync.json'})], {type:'application/json'}));
+    form.append('file', blob);
     const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
-      {method:'PATCH',headers:{Authorization:`Bearer ${S.driveToken}`},body:form});
+      {method:'PATCH', headers:{Authorization:`Bearer ${S.driveToken}`}, body:form});
     if(!res.ok) throw new Error(await res.text());
     toast('✅ Cambios guardados en Drive');
     return true;
-  }catch(e){ toast('❌ Error al guardar: '+e.message); return false; }
+  } catch(e) {
+    toast('❌ Error al guardar: ' + e.message);
+    return false;
+  }
 }
 function setDS(t,m){
   const el=document.getElementById('driveStatus');
@@ -639,19 +680,6 @@ function selectEmp(id, name, group){
   showEmpSelected(name, group);
   document.getElementById('btnStart').disabled=false;
   toast(`✅ ${name} seleccionado/a`);
-  // Cargar horarios del grupo desde localStorage
-  try{
-    const local = JSON.parse(localStorage.getItem(horariosKey(group))||'{}');
-    S.reports={};
-    Object.keys(local).forEach(function(date){
-      if(!S.reports[date]) S.reports[date]={};
-      S.reports[date][group]=local[date];
-    });
-  }catch(e){}
-  // Si Drive está conectado, cargar desde Drive
-  if(S.driveToken&&S.folderId){
-    setTimeout(function(){ try{ loadHorariosFromDrive(); }catch(e){} },300);
-  }
 }
 
 function showEmpSelected(name, group){
@@ -782,6 +810,8 @@ function renderAgenda(){
     const hasCheckin=!!(rpt.checkin);
     const hasCheckout=!!(rpt.checkout);
     const dur=(rpt.checkin&&rpt.checkout)?calcDur(rpt.checkin,rpt.checkout):null;
+    const sid=String(svc.id).replace(/[^a-zA-Z0-9]/g,'_');
+    window._sids=window._sids||{}; window._sids[sid]=svc.id;
 
     blk.innerHTML=`
       <div class="sh" onclick="tog('${svc.id}')">
@@ -802,20 +832,34 @@ function renderAgenda(){
           <button onclick="supvMoveDate('${svc.id}')" style="flex:1;padding:6px;background:#0ea5e9;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;">📅 Cambiar Fecha</button>
         </div>
       `:''}
+      ${true?`
+        <div class="tr2">
+          <div class="tb ${hasCheckin?'has':'empty'}">
+            <div class="tbl">🟡 Llegada</div>
+            <input type="time" id="cin_${sid}" value="${rpt.checkin||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckin?'var(--yellow)':'var(--border)'};color:${hasCheckin?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;">
+            <button onclick="var v=document.getElementById('cin_${sid}').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');document.getElementById('cin_${sid}').value=v;}suplenteUpdTime(window._sids['${sid}'],'checkin',v);renderView();" style="width:100%;margin-top:6px;padding:10px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Llegada</button>
+          </div>
+          <div class="tb ${hasCheckout?'has':'empty'}">
+            <div class="tbl">🟢 Salida</div>
+            <input type="time" id="cout_${sid}" value="${rpt.checkout||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckout?'var(--green)':'var(--border)'};color:${hasCheckout?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;">
+            <button onclick="var v=document.getElementById('cout_${sid}').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');document.getElementById('cout_${sid}').value=v;}suplenteUpdTime(window._sids['${sid}'],'checkout',v);renderView();" style="width:100%;margin-top:6px;padding:10px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Salida</button>
+          </div>
+        </div>` : `
         <div class="tr2">
           <div class="tb ${hasCheckin?'has':'empty'}">
             <div class="tbl">🟡 Llegada</div>
             <div class="tbv">${hasCheckin?fmt12(rpt.checkin):'—'}</div>
+            <div class="tbs">${hasCheckin?'registrada':'sin registrar'}</div>
           </div>
           <div class="tb ${hasCheckout?'has':'empty'}">
             <div class="tbl">🟢 Salida</div>
             <div class="tbv">${hasCheckout?fmt12(rpt.checkout):'—'}</div>
-            ${hasCheckout&&dur?`<div class="tbs">${dur}</div>`:''}
+            <div class="tbs">${hasCheckout?(dur||'—'):'sin registrar'}</div>
           </div>
         </div>
-        <button onclick="abrirRegModal('${svc.id}')" style="width:100%;margin-top:10px;padding:13px;background:${hasCheckin?'#0ea5e9':'#f59e0b'};color:white;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">
-          ${hasCheckin||hasCheckout?'✏️ Editar Horario':'⏱ Registrar Horario'}
-        </button>
+        ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
+        ${rpt.note?`<div style="font-size:12px;color:var(--muted);padding:6px 8px;background:var(--s2);border-radius:7px;margin-top:6px">📝 ${rpt.note}</div>`:''}
+        `}
       </div>`;
 
     bc.appendChild(blk);
@@ -826,101 +870,34 @@ function renderAgenda(){
 
 function tog(id){document.getElementById(`blk_${id}`)?.classList.toggle('open');}
 
-var _regSvcId = null;
-
-function horariosKey(group){ return 'brazos_horarios_'+group.toLowerCase().replace(/\s+/g,'_'); }
-function horariosFile(group){ return 'brazos_horarios_'+group.toLowerCase().replace(/\s+/g,'_')+'.json'; }
-
-function abrirRegModal(svcId){
-  _regSvcId = svcId;
-  var rpts = getReportsForDay(S.selectedDate);
-  var rpt  = rpts[svcId]||{};
-  var svc  = (S.servs||[]).find(function(s){ return String(s.id)===String(svcId); })||{};
-  var cli  = (S.clis||[]).find(function(c){ return String(c.id)===String(svc.cliId); })||{};
-  document.getElementById('regNombreCliente').textContent = cli.name||'';
-  document.getElementById('regCheckin').value  = rpt.checkin  || '';
-  document.getElementById('regCheckout').value = rpt.checkout || '';
-  document.getElementById('regModal').style.display = 'flex';
-}
-
-function cerrarRegModal(){
-  document.getElementById('regModal').style.display = 'none';
-}
-
-function regSetAhora(inputId){
-  var n = new Date();
-  document.getElementById(inputId).value = String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
-}
-
-function regGuardar(){
-  var id       = _regSvcId;
-  var checkin  = document.getElementById('regCheckin').value;
-  var checkout = document.getElementById('regCheckout').value;
-  var date     = S.selectedDate;
-  var group    = S.group;
-
-  if(!id || !date || !group){
-    toast('⚠ Error: id='+id+' date='+date+' group='+group);
-    return;
-  }
-  if(!checkin && !checkout){
-    toast('⚠ Ingresa al menos la hora de llegada');
-    return;
-  }
-
-  var key = horariosKey(group);
-  var all = JSON.parse(localStorage.getItem(key)||'{}');
-  if(!all[date]) all[date] = {group:group, date:date, services:[], savedAt:''};
-
-  var svc = all[date].services.find(function(s){ return String(s.id)===String(id); });
-  if(!svc){
-    var orig = (S.servs||[]).find(function(s){ return String(s.id)===String(id); });
-    var cli  = orig ? ((S.clis||[]).find(function(c){ return String(c.id)===String(orig.cliId); })||{}) : {};
-    svc = {id:String(id), clientName:cli.name||'', address:[cli.address,cli.city].filter(Boolean).join(', '), checkin:'', checkout:'', status:'pending', note:''};
-    all[date].services.push(svc);
-  }
-
-  if(checkin)  svc.checkin  = checkin;
-  if(checkout) svc.checkout = checkout;
-  svc.status = (svc.checkin&&svc.checkout) ? 'done' : (svc.checkin ? 'active' : 'pending');
-  all[date].savedAt = new Date().toISOString();
-
-  localStorage.setItem(key, JSON.stringify(all));
-
-  if(!S.reports) S.reports = {};
-  if(!S.reports[date]) S.reports[date] = {};
-  S.reports[date][group] = all[date];
-
-  cerrarRegModal();
-  toast('✅ Horario guardado');
-  setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 300);
-  renderView();
-}
+function horariosKey(g){ return 'brazos_horarios_'+g.toLowerCase().replace(/\s+/g,'_'); }
+function horariosFile(g){ return 'brazos_horarios_'+g.toLowerCase().replace(/\s+/g,'_')+'.json'; }
 
 function suplenteGetReports(){
   try{ return JSON.parse(localStorage.getItem(horariosKey(S.group||''))||'{}'); }catch(e){ return {}; }
 }
 function suplenteUpdTime(id, field, val){
-  var date  = S.selectedDate;
-  var group = S.group;
-  var key   = horariosKey(group);
-  var all   = JSON.parse(localStorage.getItem(key)||'{}');
+  var date=S.selectedDate, group=S.group;
+  if(!date||!group){ toast('⚠ Sin fecha/grupo'); return; }
+  var key=horariosKey(group);
+  var all=JSON.parse(localStorage.getItem(key)||'{}');
   if(!all[date]) all[date]={group:group,date:date,services:[],savedAt:''};
-  var svc = all[date].services.find(function(s){ return String(s.id)===String(id); });
+  var svc=all[date].services.find(function(s){return String(s.id)===String(id);});
   if(!svc){
-    var orig = (S.servs||[]).find(function(s){ return String(s.id)===String(id); });
-    var cli  = orig ? ((S.clis||[]).find(function(c){ return String(c.id)===String(orig.cliId); })||{}) : {};
-    svc = {id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
+    var orig=(S.servs||[]).find(function(s){return String(s.id)===String(id);});
+    var cli=orig?(S.clis||[]).find(function(c){return String(c.id)===String(orig.cliId);})||{}:{};
+    svc={id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
     all[date].services.push(svc);
   }
   svc[field]=val;
   svc.status=(svc.checkin&&svc.checkout)?'done':(svc.checkin?'active':'pending');
   all[date].savedAt=new Date().toISOString();
-  localStorage.setItem(key, JSON.stringify(all));
+  localStorage.setItem(key,JSON.stringify(all));
   if(!S.reports) S.reports={};
   if(!S.reports[date]) S.reports[date]={};
   S.reports[date][group]=all[date];
-  setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 300);
+  toast('✅ '+(field==='checkin'?'Llegada':'Salida')+' guardada');
+  setTimeout(function(){try{saveHorariosToDrive();}catch(e){}},300);
 }
 function suplenteUpdNote(id, val){
   suplenteUpdTime(id,'note',val);
@@ -964,7 +941,7 @@ function getSvcs(date){
       const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
       const showProp=(c.type==='airbnb'||c.type==='unico');
       const clientName=(showProp&&c.propId)?c.name+' / '+c.propId:c.name||`Cliente ${s.cliId}`;
-      return{id:String(s.id),clientName,address:[c.address,c.city].filter(Boolean).join(', '),phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||''};
+      return{id:String(s.id),clientName,address:c.city||c.address||'',phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||''};
     });
 }
 
@@ -1020,7 +997,7 @@ function closeSett(){document.getElementById('sp').classList.remove('open');}
 function disconnectDrive(){
   localStorage.removeItem('brazos_drive_token');
   localStorage.removeItem('brazos_drive_token_expiry');
-  S.driveToken=null; S.folderId=null;
+  S.driveToken=null; S.folderId=null; S.reportsFileId=null;
   closeSett();
   toast('🔌 Drive desconectado — reconecta para cambiar cuenta');
   setTimeout(()=>goSetup(), 1200);
@@ -1042,8 +1019,10 @@ async function refreshData(){
           S.servs=data.servs||[]; S.clis=data.clis||[]; S.grupos=data.grupos||{}; S.emps=data.emps||[];
         }
       }
-      // Recargar horarios del grupo
-      if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
+      // Reload reports
+      if(S.reportsFileId){
+        try{const rdata=await dGet(`https://www.googleapis.com/drive/v3/files/${S.reportsFileId}?alt=media`);S.reports=rdata||{};}catch(e){}
+      }
       const mod=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
       sdot('ok','Actualizado '+mod);
       document.getElementById('syncLbl').textContent='Actualizado '+mod;
@@ -1058,17 +1037,17 @@ async function refreshData(){
       if(sv) S.servs=JSON.parse(sv);
       if(c) S.clis=JSON.parse(c);
       if(e) S.emps=JSON.parse(e);
-      // Cargar horarios desde localStorage
-      if(S.group){
-        try{
-          const local=JSON.parse(localStorage.getItem(horariosKey(S.group))||'{}');
-          S.reports={};
-          Object.keys(local).forEach(function(date){
-            if(!S.reports[date]) S.reports[date]={};
-            S.reports[date][S.group]=local[date];
+      // Also read reports from localStorage
+      try{
+        const rpts=JSON.parse(localStorage.getItem('qt_bra_reports')||'{}');
+        // Convertir estructura fecha->grupo->services[] a id->reporte para render
+        S.reports={};
+        Object.values(rpts).forEach(dayData=>{
+          Object.values(dayData).forEach(grpData=>{
+            if(grpData.services) grpData.services.forEach(s=>{ S.reports[String(s.id)]=s; });
           });
-        }catch(ex){}
-      }
+        });
+      }catch(ex){}
       sdot('ok','Datos locales');
       document.getElementById('syncLbl').textContent='Datos locales actualizados';
       toast('✅ Actualizado desde Scheduler');
@@ -1091,17 +1070,16 @@ function loadLocal(){
     S.servs=JSON.parse(localStorage.getItem('v35_servs')||'[]');
     S.clis=JSON.parse(localStorage.getItem('v35_clis')||'[]');
     S.emps=JSON.parse(localStorage.getItem('v35_emps')||'[]');
-    // Cargar horarios desde localStorage
-    if(S.group){
-      try{
-        const local=JSON.parse(localStorage.getItem(horariosKey(S.group))||'{}');
-        S.reports={};
-        Object.keys(local).forEach(function(date){
-          if(!S.reports[date]) S.reports[date]={};
-          S.reports[date][S.group]=local[date];
+    // Read reports too
+    try{
+      const rpts2=JSON.parse(localStorage.getItem('qt_bra_reports')||'{}');
+      S.reports={};
+      Object.values(rpts2).forEach(dayData=>{
+        Object.values(dayData).forEach(grpData=>{
+          if(grpData.services) grpData.services.forEach(s=>{ S.reports[String(s.id)]=s; });
         });
-      }catch(e){}
-    }
+      });
+    }catch(e){}
     setDS('ok',`📱 ${S.servs.length} servicios cargados`);
     buildEmpsList(); showEmpSection();
     toast('✅ Datos del Scheduler cargados');
@@ -1325,7 +1303,7 @@ function saveSess(){
 }
 
 /* ── UTILS ── */
-function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function today(){return new Date().toISOString().split('T')[0];}
 function mondayOf(d){const dt=new Date(d+'T12:00:00'),day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));return dt.toISOString().split('T')[0];}
 function addDays(d,n){const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+n);return dt.toISOString().split('T')[0];}
 function toMins(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
@@ -1334,31 +1312,5 @@ function fmt12s(t){if(!t)return'';const[h24]=t.split(':').map(Number),am=h24>=12
 function calcDur(s,e){const m=toMins(e)-toMins(s);if(m<=0)return'—';return Math.floor(m/60)>0?`${Math.floor(m/60)}h ${m%60}min`:`${m}min`;}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 </script>
-<!-- Modal Registro Horario -->
-<div id="regModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center;">
-  <div style="background:white;border-radius:16px;width:92%;max-width:340px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <h3 style="margin:0;color:#2c3e50;">⏱ Horario del Servicio</h3>
-      <button onclick="cerrarRegModal()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#999;">✕</button>
-    </div>
-    <div id="regNombreCliente" style="font-size:0.9rem;color:#666;margin-bottom:18px;"></div>
-    <div style="margin-bottom:16px;">
-      <div style="font-size:0.8rem;font-weight:700;color:#f59e0b;margin-bottom:8px;">🟡 LLEGADA</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="time" id="regCheckin" style="flex:1;padding:12px;border:2px solid #f59e0b;border-radius:8px;font-size:1.2rem;text-align:center;">
-        <button onclick="regSetAhora('regCheckin')" style="padding:11px 14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap;">⏱ Ahora</button>
-      </div>
-    </div>
-    <div style="margin-bottom:20px;">
-      <div style="font-size:0.8rem;font-weight:700;color:#22c55e;margin-bottom:8px;">🟢 SALIDA</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="time" id="regCheckout" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1.2rem;text-align:center;">
-        <button onclick="regSetAhora('regCheckout')" style="padding:11px 14px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap;">⏱ Ahora</button>
-      </div>
-    </div>
-    <button onclick="regGuardar()" style="width:100%;padding:15px;background:#0ea5e9;color:white;border:none;border-radius:10px;font-size:1.05rem;font-weight:700;cursor:pointer;">💾 Guardar</button>
-  </div>
-</div>
-
 </body>
 </html>
