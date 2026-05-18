@@ -348,6 +348,35 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal Registro de Horario -->
+<div id="regModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:5000;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;width:92%;max-width:340px;padding:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 id="regModalTitle" style="margin:0;color:#2c3e50;">Registrar Horario</h3>
+      <button onclick="document.getElementById('regModal').style.display='none'" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;">✕</button>
+    </div>
+    <div id="regModalCliente" style="font-size:0.85rem;color:#666;margin-bottom:16px;"></div>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:0.82rem;font-weight:700;color:#f59e0b;display:block;margin-bottom:6px;">🟡 LLEGADA</label>
+      <div style="display:flex;gap:8px;">
+        <input type="time" id="regInputCheckin" style="flex:1;padding:12px;border:2px solid #f59e0b;border-radius:8px;font-size:1.1rem;text-align:center;">
+        <button onclick="regAhora('checkin')" style="padding:10px 14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.85rem;">⏱ Ahora</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <label style="font-size:0.82rem;font-weight:700;color:#22c55e;display:block;margin-bottom:6px;">🟢 SALIDA</label>
+      <div style="display:flex;gap:8px;">
+        <input type="time" id="regInputCheckout" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1.1rem;text-align:center;">
+        <button onclick="regAhora('checkout')" style="padding:10px 14px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.85rem;">⏱ Ahora</button>
+      </div>
+    </div>
+
+    <button onclick="regGuardar()" style="width:100%;padding:14px;background:#0ea5e9;color:white;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">💾 Guardar Registro</button>
+  </div>
+</div>
+
 <!-- Modal Modo Suplente -->
 <div id="suplenteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:center;justify-content:center;">
   <div style="background:white;border-radius:16px;width:90%;max-width:340px;padding:24px;">
@@ -884,184 +913,108 @@ function registrarShop(campo){
 }
 
 
+// ── MÓDULO DE REGISTRO DE HORARIOS ──────────────────────────────────────────
+// Un solo modal global maneja todo el registro — sin onclick complejos
+
+var _regSvcId = null; // ID del servicio actualmente en el modal
+
+function abrirRegModal(id, clientName, checkin, checkout){
+  _regSvcId = id;
+  document.getElementById('regModalTitle').textContent = 'Registrar Horario';
+  document.getElementById('regModalCliente').textContent = clientName || '';
+  document.getElementById('regInputCheckin').value  = checkin  || '';
+  document.getElementById('regInputCheckout').value = checkout || '';
+  document.getElementById('regModal').style.display = 'flex';
+}
+
+function regAhora(field){
+  var n = new Date();
+  var v = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+  document.getElementById(field==='checkin' ? 'regInputCheckin' : 'regInputCheckout').value = v;
+}
+
+function regGuardar(){
+  var id = _regSvcId;
+  if(!id){ toast('⚠ Error: sin servicio'); return; }
+  var checkin  = document.getElementById('regInputCheckin').value;
+  var checkout = document.getElementById('regInputCheckout').value;
+  var date  = S.selectedDate;
+  var group = S.group;
+  if(!date || !group){ toast('⚠ Error: date=['+date+'] group=['+group+']'); return; }
+
+  var localKey = horariosKey(group);
+  var allRpts  = JSON.parse(localStorage.getItem(localKey)||'{}');
+  if(!allRpts[date]) allRpts[date] = {group:group, date:date, services:[], savedAt:new Date().toISOString()};
+
+  var svc = allRpts[date].services.find(function(s){ return String(s.id)===String(id); });
+  if(!svc){
+    var orig = (S.servs||[]).find(function(s){ return String(s.id)===String(id); });
+    var cli  = orig ? (S.clis||[]).find(function(c){ return String(c.id)===String(orig.cliId); })||{} : {};
+    svc = {id:String(id), clientName:cli.name||'', address:[cli.address,cli.city].filter(Boolean).join(', '), checkin:'', checkout:'', status:'pending', note:''};
+    allRpts[date].services.push(svc);
+  }
+
+  if(checkin)  svc.checkin  = checkin;
+  if(checkout) svc.checkout = checkout;
+  if(svc.checkin && !svc.checkout) svc.status = 'active';
+  if(svc.checkin &&  svc.checkout) svc.status = 'done';
+  allRpts[date].savedAt = new Date().toISOString();
+
+  localStorage.setItem(localKey, JSON.stringify(allRpts));
+
+  // Actualizar S.reports
+  if(!S.reports) S.reports = {};
+  if(!S.reports[date]) S.reports[date] = {};
+  S.reports[date][group] = allRpts[date];
+
+  document.getElementById('regModal').style.display = 'none';
+  toast('✅ Horario guardado');
+
+  // Subir a Drive
+  setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 400);
+
+  // Re-render
+  renderView();
+}
+
 function panelSvcHTML(id, rpt){
   var hasCheckin  = !!(rpt.checkin);
   var hasCheckout = !!(rpt.checkout);
   var dur = (rpt.checkin && rpt.checkout) ? calcDur(rpt.checkin, rpt.checkout) : null;
-  var sid = 'svc_' + String(id).replace(/[^a-zA-Z0-9]/g, '');
-  window._rids = window._rids||{}; window._rids[sid]=id;
+  var clientName  = rpt.clientName || '';
 
-  var html = '<div style="padding:4px 0;">';
+  var html = '<div style="padding:6px 0;">';
 
-  // Llegada
-  html += '<div style="margin-bottom:12px;">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px;">🟡 LLEGADA</div>';
-  if(hasCheckin){
-    html += '<div style="font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:8px;">' + fmt12(rpt.checkin) + '</div>';
-  }
-  html += '<div style="display:flex;gap:6px;">';
-  html += '<input type="time" id="in_' + sid + '" value="' + (rpt.checkin||'') + '" style="flex:1;padding:12px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
-  if(hasCheckin){
-    html += '<button style="padding:12px 16px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regGuardarLlegada(\'' + sid + '\')">💾</button>';
-  } else {
-    html += '<button style="padding:12px 16px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regLlegada(\'' + sid + '\')">⏱ Ahora / 💾</button>';
-  }
-  html += '</div>';
-  html += '</div>';
-
-  // Salida
-  html += '<div>';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px;">🟢 SALIDA</div>';
-  if(hasCheckout){
-    html += '<div style="font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:4px;">' + fmt12(rpt.checkout) + '</div>';
-    if(dur) html += '<div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px;">⏱ Duración: ' + dur + '</div>';
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<input type="time" id="out_' + sid + '" value="' + rpt.checkout + '" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:12px 16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regGuardarSalida(\'' + sid + '\')">💾</button>';
+  if(hasCheckin || hasCheckout){
+    html += '<div style="display:flex;gap:16px;margin-bottom:10px;">';
+    html += '<div style="flex:1;text-align:center;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#f59e0b;margin-bottom:2px;">🟡 LLEGADA</div>';
+    html += '<div style="font-size:1.3rem;font-weight:700;">' + (hasCheckin ? fmt12(rpt.checkin) : '—') + '</div>';
     html += '</div>';
-  } else if(hasCheckin){
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<input type="time" id="out_' + sid + '" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:12px 16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regSalida(\'' + sid + '\')">⏱ Ahora / 💾</button>';
+    html += '<div style="flex:1;text-align:center;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:2px;">🟢 SALIDA</div>';
+    html += '<div style="font-size:1.3rem;font-weight:700;">' + (hasCheckout ? fmt12(rpt.checkout) : '—') + '</div>';
     html += '</div>';
-  } else {
-    html += '<div style="color:var(--muted);font-size:12px;padding:8px 0;text-align:center;">Registra llegada primero</div>';
+    html += '</div>';
+    if(dur) html += '<div style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:10px;">⏱ Duración: ' + dur + '</div>';
   }
-  html += '</div>';
 
+  // Un solo botón — abre el modal global
+  var btnLabel = (hasCheckin || hasCheckout) ? '✏️ Editar Horario' : '⏱ Registrar Horario';
+  var btnBg    = (hasCheckin || hasCheckout) ? '#0ea5e9' : '#f59e0b';
+  var cIn  = hasCheckin  ? rpt.checkin  : '';
+  var cOut = hasCheckout ? rpt.checkout : '';
+  // Escapar para uso en atributo onclick — solo alfanuméricos en id
+  var safeId = String(id).replace(/[^a-zA-Z0-9]/g,'_');
+  window._regMap = window._regMap||{};
+  window._regMap[safeId] = {id:id, clientName:clientName, checkin:cIn, checkout:cOut};
+
+  html += '<button style="width:100%;padding:12px;background:'+btnBg+';color:white;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;" ';
+  html += 'onclick="var d=window._regMap[\''+safeId+'\'];abrirRegModal(d.id,d.clientName,d.checkin,d.checkout)">'+btnLabel+'</button>';
   html += '</div>';
   return html;
 }
 
-
-
-// Funciones globales simples para registro de horarios — sin onclick complejo
-function regLlegada(sid){
-  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
-  var el = document.getElementById('in_'+sid);
-  var v = el ? el.value : '';
-  if(!v){ var n=new Date(); v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
-  toast('🟡 Llegada: '+v);
-  suplenteUpdTime(id,'checkin',v);
-  suplenteRegistrar(id,'_refresh');
-}
-function regSalida(sid){
-  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
-  var el = document.getElementById('out_'+sid);
-  var v = el ? el.value : '';
-  if(!v){ var n=new Date(); v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
-  toast('🟢 Salida: '+v);
-  suplenteUpdTime(id,'checkout',v);
-  suplenteRegistrar(id,'_refresh');
-}
-function regGuardarLlegada(sid){
-  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
-  var el = document.getElementById('in_'+sid);
-  var v = el ? el.value : '';
-  if(!v){ toast('⚠ Selecciona una hora'); return; }
-  toast('🟡 Llegada: '+v);
-  suplenteUpdTime(id,'checkin',v);
-  suplenteRegistrar(id,'_refresh');
-}
-function regGuardarSalida(sid){
-  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
-  var el = document.getElementById('out_'+sid);
-  var v = el ? el.value : '';
-  if(!v){ toast('⚠ Selecciona una hora'); return; }
-  toast('🟢 Salida: '+v);
-  suplenteUpdTime(id,'checkout',v);
-  suplenteRegistrar(id,'_refresh');
-}
-
-
-function suplenteEditarHora(id, field){
-  const rpts = getReportsForDay(S.selectedDate);
-  const modal = document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;display:flex;align-items:center;justify-content:center;';
-  modal.innerHTML=`
-    <div style="background:white;border-radius:16px;width:90%;max-width:320px;padding:24px;">
-      <h3 style="margin:0 0 6px;color:#2c3e50;">${lbl}</h3>
-      <p style="font-size:0.83rem;color:#666;margin:0 0 16px;">Ingresa la hora del servicio</p>
-      <input type="time" id="editHoraInput" value="${actual}"
-        style="width:100%;padding:14px;border:2px solid #0ea5e9;border-radius:8px;font-size:1.8rem;text-align:center;box-sizing:border-box;margin-bottom:10px;">
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button id="editHoraCancel" style="flex:1;padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;cursor:pointer;font-weight:700;">Cancelar</button>
-        <button id="editHoraOk" style="flex:2;padding:12px;background:#0ea5e9;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.95rem;">✅ Guardar</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  setTimeout(()=>document.getElementById('editHoraInput')?.focus(),100);
-  document.getElementById('editHoraCancel').onclick=()=>modal.remove();
-  document.getElementById('editHoraOk').onclick=()=>{
-    const val=document.getElementById('editHoraInput').value;
-    if(!val){toast('⚠️ Ingresa una hora');return;}
-    modal.remove();
-    suplenteUpdTime(id, field, val);
-    suplenteRegistrar(id, '_refresh');
-    toast(`${lbl} actualizada: ${fmt12(val)}`);
-  };
-}
-
-
-function suplenteRegistrar(id, field){
-  console.log('suplenteRegistrar called:', id, field, 'S.group:', S.group, 'S.selectedDate:', S.selectedDate);
-  if(field !== '_refresh'){
-    const now = new Date();
-    const hora = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    suplenteUpdTime(id, field, hora);
-    toast(`${field==='checkin'?'🟡 Llegada':'🟢 Salida'} registrada: ${fmt12(hora)}`);
-  }
-  // Actualizar panel in-place sin colapsar el bloque
-  const blk = document.getElementById('blk_'+String(id).replace(/[^a-zA-Z0-9]/g,'_'));
-  if(blk){
-    const rpts = getReportsForDay(S.selectedDate);
-    const rpt = rpts[id]||{};
-    const stb = blk.querySelector('.stb');
-    if(stb){
-      stb.className=`stb ${rpt.status==='done'?'std':rpt.status==='active'?'sta':'stp'}`;
-      stb.textContent=rpt.status==='done'?'Terminado':rpt.status==='active'?'En servicio':'Pendiente';
-    }
-    const sp = blk.querySelector('.sp');
-    if(sp) sp.innerHTML = panelSvcHTML(id, rpt);
-    blk.classList.add('open');
-  }
-}
-
-
-function suplenteGetReports(){
-  try{ return JSON.parse(localStorage.getItem(horariosKey(S.group||''))||'{}'); }catch(e){ return {}; }
-}
-function suplenteUpdTime(id, field, val){
-  const date = S.selectedDate;
-  const group = S.group;
-  console.log('suplenteUpdTime:', id, field, val, 'date:', date, 'group:', group);
-  if(!date || !group){ toast('⚠ Error: sin fecha o grupo. date='+date+' group='+group); return; }
-  const localKey = horariosKey(group);
-  const allRpts = JSON.parse(localStorage.getItem(localKey)||'{}');
-  // Estructura correcta: allRpts[date] = {group, date, services:[], savedAt, shopOut, shopBack}
-  if(!allRpts[date]) allRpts[date]={group,date,services:[],savedAt:new Date().toISOString()};
-  let svc = allRpts[date].services.find(s=>String(s.id)===String(id));
-  if(!svc){
-    const orig = (S.servs||[]).find(s=>String(s.id)===String(id));
-    const cli = (S.clis||[]).find(c=>String(c.id)===String(orig?.cliId))||{};
-    svc = {id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
-    allRpts[date].services.push(svc);
-  }
-  svc[field]=val;
-  if(svc.checkin&&!svc.checkout) svc.status='active';
-  if(svc.checkin&&svc.checkout) svc.status='done';
-  allRpts[date].savedAt=new Date().toISOString();
-  localStorage.setItem(localKey, JSON.stringify(allRpts));
-  // Actualizar S.reports[date][group]
-  if(!S.reports) S.reports={};
-  if(!S.reports[date]) S.reports[date]={};
-  S.reports[date][group]=allRpts[date];
-  // Subir a Drive en segundo plano
-  setTimeout(()=>{ try{ saveHorariosToDrive(); }catch(e){} }, 500);
-}
-function suplenteUpdNote(id, val){
-  suplenteUpdTime(id,'note',val);
-}
 
 /* ── WEEK VIEW ── */
 function renderWeek(){
