@@ -823,7 +823,7 @@ function renderAgenda(){
 
     const blk=document.createElement('div');
     blk.className=`sb ${st}`;
-    blk.id=`blk_${svc.id}`;
+    blk.id='blk_'+String(svc.id).replace(/[^a-zA-Z0-9]/g,'_');
 
     const timeStr=bts(svc,rpt);
     const hasCheckin=!!(rpt.checkin);
@@ -858,7 +858,7 @@ function renderAgenda(){
   grid.appendChild(tc); grid.appendChild(bc); el.appendChild(grid);
 }
 
-function tog(id){document.getElementById(`blk_${id}`)?.classList.toggle('open');}
+function tog(id){document.getElementById('blk_'+String(id).replace(/[^a-zA-Z0-9]/g,'_'))?.classList.toggle('open');}
 
 /* ── REGISTRO SHOP ── */
 function registrarShop(campo){
@@ -894,60 +894,88 @@ function panelSvcHTML(id, rpt){
   var html = '<div style="padding:4px 0;">';
 
   // Llegada
-  html += '<div style="margin-bottom:10px;">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">🟡 LLEGADA</div>';
+  html += '<div style="margin-bottom:12px;">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px;">🟡 LLEGADA</div>';
   if(hasCheckin){
-    html += '<div style="font-size:1.4rem;font-weight:700;color:var(--text);text-align:center;">' + fmt12(rpt.checkin) + '</div>';
-    html += '<div style="display:flex;gap:6px;margin-top:6px;">';
-    html += '<input type="time" id="in_' + sid + '" value="' + rpt.checkin + '" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:8px 12px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'in_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+v);}">💾</button>';
-    html += '</div>';
-  } else {
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<input type="time" id="in_' + sid + '" style="flex:1;padding:10px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:10px 14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'in_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+v);}else{var n=new Date();var h=String(n.getHours()).padStart(2,\'0\')+\':\'+String(n.getMinutes()).padStart(2,\'0\');document.getElementById(\'in_' + sid + '\').value=h;suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',h);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+h);}">⏱ Ahora</button>';
-    html += '</div>';
+    html += '<div style="font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:8px;">' + fmt12(rpt.checkin) + '</div>';
   }
+  html += '<div style="display:flex;gap:6px;">';
+  html += '<input type="time" id="in_' + sid + '" value="' + (rpt.checkin||'') + '" style="flex:1;padding:12px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
+  if(hasCheckin){
+    html += '<button style="padding:12px 16px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regGuardarLlegada(\'' + sid + '\')">💾</button>';
+  } else {
+    html += '<button style="padding:12px 16px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regLlegada(\'' + sid + '\')">⏱ Ahora / 💾</button>';
+  }
+  html += '</div>';
   html += '</div>';
 
   // Salida
-  html += '<div style="margin-bottom:10px;">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">🟢 SALIDA</div>';
+  html += '<div>';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px;">🟢 SALIDA</div>';
   if(hasCheckout){
-    html += '<div style="font-size:1.4rem;font-weight:700;color:var(--text);text-align:center;">' + fmt12(rpt.checkout) + '</div>';
-    if(dur) html += '<div style="font-size:12px;color:var(--muted);text-align:center;">⏱ ' + dur + '</div>';
-    html += '<div style="display:flex;gap:6px;margin-top:6px;">';
-    html += '<input type="time" id="out_' + sid + '" value="' + rpt.checkout + '" style="flex:1;padding:8px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:8px 12px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'out_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+v);}">💾</button>';
+    html += '<div style="font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:4px;">' + fmt12(rpt.checkout) + '</div>';
+    if(dur) html += '<div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px;">⏱ Duración: ' + dur + '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input type="time" id="out_' + sid + '" value="' + rpt.checkout + '" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:12px 16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regGuardarSalida(\'' + sid + '\')">💾</button>';
     html += '</div>';
   } else if(hasCheckin){
     html += '<div style="display:flex;gap:6px;">';
-    html += '<input type="time" id="out_' + sid + '" style="flex:1;padding:10px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
-    html += '<button style="padding:10px 14px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'out_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+v);}else{var n=new Date();var h=String(n.getHours()).padStart(2,\'0\')+\':\'+String(n.getMinutes()).padStart(2,\'0\');document.getElementById(\'out_' + sid + '\').value=h;suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',h);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+h);}">⏱ Ahora</button>';
+    html += '<input type="time" id="out_' + sid + '" style="flex:1;padding:12px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:12px 16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="regSalida(\'' + sid + '\')">⏱ Ahora / 💾</button>';
     html += '</div>';
   } else {
-    html += '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Registra llegada primero</div>';
+    html += '<div style="color:var(--muted);font-size:12px;padding:8px 0;text-align:center;">Registra llegada primero</div>';
   }
   html += '</div>';
-
-  // Nota
-  html += '<textarea rows="2" placeholder="Notas…" id="nota_' + sid + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:none;box-sizing:border-box;">' + (rpt.note||'') + '</textarea>';
-  html += '<button style="width:100%;margin-top:6px;padding:9px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(window._rids[\''+sid+'\'],document.getElementById(\'nota_'+sid+'\').value);toast(\'📝 Nota guardada\')">💾 Guardar Nota</button>';
 
   html += '</div>';
   return html;
 }
 
-document.addEventListener('click', function(e){
-  if(!e.target.closest('[data-action]')) return;
-});
+
+
+// Funciones globales simples para registro de horarios — sin onclick complejo
+function regLlegada(sid){
+  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
+  var el = document.getElementById('in_'+sid);
+  var v = el ? el.value : '';
+  if(!v){ var n=new Date(); v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+  toast('🟡 Llegada: '+v);
+  suplenteUpdTime(id,'checkin',v);
+  suplenteRegistrar(id,'_refresh');
+}
+function regSalida(sid){
+  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
+  var el = document.getElementById('out_'+sid);
+  var v = el ? el.value : '';
+  if(!v){ var n=new Date(); v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+  toast('🟢 Salida: '+v);
+  suplenteUpdTime(id,'checkout',v);
+  suplenteRegistrar(id,'_refresh');
+}
+function regGuardarLlegada(sid){
+  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
+  var el = document.getElementById('in_'+sid);
+  var v = el ? el.value : '';
+  if(!v){ toast('⚠ Selecciona una hora'); return; }
+  toast('🟡 Llegada: '+v);
+  suplenteUpdTime(id,'checkin',v);
+  suplenteRegistrar(id,'_refresh');
+}
+function regGuardarSalida(sid){
+  var id = window._rids&&window._rids[sid] ? window._rids[sid] : sid;
+  var el = document.getElementById('out_'+sid);
+  var v = el ? el.value : '';
+  if(!v){ toast('⚠ Selecciona una hora'); return; }
+  toast('🟢 Salida: '+v);
+  suplenteUpdTime(id,'checkout',v);
+  suplenteRegistrar(id,'_refresh');
+}
+
 
 function suplenteEditarHora(id, field){
   const rpts = getReportsForDay(S.selectedDate);
-  const rpt = rpts[id]||{};
-  const actual = rpt[field]||'';
-  const lbl = field==='checkin'?'🟡 Llegada':'🟢 Salida';
-  // Modal propio — prompt() bloqueado en PWA/Safari
   const modal = document.createElement('div');
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML=`
@@ -984,7 +1012,7 @@ function suplenteRegistrar(id, field){
     toast(`${field==='checkin'?'🟡 Llegada':'🟢 Salida'} registrada: ${fmt12(hora)}`);
   }
   // Actualizar panel in-place sin colapsar el bloque
-  const blk = document.getElementById(`blk_${id}`);
+  const blk = document.getElementById('blk_'+String(id).replace(/[^a-zA-Z0-9]/g,'_'));
   if(blk){
     const rpts = getReportsForDay(S.selectedDate);
     const rpt = rpts[id]||{};
