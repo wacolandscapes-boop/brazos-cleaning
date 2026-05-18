@@ -884,60 +884,57 @@ function registrarShop(campo){
 }
 
 
-// Helper: genera HTML del panel de un servicio — concatenación simple, sin backticks anidados
 function panelSvcHTML(id, rpt){
   var hasCheckin  = !!(rpt.checkin);
   var hasCheckout = !!(rpt.checkout);
   var dur = (rpt.checkin && rpt.checkout) ? calcDur(rpt.checkin, rpt.checkout) : null;
-  var sid = id.replace(/[^a-zA-Z0-9_]/g, '_'); // ID seguro para usar en HTML
+  var sid = 'svc_' + String(id).replace(/[^a-zA-Z0-9]/g, '');
+  window._rids = window._rids||{}; window._rids[sid]=id;
 
-  // Guardar en registro global para recuperar desde onclick
-  window._rids = window._rids || {};
-  window._rids[sid] = id;
+  var html = '<div style="padding:4px 0;">';
 
-  var html = '<div class="tr2">';
-
-  // — Llegada —
-  html += '<div class="tb ' + (hasCheckin ? 'has' : 'empty') + '">';
-  html += '<div class="tbl">🟡 Llegada</div>';
+  // Llegada
+  html += '<div style="margin-bottom:10px;">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">🟡 LLEGADA</div>';
   if(hasCheckin){
-    html += '<div class="tbv">' + fmt12(rpt.checkin) + '</div>';
-    html += '<div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">';
-    html += '<button style="padding:6px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkin\')">✏️ Editar</button>';
-    html += '<button style="padding:6px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteUpdTime(window._rids[\'' + sid + '\'],\'checkin\',\'\');suplenteRegistrar(window._rids[\'' + sid + '\'],\'_refresh\')">✕</button>';
+    html += '<div style="font-size:1.4rem;font-weight:700;color:var(--text);text-align:center;">' + fmt12(rpt.checkin) + '</div>';
+    html += '<div style="display:flex;gap:6px;margin-top:6px;">';
+    html += '<input type="time" id="in_' + sid + '" value="' + rpt.checkin + '" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:8px 12px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'in_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+v);}">💾</button>';
     html += '</div>';
   } else {
-    html += '<button style="width:100%;margin-top:8px;padding:13px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(window._rids[\'' + sid + '\'],\'checkin\')">⏱ Registrar Ahora</button>';
-    html += '<button style="width:100%;margin-top:5px;padding:10px;background:none;border:2px solid #f59e0b;color:#f59e0b;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkin\')">✏️ Ingresar Hora</button>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input type="time" id="in_' + sid + '" style="flex:1;padding:10px;border:2px solid #f59e0b;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:10px 14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'in_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+v);}else{var n=new Date();var h=String(n.getHours()).padStart(2,\'0\')+\':\'+String(n.getMinutes()).padStart(2,\'0\');document.getElementById(\'in_' + sid + '\').value=h;suplenteUpdTime(window._rids[\''+sid+'\'],\'checkin\',h);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟡 Llegada: \'+h);}">⏱ Ahora</button>';
+    html += '</div>';
   }
   html += '</div>';
 
-  // — Salida —
-  html += '<div class="tb ' + (hasCheckout ? 'has' : 'empty') + '">';
-  html += '<div class="tbl">🟢 Salida</div>';
+  // Salida
+  html += '<div style="margin-bottom:10px;">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">🟢 SALIDA</div>';
   if(hasCheckout){
-    html += '<div class="tbv">' + fmt12(rpt.checkout) + '</div>';
-    if(dur) html += '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + dur + '</div>';
-    html += '<div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">';
-    html += '<button style="padding:6px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkout\')">✏️ Editar</button>';
-    html += '<button style="padding:6px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;" onclick="suplenteUpdTime(window._rids[\'' + sid + '\'],\'checkout\',\'\');suplenteRegistrar(window._rids[\'' + sid + '\'],\'_refresh\')">✕</button>';
+    html += '<div style="font-size:1.4rem;font-weight:700;color:var(--text);text-align:center;">' + fmt12(rpt.checkout) + '</div>';
+    if(dur) html += '<div style="font-size:12px;color:var(--muted);text-align:center;">⏱ ' + dur + '</div>';
+    html += '<div style="display:flex;gap:6px;margin-top:6px;">';
+    html += '<input type="time" id="out_' + sid + '" value="' + rpt.checkout + '" style="flex:1;padding:8px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:8px 12px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'out_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+v);}">💾</button>';
     html += '</div>';
   } else if(hasCheckin){
-    html += '<button style="width:100%;margin-top:8px;padding:13px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(window._rids[\'' + sid + '\'],\'checkout\')">⏱ Registrar Ahora</button>';
-    html += '<button style="width:100%;margin-top:5px;padding:10px;background:none;border:2px solid #22c55e;color:#22c55e;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(window._rids[\'' + sid + '\'],\'checkout\')">✏️ Ingresar Hora</button>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input type="time" id="out_' + sid + '" style="flex:1;padding:10px;border:2px solid #22c55e;border-radius:8px;font-size:1rem;text-align:center;">';
+    html += '<button style="padding:10px 14px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="var v=document.getElementById(\'out_' + sid + '\').value;if(v){suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',v);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+v);}else{var n=new Date();var h=String(n.getHours()).padStart(2,\'0\')+\':\'+String(n.getMinutes()).padStart(2,\'0\');document.getElementById(\'out_' + sid + '\').value=h;suplenteUpdTime(window._rids[\''+sid+'\'],\'checkout\',h);suplenteRegistrar(window._rids[\''+sid+'\'],\'_refresh\');toast(\'🟢 Salida: \'+h);}">⏱ Ahora</button>';
+    html += '</div>';
   } else {
-    html += '<button disabled style="width:100%;margin-top:8px;padding:13px;background:#ccc;color:white;border:none;border-radius:8px;font-size:1rem;cursor:not-allowed;">⏱ Registrar Ahora</button>';
-    html += '<div class="tbs">registra llegada primero</div>';
+    html += '<div style="color:var(--muted);font-size:12px;padding:8px 0;">Registra llegada primero</div>';
   }
   html += '</div>';
 
-  html += '</div>'; // tr2
+  // Nota
+  html += '<textarea rows="2" placeholder="Notas…" id="nota_' + sid + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:none;box-sizing:border-box;">' + (rpt.note||'') + '</textarea>';
+  html += '<button style="width:100%;margin-top:6px;padding:9px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(window._rids[\''+sid+'\'],document.getElementById(\'nota_'+sid+'\').value);toast(\'📝 Nota guardada\')">💾 Guardar Nota</button>';
 
-  if(dur) html += '<div class="dur-row">⏱ Duración: <span>' + dur + '</span></div>';
-
-  html += '<textarea rows="2" placeholder="Notas…" id="notaTxt_' + sid + '" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:Barlow,sans-serif;font-size:13px;resize:none;box-sizing:border-box;">' + (rpt.note||'') + '</textarea>';
-  html += '<button style="width:100%;margin-top:6px;padding:10px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(window._rids[\'' + sid + '\'],document.getElementById(\'notaTxt_' + sid + '\').value)">💾 Guardar Nota</button>';
-
+  html += '</div>';
   return html;
 }
 
@@ -979,6 +976,7 @@ function suplenteEditarHora(id, field){
 
 
 function suplenteRegistrar(id, field){
+  console.log('suplenteRegistrar called:', id, field, 'S.group:', S.group, 'S.selectedDate:', S.selectedDate);
   if(field !== '_refresh'){
     const now = new Date();
     const hora = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
@@ -1008,6 +1006,8 @@ function suplenteGetReports(){
 function suplenteUpdTime(id, field, val){
   const date = S.selectedDate;
   const group = S.group;
+  console.log('suplenteUpdTime:', id, field, val, 'date:', date, 'group:', group);
+  if(!date || !group){ toast('⚠ Error: sin fecha o grupo. date='+date+' group='+group); return; }
   const localKey = horariosKey(group);
   const allRpts = JSON.parse(localStorage.getItem(localKey)||'{}');
   // Estructura correcta: allRpts[date] = {group, date, services:[], savedAt, shopOut, shopBack}
