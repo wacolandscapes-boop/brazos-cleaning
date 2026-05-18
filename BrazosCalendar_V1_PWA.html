@@ -850,19 +850,7 @@ function renderAgenda(){
         </div>
       `:''}
       ${checkSuplenteActivo()?`
-        <div class="tr2">
-          <div class="tb ${hasCheckin?'has':'empty'}">
-            <div class="tbl">🟡 Llegada</div>
-            <input type="time" value="${rpt.checkin||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckin?'var(--yellow)':'var(--border)'};color:${hasCheckin?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;" onchange="suplenteUpdTime('${svc.id}','checkin',this.value)">
-            <div class="tbs">${hasCheckin?'registrada':'toca para ingresar'}</div>
-          </div>
-          <div class="tb ${hasCheckout?'has':'empty'}">
-            <div class="tbl">🟢 Salida</div>
-            <input type="time" value="${rpt.checkout||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckout?'var(--green)':'var(--border)'};color:${hasCheckout?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;" onchange="suplenteUpdTime('${svc.id}','checkout',this.value)">
-            <div class="tbs">${hasCheckout?(dur||'—'):'toca para ingresar'}</div>
-          </div>
-        </div>
-        <textarea rows="2" placeholder="Notas…" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;" onchange="suplenteUpdNote('${svc.id}',this.value)">${rpt.note||''}</textarea>
+        ${panelSvcHTML(svc.id, rpt)}
         ` : `
         <div class="tr2">
           <div class="tb ${hasCheckin?'has':'empty'}">
@@ -910,6 +898,80 @@ function registrarShop(campo){
   const lbl = campo==='shopOut'?'🚐 Salida del Shop':'🏠 Regreso al Shop';
   toast(`${lbl} registrado: ${fmt12(hora)}`);
   setTimeout(()=>{ try{ saveHorariosToDrive(); }catch(e){} }, 400);
+}
+
+
+// Helper: genera HTML del panel de un servicio (usado en render y en actualización in-place)
+function panelSvcHTML(id, rpt){
+  const hasCheckin=!!(rpt.checkin);
+  const hasCheckout=!!(rpt.checkout);
+  const dur=(rpt.checkin&&rpt.checkout)?calcDur(rpt.checkin,rpt.checkout):null;
+
+  function campoHTML(campo, tiene, valor, habilitado){
+    const lbl = campo==='checkin'?'🟡 Llegada':'🟢 Salida';
+    const color = campo==='checkin'?'#f59e0b':'#22c55e';
+    if(tiene){
+      return `<div class="tbl">${lbl}</div>
+        <div class="tbv">${fmt12(valor)}</div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:4px;">
+          <button onclick="suplenteEditarHora('${id}','${campo}')" style="padding:3px 8px;background:none;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;color:var(--muted);">✏️ Editar</button>
+          <button onclick="suplenteUpdTime('${id}','${campo}','');suplenteRegistrar('${id}','_refresh')" style="padding:3px 8px;background:none;border:1px solid #e74c3c;border-radius:6px;font-size:11px;cursor:pointer;color:#e74c3c;">✕ Borrar</button>
+        </div>`;
+    } else {
+      return `<div class="tbl">${lbl}</div>
+        <button onclick="suplenteRegistrar('${id}','${campo}')" ${!habilitado?'disabled':''} style="width:100%;margin-top:6px;padding:10px;background:${habilitado?color:'#ccc'};color:white;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">⏱ Ahora</button>
+        <button onclick="suplenteEditarHora('${id}','${campo}')" ${!habilitado?'disabled':''} style="width:100%;margin-top:4px;padding:8px;background:none;border:1px solid ${habilitado?color:'#ccc'};color:${habilitado?color:'#ccc'};border-radius:8px;font-size:0.82rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">✏️ Ingresar Hora</button>
+        <div class="tbs">${habilitado?'toca para registrar':'registra llegada primero'}</div>`;
+    }
+  }
+
+  return `
+    <div class="tr2">
+      <div class="tb ${hasCheckin?'has':'empty'}">${campoHTML('checkin',hasCheckin,rpt.checkin,true)}</div>
+      <div class="tb ${hasCheckout?'has':'empty'}">${campoHTML('checkout',hasCheckout,rpt.checkout,hasCheckin)}</div>
+    </div>
+    ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
+    <textarea rows="2" placeholder="Notas…" id="nota_${id}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
+    <button onclick="suplenteUpdNote('${id}',document.getElementById('nota_${id}').value)" style="width:100%;margin-top:6px;padding:8px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">💾 Guardar Nota</button>
+  `;
+}
+
+function suplenteEditarHora(id, field){
+  const rpts = getReportsForDay(S.selectedDate);
+  const rpt = rpts[id]||{};
+  const actual = rpt[field]||'';
+  const lbl = field==='checkin'?'🟡 Llegada':'🟢 Salida';
+  const nueva = prompt(`${lbl} — ingresa la hora:\n(Formato 24h, ej: 14:30)\nHora actual: ${actual?fmt12(actual):'sin registrar'}`);
+  if(!nueva) return;
+  const match = nueva.trim().match(/^([0-1]?\d|2[0-3]):([0-5]\d)$/);
+  if(!match){ toast('⚠️ Formato inválido. Usa HH:MM (ej: 09:30)'); return; }
+  suplenteUpdTime(id, field, nueva.trim());
+  suplenteRegistrar(id, '_refresh');
+  toast(`${lbl} actualizada: ${fmt12(nueva.trim())}`);
+}
+
+
+function suplenteRegistrar(id, field){
+  if(field !== '_refresh'){
+    const now = new Date();
+    const hora = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    suplenteUpdTime(id, field, hora);
+    toast(`${field==='checkin'?'🟡 Llegada':'🟢 Salida'} registrada: ${fmt12(hora)}`);
+  }
+  // Actualizar panel in-place sin colapsar el bloque
+  const blk = document.getElementById(`blk_${id}`);
+  if(blk){
+    const rpts = getReportsForDay(S.selectedDate);
+    const rpt = rpts[id]||{};
+    const stb = blk.querySelector('.stb');
+    if(stb){
+      stb.className=`stb ${rpt.status==='done'?'std':rpt.status==='active'?'sta':'stp'}`;
+      stb.textContent=rpt.status==='done'?'Terminado':rpt.status==='active'?'En servicio':'Pendiente';
+    }
+    const sp = blk.querySelector('.sp');
+    if(sp) sp.innerHTML = panelSvcHTML(id, rpt);
+    blk.classList.add('open');
+  }
 }
 
 
