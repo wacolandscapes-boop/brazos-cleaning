@@ -941,7 +941,7 @@ function getSvcs(date){
       const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
       const showProp=(c.type==='airbnb'||c.type==='unico');
       const clientName=(showProp&&c.propId)?c.name+' / '+c.propId:c.name||`Cliente ${s.cliId}`;
-      return{id:String(s.id),clientName,address:c.city||c.address||'',phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||''};
+      return{id:String(s.id),clientName,address:[c.address,c.city].filter(Boolean).join(', '),phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||''};
     });
 }
 
