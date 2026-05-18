@@ -901,7 +901,7 @@ function registrarShop(campo){
 }
 
 
-// Helper: genera HTML del panel de un servicio (usado en render y en actualización in-place)
+// Helper: genera HTML del panel de un servicio
 function panelSvcHTML(id, rpt){
   const hasCheckin=!!(rpt.checkin);
   const hasCheckout=!!(rpt.checkout);
@@ -914,13 +914,13 @@ function panelSvcHTML(id, rpt){
       return `<div class="tbl">${lbl}</div>
         <div class="tbv">${fmt12(valor)}</div>
         <div style="display:flex;gap:6px;justify-content:center;margin-top:4px;">
-          <button onclick="suplenteEditarHora('${id}','${campo}')" style="padding:3px 8px;background:none;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;color:var(--muted);">✏️ Editar</button>
-          <button onclick="suplenteUpdTime('${id}','${campo}','');suplenteRegistrar('${id}','_refresh')" style="padding:3px 8px;background:none;border:1px solid #e74c3c;border-radius:6px;font-size:11px;cursor:pointer;color:#e74c3c;">✕ Borrar</button>
+          <button data-action="editar" data-id="${id}" data-campo="${campo}" style="padding:4px 10px;background:none;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;color:var(--muted);">✏️ Editar</button>
+          <button data-action="borrar" data-id="${id}" data-campo="${campo}" style="padding:4px 10px;background:none;border:1px solid #e74c3c;border-radius:6px;font-size:12px;cursor:pointer;color:#e74c3c;">✕ Borrar</button>
         </div>`;
     } else {
       return `<div class="tbl">${lbl}</div>
-        <button onclick="suplenteRegistrar('${id}','${campo}')" ${!habilitado?'disabled':''} style="width:100%;margin-top:6px;padding:10px;background:${habilitado?color:'#ccc'};color:white;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">⏱ Ahora</button>
-        <button onclick="suplenteEditarHora('${id}','${campo}')" ${!habilitado?'disabled':''} style="width:100%;margin-top:4px;padding:8px;background:none;border:1px solid ${habilitado?color:'#ccc'};color:${habilitado?color:'#ccc'};border-radius:8px;font-size:0.82rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">✏️ Ingresar Hora</button>
+        <button data-action="ahora" data-id="${id}" data-campo="${campo}" ${!habilitado?'disabled':''} style="width:100%;margin-top:6px;padding:11px;background:${habilitado?color:'#ccc'};color:white;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">⏱ Ahora</button>
+        <button data-action="editar" data-id="${id}" data-campo="${campo}" ${!habilitado?'disabled':''} style="width:100%;margin-top:4px;padding:9px;background:none;border:1px solid ${habilitado?color:'#ccc'};color:${habilitado?color:'#ccc'};border-radius:8px;font-size:0.82rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">✏️ Ingresar Hora</button>
         <div class="tbs">${habilitado?'toca para registrar':'registra llegada primero'}</div>`;
     }
   }
@@ -931,23 +931,60 @@ function panelSvcHTML(id, rpt){
       <div class="tb ${hasCheckout?'has':'empty'}">${campoHTML('checkout',hasCheckout,rpt.checkout,hasCheckin)}</div>
     </div>
     ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
-    <textarea rows="2" placeholder="Notas…" id="nota_${id}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
-    <button onclick="suplenteUpdNote('${id}',document.getElementById('nota_${id}').value)" style="width:100%;margin-top:6px;padding:8px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">💾 Guardar Nota</button>
+    <textarea rows="2" placeholder="Notas…" data-nota-id="${id}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
+    <button data-action="nota" data-id="${id}" style="width:100%;margin-top:6px;padding:8px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">💾 Guardar Nota</button>
   `;
 }
+
+// Handler global para eventos del panel — evita onclick strings con comillas anidadas
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+  const campo = btn.dataset.campo;
+  if(action==='ahora'){ suplenteRegistrar(id, campo); }
+  else if(action==='editar'){ suplenteEditarHora(id, campo); }
+  else if(action==='borrar'){
+    suplenteUpdTime(id, campo, '');
+    suplenteRegistrar(id, '_refresh');
+  }
+  else if(action==='nota'){
+    const ta = document.querySelector(`[data-nota-id="${id}"]`);
+    if(ta) suplenteUpdNote(id, ta.value);
+  }
+});
 
 function suplenteEditarHora(id, field){
   const rpts = getReportsForDay(S.selectedDate);
   const rpt = rpts[id]||{};
   const actual = rpt[field]||'';
   const lbl = field==='checkin'?'🟡 Llegada':'🟢 Salida';
-  const nueva = prompt(`${lbl} — ingresa la hora:\n(Formato 24h, ej: 14:30)\nHora actual: ${actual?fmt12(actual):'sin registrar'}`);
-  if(!nueva) return;
-  const match = nueva.trim().match(/^([0-1]?\d|2[0-3]):([0-5]\d)$/);
-  if(!match){ toast('⚠️ Formato inválido. Usa HH:MM (ej: 09:30)'); return; }
-  suplenteUpdTime(id, field, nueva.trim());
-  suplenteRegistrar(id, '_refresh');
-  toast(`${lbl} actualizada: ${fmt12(nueva.trim())}`);
+  // Modal propio — prompt() bloqueado en PWA/Safari
+  const modal = document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML=`
+    <div style="background:white;border-radius:16px;width:90%;max-width:320px;padding:24px;">
+      <h3 style="margin:0 0 6px;color:#2c3e50;">${lbl}</h3>
+      <p style="font-size:0.83rem;color:#666;margin:0 0 16px;">Ingresa la hora del servicio</p>
+      <input type="time" id="editHoraInput" value="${actual}"
+        style="width:100%;padding:14px;border:2px solid #0ea5e9;border-radius:8px;font-size:1.8rem;text-align:center;box-sizing:border-box;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="editHoraCancel" style="flex:1;padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;cursor:pointer;font-weight:700;">Cancelar</button>
+        <button id="editHoraOk" style="flex:2;padding:12px;background:#0ea5e9;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.95rem;">✅ Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById('editHoraInput')?.focus(),100);
+  document.getElementById('editHoraCancel').onclick=()=>modal.remove();
+  document.getElementById('editHoraOk').onclick=()=>{
+    const val=document.getElementById('editHoraInput').value;
+    if(!val){toast('⚠️ Ingresa una hora');return;}
+    modal.remove();
+    suplenteUpdTime(id, field, val);
+    suplenteRegistrar(id, '_refresh');
+    toast(`${lbl} actualizada: ${fmt12(val)}`);
+  };
 }
 
 
