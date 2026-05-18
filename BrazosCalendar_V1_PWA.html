@@ -917,31 +917,29 @@ function suplenteGetReports(){
   try{ return JSON.parse(localStorage.getItem(horariosKey(S.group||''))||'{}'); }catch(e){ return {}; }
 }
 function suplenteUpdTime(id, field, val){
-  const allRpts = suplenteGetReports();
   const date = S.selectedDate;
   const group = S.group;
-  if(!allRpts[date]) allRpts[date]={};
-  if(!allRpts[date][group]) allRpts[date][group]={savedAt:new Date().toISOString(),group,date,services:[]};
-  let svc = allRpts[date][group].services.find(s=>String(s.id)===String(id));
+  const localKey = horariosKey(group);
+  const allRpts = JSON.parse(localStorage.getItem(localKey)||'{}');
+  // Estructura correcta: allRpts[date] = {group, date, services:[], savedAt, shopOut, shopBack}
+  if(!allRpts[date]) allRpts[date]={group,date,services:[],savedAt:new Date().toISOString()};
+  let svc = allRpts[date].services.find(s=>String(s.id)===String(id));
   if(!svc){
     const orig = (S.servs||[]).find(s=>String(s.id)===String(id));
     const cli = (S.clis||[]).find(c=>String(c.id)===String(orig?.cliId))||{};
     svc = {id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
-    allRpts[date][group].services.push(svc);
+    allRpts[date].services.push(svc);
   }
   svc[field]=val;
   if(svc.checkin&&!svc.checkout) svc.status='active';
   if(svc.checkin&&svc.checkout) svc.status='done';
-  allRpts[date][group].savedAt=new Date().toISOString();
-  localStorage.setItem(horariosKey(S.group), JSON.stringify(allRpts));
-  // Actualizar S.reports con la estructura correcta [date][group]
+  allRpts[date].savedAt=new Date().toISOString();
+  localStorage.setItem(localKey, JSON.stringify(allRpts));
+  // Actualizar S.reports[date][group]
   if(!S.reports) S.reports={};
   if(!S.reports[date]) S.reports[date]={};
-  if(!S.reports[date][group]) S.reports[date][group]={savedAt:new Date().toISOString(),group,date,services:[]};
-  const idx = S.reports[date][group].services.findIndex(s=>String(s.id)===String(id));
-  if(idx>=0) S.reports[date][group].services[idx]=svc;
-  else S.reports[date][group].services.push(svc);
-  // Subir horarios del grupo a Drive en segundo plano
+  S.reports[date][group]=allRpts[date];
+  // Subir a Drive en segundo plano
   setTimeout(()=>{ try{ saveHorariosToDrive(); }catch(e){} }, 500);
 }
 function suplenteUpdNote(id, val){
