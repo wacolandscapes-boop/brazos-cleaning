@@ -906,53 +906,40 @@ function panelSvcHTML(id, rpt){
   const hasCheckin=!!(rpt.checkin);
   const hasCheckout=!!(rpt.checkout);
   const dur=(rpt.checkin&&rpt.checkout)?calcDur(rpt.checkin,rpt.checkout):null;
+  const cIN  = hasCheckin  ? `<div class="tbv">${fmt12(rpt.checkin)}</div>
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
+      <button style="padding:5px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteEditarHora(${JSON.stringify(id)},${JSON.stringify('checkin')})">✏️ Editar</button>
+      <button style="padding:5px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteUpdTime(${JSON.stringify(id)},${JSON.stringify('checkin')},${JSON.stringify('')});suplenteRegistrar(${JSON.stringify(id)},${JSON.stringify('_refresh')})">✕ Borrar</button>
+    </div>`
+  : `<button style="width:100%;margin-top:6px;padding:12px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(${JSON.stringify(id)},${JSON.stringify('checkin')})">⏱ Registrar Ahora</button>
+     <button style="width:100%;margin-top:4px;padding:10px;background:none;border:2px solid #f59e0b;color:#f59e0b;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(${JSON.stringify(id)},${JSON.stringify('checkin')})">✏️ Ingresar Hora</button>`;
 
-  function campoHTML(campo, tiene, valor, habilitado){
-    const lbl = campo==='checkin'?'🟡 Llegada':'🟢 Salida';
-    const color = campo==='checkin'?'#f59e0b':'#22c55e';
-    if(tiene){
-      return `<div class="tbl">${lbl}</div>
-        <div class="tbv">${fmt12(valor)}</div>
-        <div style="display:flex;gap:6px;justify-content:center;margin-top:4px;">
-          <button data-action="editar" data-id="${id}" data-campo="${campo}" style="padding:4px 10px;background:none;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;color:var(--muted);">✏️ Editar</button>
-          <button data-action="borrar" data-id="${id}" data-campo="${campo}" style="padding:4px 10px;background:none;border:1px solid #e74c3c;border-radius:6px;font-size:12px;cursor:pointer;color:#e74c3c;">✕ Borrar</button>
-        </div>`;
-    } else {
-      return `<div class="tbl">${lbl}</div>
-        <button data-action="ahora" data-id="${id}" data-campo="${campo}" ${!habilitado?'disabled':''} style="width:100%;margin-top:6px;padding:11px;background:${habilitado?color:'#ccc'};color:white;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">⏱ Ahora</button>
-        <button data-action="editar" data-id="${id}" data-campo="${campo}" ${!habilitado?'disabled':''} style="width:100%;margin-top:4px;padding:9px;background:none;border:1px solid ${habilitado?color:'#ccc'};color:${habilitado?color:'#ccc'};border-radius:8px;font-size:0.82rem;font-weight:700;cursor:${habilitado?'pointer':'not-allowed'};">✏️ Ingresar Hora</button>
-        <div class="tbs">${habilitado?'toca para registrar':'registra llegada primero'}</div>`;
-    }
-  }
+  const cOUT = hasCheckout ? `<div class="tbv">${fmt12(rpt.checkout)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px;">${dur||''}</div>
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
+      <button style="padding:5px 12px;background:#0ea5e9;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteEditarHora(${JSON.stringify(id)},${JSON.stringify('checkout')})">✏️ Editar</button>
+      <button style="padding:5px 12px;background:#e74c3c;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;" onclick="suplenteUpdTime(${JSON.stringify(id)},${JSON.stringify('checkout')},${JSON.stringify('')});suplenteRegistrar(${JSON.stringify(id)},${JSON.stringify('_refresh')})">✕ Borrar</button>
+    </div>`
+  : hasCheckin
+    ? `<button style="width:100%;margin-top:6px;padding:12px;background:#22c55e;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;" onclick="suplenteRegistrar(${JSON.stringify(id)},${JSON.stringify('checkout')})">⏱ Registrar Ahora</button>
+       <button style="width:100%;margin-top:4px;padding:10px;background:none;border:2px solid #22c55e;color:#22c55e;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteEditarHora(${JSON.stringify(id)},${JSON.stringify('checkout')})">✏️ Ingresar Hora</button>`
+    : `<button disabled style="width:100%;margin-top:6px;padding:12px;background:#ccc;color:white;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:not-allowed;">⏱ Registrar Ahora</button>
+       <div class="tbs">registra llegada primero</div>`;
 
   return `
     <div class="tr2">
-      <div class="tb ${hasCheckin?'has':'empty'}">${campoHTML('checkin',hasCheckin,rpt.checkin,true)}</div>
-      <div class="tb ${hasCheckout?'has':'empty'}">${campoHTML('checkout',hasCheckout,rpt.checkout,hasCheckin)}</div>
+      <div class="tb ${hasCheckin?'has':'empty'}"><div class="tbl">🟡 Llegada</div>${cIN}</div>
+      <div class="tb ${hasCheckout?'has':'empty'}"><div class="tbl">🟢 Salida</div>${cOUT}</div>
     </div>
     ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
-    <textarea rows="2" placeholder="Notas…" data-nota-id="${id}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
-    <button data-action="nota" data-id="${id}" style="width:100%;margin-top:6px;padding:8px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">💾 Guardar Nota</button>
+    <textarea rows="2" placeholder="Notas…" id="notaTxt_${id}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:'Barlow',sans-serif;font-size:13px;resize:none;box-sizing:border-box;">${rpt.note||''}</textarea>
+    <button style="width:100%;margin-top:6px;padding:9px;background:#6c3483;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="suplenteUpdNote(${JSON.stringify(id)},document.getElementById('notaTxt_'+${JSON.stringify(id)}).value)">💾 Guardar Nota</button>
   `;
 }
 
-// Handler global para eventos del panel — evita onclick strings con comillas anidadas
 document.addEventListener('click', function(e){
-  const btn = e.target.closest('[data-action]');
-  if(!btn) return;
-  const action = btn.dataset.action;
-  const id = btn.dataset.id;
-  const campo = btn.dataset.campo;
-  if(action==='ahora'){ suplenteRegistrar(id, campo); }
-  else if(action==='editar'){ suplenteEditarHora(id, campo); }
-  else if(action==='borrar'){
-    suplenteUpdTime(id, campo, '');
-    suplenteRegistrar(id, '_refresh');
-  }
-  else if(action==='nota'){
-    const ta = document.querySelector(`[data-nota-id="${id}"]`);
-    if(ta) suplenteUpdNote(id, ta.value);
-  }
+  // Cerrar dropdowns al hacer click fuera
+  if(!e.target.closest('[data-action]')) return;
 });
 
 function suplenteEditarHora(id, field){
