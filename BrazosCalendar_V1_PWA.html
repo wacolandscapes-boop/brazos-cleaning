@@ -839,11 +839,12 @@ function renderAgenda(){
     window._sids=window._sids||{}; window._sids[sid]=svc.id;
 
     blk.innerHTML=`
-      <div class="sh" onclick="tog('${svc.id}')">
+      <div class="sh" onclick="tog('${String(svc.id).replace(/[^a-zA-Z0-9]/g,'_')}')">
         <div class="si">
           <div class="sn">${svc.clientName}</div>
           <div class="str">${timeStr}</div>
           <div class="sadr">${svc.address}</div>
+          ${svc.airbnbNote?`<div style="font-size:0.75rem;color:#e65100;margin-top:2px;font-weight:600;">📝 ${svc.airbnbNote}</div>`:''}
         </div>
         <div class="sr">
           <div class="stb ${sc}">${sx}</div>
@@ -966,7 +967,7 @@ function getSvcs(date){
       const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
       const showProp=(c.type==='airbnb'||c.type==='unico');
       const clientName=(showProp&&c.propId)?c.name+' / '+c.propId:c.name||`Cliente ${s.cliId}`;
-      return{id:String(s.id),clientName,address:[c.address,c.city].filter(Boolean).join(', '),phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||''};
+      return{id:String(s.id),clientName,address:[c.address,c.city].filter(Boolean).join(', '),phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||'',airbnbNote:s.airbnbNote||''};
     });
 }
 
