@@ -435,8 +435,8 @@ function tryRestoreSession(){
     if(sess && sess.empId && sess.group){
       Object.assign(S, sess);
       if(S.emps && S.emps.length) buildEmpsList();
+      showEmpSelected(S.empName, S.group);
       launch(false);
-      // Si hay token válido, refrescar desde Drive automáticamente
       const tok=localStorage.getItem(TKEY);
       const exp=parseInt(localStorage.getItem(TEXP)||'0');
       if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); } try{checkBtnSuplente();}catch(e){} try{checkBtnSupervisor();}catch(e2){}
@@ -484,7 +484,12 @@ async function loadSyncFile(){
     // Si ya hay grupo seleccionado (sesión restaurada), descargar horarios
     if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
     buildEmpsList();
-    showEmpSection();
+    // Solo mostrar pantalla de selección si NO hay empleado ya seleccionado
+    if(!S.empId){
+      showEmpSection();
+    } else {
+      showEmpSelected(S.empName, S.group);
+    }
     renderView();
   }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
 }
