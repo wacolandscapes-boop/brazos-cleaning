@@ -600,6 +600,42 @@ async function saveSyncToDrive(){
     return false;
   }
 }
+async function loadHorariosFromDrive(){
+  if(!S.driveToken || !S.folderId || !S.group) return;
+  try{
+    const fname = horariosFile(S.group);
+    const key   = horariosKey(S.group);
+    const local = JSON.parse(localStorage.getItem(key)||'{}');
+    const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
+    if(!sr.files||!sr.files.length){
+      // No existe en Drive aún — subir local si hay datos
+      if(Object.keys(local).length) saveHorariosToDrive();
+      S.reports={};
+      Object.keys(local).forEach(function(date){
+        if(!S.reports[date]) S.reports[date]={};
+        S.reports[date][S.group]=local[date];
+      });
+      return;
+    }
+    const drive = await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
+    // Merge: local gana si es más reciente
+    const merged = Object.assign({}, drive||{});
+    Object.keys(local).forEach(function(date){
+      const lt = new Date((local[date]||{}).savedAt||0).getTime();
+      const dt = new Date((merged[date]||{}).savedAt||0).getTime();
+      if(lt >= dt) merged[date] = local[date];
+    });
+    localStorage.setItem(key, JSON.stringify(merged));
+    S.reports={};
+    Object.keys(merged).forEach(function(date){
+      if(!S.reports[date]) S.reports[date]={};
+      S.reports[date][S.group]=merged[date];
+    });
+    toast('✅ Horarios cargados');
+  }catch(e){ console.warn('loadHorariosFromDrive:',e.message); }
+}
+
+
 function setDS(t,m){
   const el=document.getElementById('driveStatus');
   el.textContent=m; el.className='ds'+(t==='ok'?' ok':t==='err'?' err':'');
