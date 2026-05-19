@@ -475,37 +475,17 @@ async function loadSyncFile(){
     if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado`);return;}
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
     if(!data||data.exportType!=='anaCS_sync'){setDS('err','⚠ Archivo inválido');return;}
-    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[]; S.cellNotes=data.cellNotes||{}; if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente; if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
+    S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[];
+    S.cellNotes=data.cellNotes||{};
+    if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
+    if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
     const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${mod}`);
-    // also try to load reports
-    try{
-      const rr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${RFILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
-      if(rr.files&&rr.files.length){
-        S.reportsFileId=rr.files[0].id;
-        const rdata=await dGet(`https://www.googleapis.com/drive/v3/files/${rr.files[0].id}?alt=media`);
-        // Mezclar reportes de Drive con reportes locales (modo suplente)
-        const localRpts = suplenteGetReports();
-        const merged = rdata||{};
-        Object.keys(localRpts).forEach(date=>{
-          Object.keys(localRpts[date]).forEach(group=>{
-            if(!merged[date]) merged[date]={};
-            if(!merged[date][group]) merged[date][group]=localRpts[date][group];
-            else {
-              // Mezclar servicios
-              localRpts[date][group].services.forEach(ls=>{
-                const idx=merged[date][group].services.findIndex(s=>String(s.id)===String(ls.id));
-                if(idx>=0) merged[date][group].services[idx]=ls;
-                else merged[date][group].services.push(ls);
-              });
-            }
-          });
-        });
-        S.reports=merged;
-      }
-    }catch(e){}
+    // Si ya hay grupo seleccionado (sesión restaurada), descargar horarios
+    if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
     buildEmpsList();
     showEmpSection();
+    renderView();
   }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
 }
 
