@@ -25,7 +25,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '2.2.0';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -283,7 +283,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 <div class="bnav" id="bnav">
   <div class="bnav-i">
     <div class="ni active" id="niAg" onclick="showTab('agenda')"><div class="ni-ic">📅</div><div class="ni-lb">AGENDA</div></div>
-    <div class="ni" id="niInfo" onclick="showTab('info')"><div class="ni-ic">👤</div><div class="ni-lb">YO</div></div>
+    <div class="ni" id="niInfo" onclick="showTab('info')"><div class="ni-ic">👤</div><div class="ni-lb" id="niInfoLbl">YO</div></div>
   </div>
 </div>
 
@@ -389,10 +389,12 @@ let allEmpsList = [];
 
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible'){
-    // App retomada del segundo plano — refrescar datos si hay token
     setTimeout(()=>{ try{ refreshData() }catch(e){} }, 800);
   }
 });
+
+// Auto-sync cada 3 minutos
+setInterval(()=>{ try{ if(S.driveToken && S.folderId) refreshData(); }catch(e){} }, 3 * 60 * 1000);
 
 window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(checkForUpdate, 3000);
@@ -687,6 +689,8 @@ function showEmpSelected(name, group){
   document.getElementById('empSelected').style.display='block';
   document.getElementById('selEmpName').textContent=name;
   document.getElementById('selEmpGrp').textContent='👥 '+group;
+  const niLbl=document.getElementById('niInfoLbl');
+  if(niLbl) niLbl.textContent=name.split(' ')[0]; // primer nombre
   document.getElementById('btnStart').disabled=false;
 }
 
@@ -1017,42 +1021,35 @@ async function refreshData(){
         const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
         if(data&&data.exportType==='anaCS_sync'){
           S.servs=data.servs||[]; S.clis=data.clis||[]; S.grupos=data.grupos||{}; S.emps=data.emps||[];
+          S.cellNotes=data.cellNotes||{};
+          if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
+          if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
         }
       }
-      // Reload reports
-      if(S.reportsFileId){
-        try{const rdata=await dGet(`https://www.googleapis.com/drive/v3/files/${S.reportsFileId}?alt=media`);S.reports=rdata||{};}catch(e){}
-      }
+      // Recargar horarios del grupo
+      if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
       const mod=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
       sdot('ok','Actualizado '+mod);
       document.getElementById('syncLbl').textContent='Actualizado '+mod;
+      saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
       toast('✅ Datos actualizados');
     } else {
       // localStorage fallback
-      const g=localStorage.getItem('v35_grupos');
-      const sv=localStorage.getItem('v35_servs');
-      const c=localStorage.getItem('v35_clis');
-      const e=localStorage.getItem('v35_emps');
-      if(g) S.grupos=JSON.parse(g);
-      if(sv) S.servs=JSON.parse(sv);
-      if(c) S.clis=JSON.parse(c);
-      if(e) S.emps=JSON.parse(e);
-      // Also read reports from localStorage
-      try{
-        const rpts=JSON.parse(localStorage.getItem('qt_bra_reports')||'{}');
-        // Convertir estructura fecha->grupo->services[] a id->reporte para render
-        S.reports={};
-        Object.values(rpts).forEach(dayData=>{
-          Object.values(dayData).forEach(grpData=>{
-            if(grpData.services) grpData.services.forEach(s=>{ S.reports[String(s.id)]=s; });
+      if(S.group){
+        try{
+          const local=JSON.parse(localStorage.getItem(horariosKey(S.group))||'{}');
+          S.reports={};
+          Object.keys(local).forEach(function(date){
+            if(!S.reports[date]) S.reports[date]={};
+            S.reports[date][S.group]=local[date];
           });
-        });
-      }catch(ex){}
+        }catch(ex){}
+      }
       sdot('ok','Datos locales');
       document.getElementById('syncLbl').textContent='Datos locales actualizados';
-      toast('✅ Actualizado desde Scheduler');
+      saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
+      toast('✅ Actualizado desde local');
     }
-    saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
   }catch(e){
     sdot('err','Error al actualizar');
     toast('⚠ Error: '+e.message);

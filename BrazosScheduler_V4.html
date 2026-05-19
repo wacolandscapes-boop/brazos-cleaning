@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Brazos Scheduler v55.0</title>
+    <title>Brazos Scheduler v56.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1123,7 +1123,6 @@
                 <button class="btn" onclick="app.showSec('secConfig')" style="background:#2c3e50; color:white">🎨 Config. Series</button>
                 <button class="btn" onclick="app.showSec('secGrupos')" style="background:#2c3e50; color:white">👥 Grupos</button>
                 <button class="btn" onclick="app.showSec('secSupervisor')" style="background:#6c3483; color:white">🔐 Supervisor</button>
-                <button class="btn" onclick="app.showSec('secClavesSuplente')" style="background:#e67e22; color:white">🔑 Claves Suplente</button>
             </div>
             <div id="secEmp">
                 <div style="margin-bottom:15px; display:flex; justify-content:flex-end; gap:8px;">
@@ -1234,8 +1233,14 @@
 
             <div id="secSupervisor" style="display:none">
                 <h3 style="margin-top:0; color:#6c3483">🔐 Configuración del Supervisor</h3>
-                <p style="color:#666; font-size:0.85rem; margin-bottom:16px;">Este PIN es el que usa el supervisor en <strong>QuikTrack</strong> para acceder al modo de gestión de servicios.</p>
+                <p style="color:#666; font-size:0.85rem; margin-bottom:16px;">Este PIN es el que usa el supervisor en <strong>BrazosCalendar</strong> para acceder al modo de gestión de servicios.</p>
                 <div style="background:#f8f0ff; border:2px solid #9b59b6; border-radius:12px; padding:20px; max-width:360px;">
+                    <div style="margin-bottom:14px; background:#ede7f6; border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:0.78rem; font-weight:700; color:#6c3483; margin-bottom:4px;">PIN ACTUAL</div>
+                        <div id="supPinActual" style="font-size:1.8rem; font-weight:900; color:#4a235a; letter-spacing:8px;">
+                            ••••
+                        </div>
+                    </div>
                     <div style="margin-bottom:14px;">
                         <label style="font-size:0.82rem; font-weight:700; color:#6c3483; display:block; margin-bottom:6px;">🔢 PIN del Supervisor</label>
                         <input type="password" id="supPinInput" placeholder="Ingresa el PIN (mín. 4 dígitos)"
@@ -1259,22 +1264,6 @@
                         <strong>ℹ️ Nota:</strong> El PIN se guarda en <em>localStorage</em> con la clave <code>brazos_supervisorPin</code>.
                         El valor por defecto es <strong>1234</strong> si nunca se ha configurado.<br><br>
                         Para que el supervisor use el PIN actualizado en otro dispositivo, sincroniza Drive después de guardarlo.
-                    </div>
-                </div>
-            </div>
-
-            <div id="secClavesSuplente" style="display:none">
-                <h3 style="margin-top:0; color:#e67e22">🔑 Claves Suplente</h3>
-                <p style="color:#666; font-size:0.85rem; margin-bottom:16px;">Genera claves de un solo uso para que un líder suplente pueda registrar horarios en <strong>BrazosCalendar</strong> por un día.</p>
-                <div style="background:#fff8f0; border:2px solid #e67e22; border-radius:12px; padding:20px; max-width:420px;">
-                    <button onclick="app.generarClaveSuplente()" style="width:100%;padding:12px;background:#e67e22;color:white;border:none;border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-bottom:16px;">
-                        ⚡ Generar Nueva Clave
-                    </button>
-                    <div id="clavesSuplenteList" style="max-height:300px;overflow-y:auto;"></div>
-                </div>
-                <div style="margin-top:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;max-width:420px;">
-                    <div style="font-size:0.8rem;color:#856404;">
-                        <strong>ℹ️ Cómo usar:</strong> Genera una clave → comunícala por llamada o texto al líder suplente → el líder la ingresa en BrazosCalendar → queda activo por ese día hasta medianoche → la clave se descarta automáticamente.
                     </div>
                 </div>
             </div>
@@ -2332,23 +2321,38 @@ class Scheduler {
                 const textMode4 = this.getTextMode(typeKey4);
                 div.style.color = textMode4 === 'auto' ? getTextColor(bgColor4) : (textMode4 === 'white' ? '#fff' : '#000');
                 const propPart = showPropId && c.propId ? ` - ${c.propId}` : '';
-                const mainLine = `${prioPrefix}${c.name}${propPart}${c.city ? ' - ' + c.city : ''}`;
+                const mainLine = `${prioPrefix}${c.name}${propPart}${[c.address, c.city].filter(Boolean).join(', ') ? ' - ' + [c.address, c.city].filter(Boolean).join(', ') : ''}`;
                 const timeLine = (s.timeStart || s.timeEnd)
                     ? `<div class="ev-time">${this.fmt12(s.timeStart)}${s.timeEnd ? ' - ' + this.fmt12(s.timeEnd) : ''}</div>`
                     : '';
-                // Leer check-in/check-out desde qt_bra_reports
+                // Leer check-in/check-out — primero _prodReports (memoria), luego localStorage
                 let checkLine = '';
                 try {
-                    const qtRpts = JSON.parse(localStorage.getItem('qt_bra_reports') || '{}');
-                    const dayRpts = qtRpts[dStr] || {};
-                    // Buscar en todos los grupos del día
                     let svcRpt = null;
-                    Object.values(dayRpts).forEach(grpData => {
-                        if (grpData.services) {
-                            const found = grpData.services.find(r => String(r.id) === String(s.id));
-                            if (found) svcRpt = found;
-                        }
-                    });
+                    // 1. Buscar en _prodReports (en memoria — no afectado por Tracking Prevention)
+                    if (this._prodReports) {
+                        const dayRpts = this._prodReports[dStr] || {};
+                        Object.values(dayRpts).forEach(grpData => {
+                            if (svcRpt) return;
+                            if (grpData.services) {
+                                const found = grpData.services.find(r => String(r.id) === String(s.id));
+                                if (found) svcRpt = found;
+                            }
+                        });
+                    }
+                    // 2. Fallback: localStorage
+                    if (!svcRpt) {
+                        Object.keys(this.grupos).forEach(grp => {
+                            if (svcRpt) return;
+                            const key = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_');
+                            const grpData = JSON.parse(localStorage.getItem(key) || '{}');
+                            const dayData = grpData[dStr];
+                            if (dayData && dayData.services) {
+                                const found = dayData.services.find(r => String(r.id) === String(s.id));
+                                if (found) svcRpt = found;
+                            }
+                        });
+                    }
                     if (svcRpt && svcRpt.checkin) {
                         const cin = this.fmt12(svcRpt.checkin);
                         const cout = svcRpt.checkout ? this.fmt12(svcRpt.checkout) : '...';
@@ -2957,8 +2961,10 @@ class Scheduler {
         document.getElementById('serviceModal').style.display='block'; 
         
         if(s) { 
-            // EDITAR servicio existente
-            // Si el cliId no está en mCli (propiedad 2da, 3ra...), buscar por nombre
+            // EDITAR servicio existente — ocultar bloque de repetición
+            const _repBlockEdit = document.getElementById('repBlock');
+            if(_repBlockEdit) _repBlockEdit.style.display = 'none';
+            document.getElementById('mRep').value = 'no';
             const _mCli = document.getElementById('mCli');
             _mCli.value = s.cliId;
             if (!_mCli.value || _mCli.value !== String(s.cliId)) {
@@ -3038,6 +3044,11 @@ class Scheduler {
             document.getElementById('mUntil').value = '';
             document.getElementById('mCancelled').checked = false;
             document.getElementById('btnDel').style.display = 'none';
+            // Limpiar campos Airbnb
+            if(document.getElementById('mAirbnbNote')) document.getElementById('mAirbnbNote').value = '';
+            if(document.getElementById('mAirbnbNoteCustom')) document.getElementById('mAirbnbNoteCustom').value = '';
+            const _airbnbWrapN = document.getElementById('airbnbNoteWrap');
+            if(_airbnbWrapN) _airbnbWrapN.style.display = 'none';
             // Ocultar Repetición Automática en edición
             const _repBlock = document.getElementById('repBlock');
             if (_repBlock) _repBlock.style.display = this.editing ? 'none' : 'block';
@@ -3314,7 +3325,7 @@ class Scheduler {
             }
             this.servs.push(data); 
             const c = this.clis.find(x=>x.id==data.cliId); 
-            if(document.getElementById('mRep').value==='yes' && c) {
+            if(!this.editing && document.getElementById('mRep').value==='yes' && c) {
                 let days2x = null;
                 if(c.type === '2xsemana') {
                     days2x = [parseInt(document.getElementById('day1').value), parseInt(document.getElementById('day2').value)];
@@ -3577,49 +3588,6 @@ class Scheduler {
     }
 
     // Personalización de Colores
-    // ── CLAVES SUPLENTE ─────────────────────────────────────────────
-    _getClavesSuplente() {
-        return JSON.parse(localStorage.getItem('brazos_clavesSuplente') || '[]');
-    }
-    _saveClavesSuplente(claves) {
-        localStorage.setItem('brazos_clavesSuplente', JSON.stringify(claves));
-    }
-    generarClaveSuplente() {
-        const claves = this._getClavesSuplente();
-        let nueva;
-        do { nueva = String(Math.floor(1000 + Math.random() * 9000)); }
-        while (claves.some(c => c.clave === nueva && c.estado === 'activa'));
-        claves.push({ clave: nueva, estado: 'activa', creada: new Date().toLocaleDateString('es-MX') });
-        this._saveClavesSuplente(claves);
-        this.renderClavesSuplente();
-        this.save();
-        alert(`✅ Nueva clave generada:\n\n🔑  ${nueva}  🔑\n\nComunícala al líder suplente.\nSincroniza Drive para que esté disponible en Calendar.`);
-    }
-    eliminarClaveSuplente(idx) {
-        const claves = this._getClavesSuplente();
-        claves.splice(idx, 1);
-        this._saveClavesSuplente(claves);
-        this.renderClavesSuplente();
-        this.save();
-    }
-    renderClavesSuplente() {
-        const el = document.getElementById('clavesSuplenteList');
-        if (!el) return;
-        const claves = this._getClavesSuplente();
-        if (!claves.length) {
-            el.innerHTML = '<p style="color:#888;font-size:0.85rem;text-align:center;">Sin claves generadas.</p>';
-            return;
-        }
-        el.innerHTML = claves.map((c, i) => `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:8px;border-radius:8px;background:${c.estado==='activa'?'#f0fff4':'#f8f9fa'};border:1px solid ${c.estado==='activa'?'#27ae60':'#dee2e6'};">
-                <div>
-                    <span style="font-size:1.4rem;font-weight:800;letter-spacing:6px;color:${c.estado==='activa'?'#1a5c30':'#999'};">${c.clave}</span>
-                    <div style="font-size:0.72rem;color:#888;margin-top:2px;">${c.estado==='activa'?'✅ Activa':'❌ Usada'} · ${c.creada}</div>
-                </div>
-                <button onclick="app.eliminarClaveSuplente(${i})" style="background:none;border:1px solid #e74c3c;color:#e74c3c;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75rem;">🗑</button>
-            </div>`).join('');
-    }
-
     saveSupervisorPin() {
         const pin = document.getElementById('supPinInput').value.trim();
         const confirm2 = document.getElementById('supPinConfirm').value.trim();
@@ -3637,9 +3605,21 @@ class Scheduler {
         localStorage.setItem('brazos_supervisorPin', pin);
         document.getElementById('supPinInput').value = '';
         document.getElementById('supPinConfirm').value = '';
+        // Actualizar display del PIN actual
+        const pinDisplay = document.getElementById('supPinActual');
+        if (pinDisplay) pinDisplay.textContent = pin;
         status.style.color = '#27ae60';
-        status.textContent = '✅ PIN guardado correctamente.';
-        setTimeout(() => { status.textContent = ''; }, 3000);
+        status.textContent = '✅ PIN guardado. Sincronizando con Drive…';
+        // Sync inmediato para que Calendar lo reciba
+        if (this.driveConnected) {
+            this.driveSyncNow().then(() => {
+                status.textContent = '✅ PIN guardado y sincronizado con Drive.';
+                setTimeout(() => { status.textContent = ''; }, 3000);
+            });
+        } else {
+            setTimeout(() => { status.textContent = '✅ PIN guardado. Conecta Drive para sincronizar.'; }, 500);
+            setTimeout(() => { status.textContent = ''; }, 4000);
+        }
     }
 
     clearAllServices() {
@@ -6129,15 +6109,17 @@ class Scheduler {
 
     
     showSec(s) { 
-        ['secEmp','secCli','secConfig','secGrupos','secSupervisor','secClavesSuplente'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
+        ['secEmp','secCli','secConfig','secGrupos','secSupervisor'].forEach(x => document.getElementById(x).style.display = x === s ? 'block' : 'none');
+        // Refrescar PIN actual al abrir sección supervisor
+        if (s === 'secSupervisor') {
+            const el = document.getElementById('supPinActual');
+            if (el) el.textContent = localStorage.getItem('brazos_supervisorPin') || '1234';
+        }
         if(s === 'secConfig') {
             this.renderSeriesConfig();
         }
         if(s === 'secGrupos') {
             this.renderGruposSection();
-        }
-        if(s === 'secClavesSuplente') {
-            this.renderClavesSuplente();
         }
     }
 
@@ -9746,8 +9728,11 @@ class Scheduler {
         Object.keys(this.grupos).forEach(g => {
             const o = document.createElement('option'); o.value = g; o.textContent = g; sel.appendChild(o);
         });
-        if (this._prodReports) { this.renderProductionReport(); }
-        else { this.loadProductionFromDrive(); }
+        // Siempre recargar horarios frescos desde localStorage y Drive
+        this._prodReports = null;
+        localStorage.removeItem('qt_bra_reports');
+        if (this.driveConnected) { this.loadProductionFromDrive(); }
+        else { this.loadProductionLocal(); }
     }
 
     closeProductionReport() {
@@ -9759,16 +9744,25 @@ class Scheduler {
 
     loadProductionLocal() {
         const status = document.getElementById('prodStatus');
-        const RPTS_KEY = 'qt_bra_reports';
-
+        // Leer horarios de cada grupo desde sus propias claves localStorage
         let allReports = {};
-        try {
-            const raw = localStorage.getItem(RPTS_KEY);
-            if (raw) allReports = JSON.parse(raw);
-        } catch(e) {}
+        let totalGrupos = 0;
+        Object.keys(this.grupos).forEach(grp => {
+            const key = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_');
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return;
+                const grpData = JSON.parse(raw);
+                Object.keys(grpData).forEach(date => {
+                    if (!allReports[date]) allReports[date] = {};
+                    allReports[date][grp] = grpData[date];
+                });
+                totalGrupos++;
+            } catch(e) {}
+        });
 
         if (!Object.keys(allReports).length) {
-            status.textContent = '⚠️ No hay datos en qt_bra_reports. Abre QuikTrack, registra al menos un check-in y vuelve aquí.';
+            status.textContent = '⚠️ Sin horarios locales. Los líderes deben registrar sus servicios en Calendar primero.';
             status.style.color = '#e74c3c';
             return;
         }
@@ -9778,7 +9772,6 @@ class Scheduler {
         const latestDate = dates[dates.length - 1];
         document.getElementById('prodDate').value = latestDate;
 
-        // Update group selector
         const groupSel = document.getElementById('prodGroup');
         const foundGroups = new Set();
         dates.forEach(dt => { Object.keys(allReports[dt]||{}).forEach(g => foundGroups.add(g)); });
@@ -9791,7 +9784,7 @@ class Scheduler {
         if (foundGroups.size === 1) groupSel.value = [...foundGroups][0];
         else groupSel.value = 'all';
 
-        status.textContent = '📱 qt_bra_reports — ' + dates.join(', ') + ' · ' + foundGroups.size + ' grupo(s)';
+        status.textContent = `📱 ${totalGrupos} grupo(s) · ${dates.join(', ')}`;
         status.style.color = '#27ae60';
         this.renderProductionReport();
     }
@@ -9842,32 +9835,68 @@ class Scheduler {
 
     async loadProductionFromDrive() {
         const status = document.getElementById('prodStatus');
-        status.textContent = '⏳ Cargando reportes de QuikTrack desde Drive…';
+        status.textContent = '⏳ Cargando horarios de grupos desde Drive…';
         status.style.color = '#f39c12';
         if (!this.driveConnected || !this.driveFolderId) {
             status.textContent = '⚠️ Conecta Drive primero (botón ☁️ en el toolbar)';
             status.style.color = '#e74c3c'; return;
         }
         try {
-            const sr = await fetch(
-                `https://www.googleapis.com/drive/v3/files?q=name='quiktrack_reports.json'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`,
-                { headers: { Authorization: `Bearer ${this.driveToken}` } }
-            );
-            const sd = await sr.json();
-            if (!sd.files || !sd.files.length) {
-                status.textContent = '⚠️ quiktrack_reports.json no encontrado. Los líderes deben usar QuikTrack primero.';
+            const grupoNames = Object.keys(this.grupos);
+            let allReports = {};
+            let cargados = 0;
+
+            // Leer archivo de cada grupo en paralelo
+            await Promise.all(grupoNames.map(async grp => {
+                const fname = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_') + '.json';
+                try {
+                    const sr = await fetch(
+                        `https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const sd = await sr.json();
+                    if (!sd.files || !sd.files.length) return; // este grupo aún no tiene archivo
+                    const fr = await fetch(
+                        `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const grpData = await fr.json();
+                    // Guardar en localStorage para que _fillCell lo lea sin Drive
+                    const key = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_');
+                    localStorage.setItem(key, JSON.stringify(grpData));
+                    // Mezclar en allReports
+                    Object.keys(grpData).forEach(date => {
+                        if (!allReports[date]) allReports[date] = {};
+                        allReports[date][grp] = grpData[date];
+                    });
+                    cargados++;
+                } catch(e) { console.warn('Horarios ' + grp + ':', e.message); }
+            }));
+
+            if (!cargados) {
+                status.textContent = '⚠️ Ningún grupo tiene horarios registrados aún.';
                 status.style.color = '#e74c3c'; return;
             }
-            const fr = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
-                { headers: { Authorization: `Bearer ${this.driveToken}` } }
-            );
-            this._prodReports = await fr.json();
-            // Guardar en localStorage para que _fillCell lo lea
-            localStorage.setItem('qt_bra_reports', JSON.stringify(this._prodReports));
-            const mod = new Date(sd.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-            status.textContent = `✅ Datos cargados · ${mod}`; status.style.color = '#27ae60';
+
+            this._prodReports = allReports;
+            const dates = Object.keys(allReports).sort();
+            document.getElementById('prodDate').value = dates[dates.length-1] || new Date().toLocaleDateString('en-CA');
+
+            const groupSel = document.getElementById('prodGroup');
+            const foundGroups = new Set();
+            dates.forEach(dt => { Object.keys(allReports[dt]||{}).forEach(g => foundGroups.add(g)); });
+            groupSel.innerHTML = '<option value="all">Todos los grupos</option>';
+            foundGroups.forEach(g => {
+                const o = document.createElement('option');
+                o.value = g; o.textContent = g; groupSel.appendChild(o);
+            });
+            if (foundGroups.size === 1) groupSel.value = [...foundGroups][0];
+            else groupSel.value = 'all';
+
+            status.textContent = `✅ ${cargados} grupo(s) cargados · ${dates.length} día(s)`;
+            status.style.color = '#27ae60';
             this.renderProductionReport();
+            this.render(); // actualizar calendario con check-ins
         } catch(e) { status.textContent = '❌ Error: ' + e.message; status.style.color = '#e74c3c'; }
     }
 
@@ -10181,9 +10210,54 @@ class Scheduler {
 
     driveSync() {
         if (this.driveConnected) {
-            this.driveSyncNow();
+            document.getElementById('driveSyncLabel').textContent = 'Guardando...';
+            document.getElementById('driveSyncBtn').style.background = '#f39c12';
+            this.isSyncing = false;
+            this.driveSyncNow().then(() => this.descargarHorariosGrupos());
         } else {
             this.driveConnect();
+        }
+    }
+
+    async descargarHorariosGrupos() {
+        if (!this.driveConnected || !this.driveFolderId) return;
+        const grupoNames = Object.keys(this.grupos);
+        let updated = false;
+        await Promise.all(grupoNames.map(async grp => {
+            const fname = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_') + '.json';
+            const key   = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_');
+            try {
+                const sr = await fetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id)`,
+                    { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                );
+                const sd = await sr.json();
+                if (!sd.files || !sd.files.length) {
+                    console.log('❌ No encontrado en Drive:', fname);
+                    return;
+                }
+                const fr = await fetch(
+                    `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
+                    { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                );
+                const grpData = await fr.json();
+                localStorage.setItem(key, JSON.stringify(grpData));
+                if (!this._prodReports) this._prodReports = {};
+                Object.keys(grpData).forEach(date => {
+                    if (!this._prodReports[date]) this._prodReports[date] = {};
+                    this._prodReports[date][grp] = grpData[date];
+                });
+                updated = true;
+            } catch(e) { console.log('❌ Error:', grp, e.message); }
+        }));
+        if (updated) {
+            this.render();
+            const now = new Date();
+            const t = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+            document.getElementById('driveSyncLabel').textContent = 'Sync ' + t;
+            document.getElementById('driveSyncBtn').style.background = '#27ae60';
+        } else {
+            console.log('Sin archivos de horarios en Drive todavía.');
         }
     }
 
@@ -10218,31 +10292,52 @@ class Scheduler {
                 // ☁️ Auto-sync cada 5 minutos
                 if (this._autoSyncInterval) clearInterval(this._autoSyncInterval);
                 this._autoSyncInterval = setInterval(async () => {
-                    if (this.driveConnected) {
+                    // Verificar token antes de cualquier llamada
+                    if (!this.driveConnected || !this.driveToken) return;
+                    if (this.tokenExpiry && Date.now() > this.tokenExpiry) {
+                        this.driveConnected = false;
+                        this.driveToken = null;
+                        document.getElementById('driveSyncLabel').textContent = 'Token expirado';
+                        document.getElementById('driveSyncBtn').style.background = '#e74c3c';
+                        clearInterval(this._autoSyncInterval);
+                        return;
+                    }
                         await this.driveSyncNow();
-                        // También descargar quiktrack_reports.json
+                        // Descargar horarios de todos los grupos para actualizar calendario
                         try {
-                            const sr = await fetch(
-                                `https://www.googleapis.com/drive/v3/files?q=name='quiktrack_reports.json'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id)`,
-                                { headers: { Authorization: `Bearer ${this.driveToken}` } }
-                            );
-                            const sd = await sr.json();
-                            if (sd.files && sd.files.length) {
-                                const fr = await fetch(
-                                    `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
-                                    { headers: { Authorization: `Bearer ${this.driveToken}` } }
-                                );
-                                const rpts = await fr.json();
-                                this._prodReports = rpts;
-                                localStorage.setItem('qt_bra_reports', JSON.stringify(rpts));
-                                this.render();
-                            }
+                            const grupoNames = Object.keys(this.grupos);
+                            let updated = false;
+                            await Promise.all(grupoNames.map(async grp => {
+                                const fname = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_') + '.json';
+                                const key   = 'brazos_horarios_' + grp.toLowerCase().replace(/\s+/g,'_');
+                                try {
+                                    const sr = await fetch(
+                                        `https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false&fields=files(id)`,
+                                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                                    );
+                                    const sd = await sr.json();
+                                    if (!sd.files || !sd.files.length) return;
+                                    const fr = await fetch(
+                                        `https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,
+                                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                                    );
+                                    const grpData = await fr.json();
+                                    localStorage.setItem(key, JSON.stringify(grpData));
+                                    // Mezclar en _prodReports
+                                    if (!this._prodReports) this._prodReports = {};
+                                    Object.keys(grpData).forEach(date => {
+                                        if (!this._prodReports[date]) this._prodReports[date] = {};
+                                        this._prodReports[date][grp] = grpData[date];
+                                    });
+                                    updated = true;
+                                } catch(e) {}
+                            }));
+                            if (updated) this.render();
                         } catch(e) {}
                         const now = new Date();
                         const t = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
                         document.getElementById('driveSyncLabel').textContent = 'Sync ' + t;
                         document.getElementById('driveSyncBtn').style.background = '#27ae60';
-                    }
                 }, 5 * 60 * 1000);
             }
         });
