@@ -59,7 +59,7 @@ if('serviceWorker' in navigator){
   }).catch(()=>{});
 }
 let _installPrompt=null;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_installPrompt=e;setTimeout(()=>{if(!window.matchMedia('(display-mode: standalone)').matches)showInstallBanner();},2000);});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); _installPrompt=null; }); // Deshabilitar instalación PWA
 function showInstallBanner(){
   if(document.getElementById('_pwaBanner'))return;
   const b=document.createElement('div');b.id='_pwaBanner';
