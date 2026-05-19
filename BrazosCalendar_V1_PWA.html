@@ -844,7 +844,7 @@ function renderAgenda(){
           <div class="sn">${svc.clientName}</div>
           <div class="str">${timeStr}</div>
           <div class="sadr">${svc.address}</div>
-          ${svc.airbnbNote?`<div style="font-size:0.75rem;color:#e65100;margin-top:2px;font-weight:600;">📝 ${svc.airbnbNote}</div>`:''}
+          ${svc.airbnbNote?`<div style="font-size:0.75rem;color:#e65100;margin-top:2px;font-weight:600;">📝 ${{checkout:'🧳 Checkout',checkin:'🔑 Checkin',same_day:'🔄 C+C mismo día',checkout_later:'📅 Checkin posterior',checkin_later:'📅 Checkout anterior'}[svc.airbnbNote]||svc.airbnbNote}</div>`:''}
         </div>
         <div class="sr">
           <div class="stb ${sc}">${sx}</div>
