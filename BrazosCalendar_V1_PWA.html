@@ -389,6 +389,20 @@ let allEmpsList = [];
 
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible'){
+    // Verificar si token está expirado o por expirar
+    const exp=parseInt(localStorage.getItem(TEXP)||'0');
+    if(S.driveToken && exp && Date.now() > exp - (5*60*1000)){
+      // Token expirado o expira en menos de 5 min — renovar silenciosamente
+      try{
+        const tcS=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,prompt:'',callback:function(r){
+          if(r.error) return;
+          S.driveToken=r.access_token;
+          localStorage.setItem(TKEY,r.access_token);
+          localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
+        }});
+        tcS.requestAccessToken({prompt:''});
+      }catch(e){}
+    }
     setTimeout(()=>{ try{ refreshData() }catch(e){} }, 800);
   }
 });
@@ -459,8 +473,38 @@ function connectDrive(){
     await loadSyncFile();
     // Subir horarios pendientes en localStorage que no se pudieron subir antes
     if(S.group){ setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 1000); }
+    // Iniciar refresh silencioso cada 50 minutos
+    startSilentRefresh();
   }});
   tc.requestAccessToken({prompt:'select_account', login_hint:'wacolandscapes@gmail.com'});
+}
+
+let _silentRefreshInterval = null;
+function startSilentRefresh(){
+  if(_silentRefreshInterval) clearInterval(_silentRefreshInterval);
+  _silentRefreshInterval = setInterval(function(){
+    if(typeof google==='undefined' || !tc) return;
+    try{
+      // Solicitar nuevo token silenciosamente sin prompt
+      const tcSilent = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        prompt: '',
+        callback: function(r){
+          if(r.error){ 
+            console.warn('Silent refresh failed:', r.error);
+            sdot('err','Reconecta Drive');
+            return; 
+          }
+          S.driveToken = r.access_token;
+          localStorage.setItem(TKEY, r.access_token);
+          localStorage.setItem(TEXP, (Date.now()+(r.expires_in||3600)*1000).toString());
+          console.log('Token renovado silenciosamente');
+        }
+      });
+      tcSilent.requestAccessToken({prompt:''});
+    }catch(e){ console.warn('Silent refresh error:', e); }
+  }, 50 * 60 * 1000); // cada 50 minutos
 }
 function markConnected(){
   const b=document.getElementById('btnDrive');
