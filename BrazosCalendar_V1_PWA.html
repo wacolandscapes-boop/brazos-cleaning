@@ -455,7 +455,10 @@ function connectDrive(){
     S.driveToken=r.access_token;
     localStorage.setItem(TKEY,r.access_token);
     localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
-    markConnected(); await loadSyncFile();
+    markConnected(); 
+    await loadSyncFile();
+    // Subir horarios pendientes en localStorage que no se pudieron subir antes
+    if(S.group){ setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 1000); }
   }});
   tc.requestAccessToken({prompt:'select_account', login_hint:'wacolandscapes@gmail.com'});
 }
@@ -502,6 +505,14 @@ async function dGet(url){
 
 async function saveHorariosToDrive(){
   if(!S.driveToken||!S.folderId||!S.group) return;
+  // Verificar token expirado
+  const exp=parseInt(localStorage.getItem(TEXP)||'0');
+  if(exp && Date.now() > exp){
+    S.driveToken=null;
+    sdot('err','Token expirado — reconecta Drive');
+    toast('⚠️ Token expirado. Reconecta Drive para subir horarios.');
+    return;
+  }
   try{
     var fname=horariosFile(S.group), key=horariosKey(S.group);
     var data=JSON.parse(localStorage.getItem(key)||'{}');
@@ -522,7 +533,15 @@ async function saveHorariosToDrive(){
     }
     await fetch(url2,{method:method,headers:{Authorization:'Bearer '+S.driveToken},body:form});
     sdot('ok','Sync '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}));
-  }catch(e){console.warn('saveHorariosToDrive:',e.message);}
+  }catch(e){
+    console.warn('saveHorariosToDrive:',e.message);
+    if(e.status===401){
+      S.driveToken=null;
+      localStorage.removeItem(TKEY);
+      toast('⚠️ Token expirado. Reconecta Drive para subir horarios.');
+      sdot('err','Reconecta Drive');
+    }
+  }
 }
 
 async function saveReportsToDrive(){
@@ -965,9 +984,15 @@ function getSvcs(date){
     })
     .map(s=>{
       const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
-      const showProp=(c.type==='airbnb'||c.type==='unico');
-      const clientName=(showProp&&c.propId)?c.name+' / '+c.propId:c.name||`Cliente ${s.cliId}`;
-      return{id:String(s.id),clientName,address:[c.address,c.city].filter(Boolean).join(', '),phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||'',airbnbNote:s.airbnbNote||''};
+      const showProp=(c.type==='airbnb'||c.type==='unico'||c.type==='construccion');
+      const clientName=(showProp&&(s.propId||c.propId))?c.name+' / '+(s.propId||c.propId):c.name||`Cliente ${s.cliId}`;
+      // Para construccion/airbnb/unico usar propId como dirección si existe
+      let address = [c.address,c.city].filter(Boolean).join(', ');
+      if(showProp){
+        const propAddr = s.propId||c.propId;
+        if(propAddr) address = propAddr;
+      }
+      return{id:String(s.id),clientName,address,phone:c.tel||c.phone||'',scheduledStart:s.timeStart||'',scheduledEnd:s.timeEnd||'',priority:s.priority||'',airbnbNote:s.airbnbNote||''};
     });
 }
 
