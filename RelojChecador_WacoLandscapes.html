@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Reloj Waco">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>⏰ Reloj Checador - Waco Landscapes</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 0;
+            box-shadow: none;
+            width: 100%;
+            max-width: 100%;
+            min-height: 100vh;
+            padding: 10px 12px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        
+        .logo {
+            font-size: 2.2rem;
+            margin-bottom: 4px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 1.1rem;
+            margin-bottom: 2px;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.72rem;
+        }
+        
+        .clock {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2d5016;
+            margin-bottom: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .date {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 12px;
+            font-size: 0.82rem;
+        }
+        
+        /* LOGIN SCREEN */
+        .login-screen {
+            display: block;
+            max-width: 310px;
+            margin: 0 auto;
+            padding: 0 6px;
+        }
+        
+        .pin-display {
+            background: #ecf0f1;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 1.6rem;
+            letter-spacing: 8px;
+            color: #2c3e50;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .key {
+            background: #2d5016;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-height: 54px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+        }
+        
+        .key:hover {
+            background: #4a7c2c;
+            transform: scale(1.05);
+        }
+        
+        .key:active {
+            transform: scale(0.92);
+            background: #7cb342;
+        }
+        
+        .key.clear {
+            background: #e74c3c;
+        }
+        
+        .key.clear:hover {
+            background: #c0392b;
+        }
+        
+        .key.enter {
+            background: #27ae60;
+        }
+        
+        .key.enter:hover {
+            background: #229954;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        /* EMPLOYEE SCREEN */
+        .employee-screen {
+            display: none;
+        }
+        
+        .welcome {
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        
+        .welcome h2 {
+            font-size: 1.2rem;
+            margin-bottom: 3px;
+        }
+        
+        .hours-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .hours-title {
+            color: #2c3e50;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .hours-list {
+            margin-bottom: 8px;
+        }
+        
+        .hour-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .hour-row:last-child {
+            border-bottom: none;
+        }
+        
+        .hour-day {
+            color: #495057;
+            font-weight: 500;
+            font-size: 0.82rem;
+        }
+        
+        .hour-value {
+            color: #2d5016;
+            font-weight: bold;
+            font-size: 0.82rem;
+        }
+        
+        .total-hours {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+        }
+        
+        .total-label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.85rem;
+        }
+        
+        .total-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #27ae60;
+        }
+        
+        .last-entry {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+        
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 46px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            color: white;
+            -webkit-text-fill-color: white;
+        }
+        
+        .btn-in {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-in:hover {
+            background: #229954;
+            transform: scale(1.05);
+        }
+        
+        .btn-out {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-out:hover {
+            background: #c0392b;
+            transform: scale(1.05);
+        }
+        
+        .btn-logout {
+            background: #95a5a6;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            width: 100%;
+        }
+        
+        .btn-logout:hover {
+            background: #7f8c8d;
+        }
+        
+        .today-row {
+            display: flex;
+            align-items: center;
+            padding: 7px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.82rem;
+        }
+        .today-row:last-child { border-bottom: none; }
+        .today-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; flex-shrink: 0; }
+        .today-name { flex: 1; font-weight: 600; color: #333; }
+        .today-time { font-size: 0.75rem; color: #888; text-align: right; }
+        .today-status { font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; margin-left: 6px; }
+
+        .admin-btn {
+            background: #34495e;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .admin-btn:hover {
+            background: #2c3e50;
+        }
+        
+        .success-message {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .confirm-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .confirm-overlay.show {
+            display: flex;
+        }
+        .confirm-box {
+            background: white;
+            border-radius: 16px;
+            padding: 24px 20px;
+            text-align: center;
+            max-width: 300px;
+            width: 92%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .confirm-icon {
+            font-size: 3rem;
+            margin-bottom: 8px;
+        }
+        .confirm-name {
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .confirm-type {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .confirm-time {
+            font-size: 2rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+        }
+        .confirm-hours {
+            font-size: 0.88rem;
+            color: #555;
+            line-height: 1.5;
+        }
+        /* Sin media query de iPad — optimizado para Android 3.5x6" */
+
+        /* Fix Safari iOS button text color */
+        button {
+            -webkit-text-fill-color: inherit;
+            color: inherit;
+        }
+        .btn {
+            -webkit-text-fill-color: white !important;
+            color: white !important;
+        }
+        /* Prevent double-tap zoom on iOS */
+        * {
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="color:#2d5016; font-weight:900; font-size:1rem; margin:0;">🌿 Waco L&I — Reloj Checador</h1>
+        </div>
+        
+        <div class="clock" id="clock">00:00:00</div>
+        <div class="date" id="date"></div>
+        
+        <!-- LOGIN SCREEN -->
+        <div class="login-screen" id="loginScreen">
+            <div class="error" id="errorMsg"></div>
+            
+            <div class="pin-display" id="pinDisplay">
+                Ingresa tu PIN
+            </div>
+            
+            <div class="keypad">
+                <button class="key" onclick="app.addDigit('1')">1</button>
+                <button class="key" onclick="app.addDigit('2')">2</button>
+                <button class="key" onclick="app.addDigit('3')">3</button>
+                <button class="key" onclick="app.addDigit('4')">4</button>
+                <button class="key" onclick="app.addDigit('5')">5</button>
+                <button class="key" onclick="app.addDigit('6')">6</button>
+                <button class="key" onclick="app.addDigit('7')">7</button>
+                <button class="key" onclick="app.addDigit('8')">8</button>
+                <button class="key" onclick="app.addDigit('9')">9</button>
+                <button class="key clear" onclick="app.clearPin()">←</button>
+                <button class="key" onclick="app.addDigit('0')">0</button>
+                <button class="key enter" onclick="app.verifyPin()">✓</button>
+            </div>
+            
+            <button class="admin-btn" onclick="app.openAdmin()">⚙️ Administrador</button>
+        </div>
+
+        <!-- BARRA INFERIOR COLAPSABLE -->
+        <div style="margin:10px 16px 0; display:flex; gap:8px; justify-content:center;">
+            <!-- Botón Drive/Sync — Verde=conectado, Rojo=reconectar -->
+            <button id="syncMainBtn" onclick="app.handleSyncBtn()" style="background:#e74c3c; border:none; border-radius:12px; padding:7px 14px; font-size:0.78rem; font-weight:700; color:white; box-shadow:0 2px 8px rgba(0,0,0,0.18); cursor:pointer; display:flex; align-items:center; gap:6px; -webkit-tap-highlight-color:transparent; transition:background 0.3s;">
+                <span id="syncBtnIcon" style="font-size:0.9rem;">☁️</span>
+                <span id="syncStatusText" style="font-size:0.75rem;">Sin conectar</span>
+            </button>
+            <!-- Botón Historial -->
+            <button onclick="app.toggleTodayPanel()" style="background:white; border:none; border-radius:12px; padding:8px 14px; font-size:0.78rem; font-weight:700; color:#2c3e50; box-shadow:0 2px 8px rgba(0,0,0,0.12); cursor:pointer; -webkit-tap-highlight-color:transparent;">
+                📋 Historial
+            </button>
+        </div>
+
+        <!-- SYNC STATUS PANEL (colapsado por defecto) -->
+        <div id="syncStatusPanel" style="margin:8px 16px 0; background:white; border-radius:14px; padding:10px 14px; box-shadow:0 2px 10px rgba(0,0,0,0.1); display:none; align-items:center; gap:10px;">
+            <div style="flex:1;">
+                <div style="font-size:0.78rem; font-weight:700; color:#2c3e50;">☁️ Drive</div>
+                <div id="syncLastTime" style="font-size:0.68rem; color:#aaa; margin-top:1px;">—</div>
+            </div>
+            <button id="syncNowBtn" onclick="app.manualSync()" style="background:#27ae60; color:white; border:none; border-radius:10px; padding:8px 14px; font-size:0.78rem; font-weight:800; cursor:pointer; -webkit-text-fill-color:white;">🔄 Sync</button>
+        </div>
+
+        <!-- ASISTENCIA DEL DÍA (colapsado por defecto) -->
+        <div id="todayPanel" style="margin:8px 16px 0; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1); display:none;">
+            <div style="background:#2c3e50; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:1px;">📋 ASISTENCIA HOY</span>
+                <span id="todayDate" style="color:rgba(255,255,255,0.7); font-size:0.75rem;"></span>
+            </div>
+            <div id="todayList" style="padding:8px;"></div>
+        </div>
+        
+        <!-- EMPLOYEE SCREEN -->
+        <div class="employee-screen" id="employeeScreen">
+            <div class="success-message" id="successMsg"></div>
+            
+            <div class="welcome">
+                <h2>👋 Hola, <span id="employeeName">Empleado</span></h2>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-in" onclick="app.checkIn()">
+                    <span>✅</span>
+                    <span>ENTRADA</span>
+                </button>
+                <button class="btn btn-out" onclick="app.checkOut()">
+                    <span>🏁</span>
+                    <span>SALIDA</span>
+                </button>
+            </div>
+            
+            <button class="btn-logout" onclick="app.logout()">🔙 Cerrar Sesión</button>
+        </div>
+        
+        <!-- ADMIN SCREEN -->
+        <div class="employee-screen" id="adminScreen" style="display: none;">
+            <div class="welcome" style="background: linear-gradient(135deg, #6b4423 0%, #54381c 100%);">
+                <h2>⚙️ Panel de Administrador</h2>
+            </div>
+            
+            <div class="hours-card">
+                <div class="hours-title">📊 RESUMEN DE LA SEMANA</div>
+                <div class="hours-list">
+                    <div class="hour-row">
+                        <span class="hour-day">👤 Empleado con más horas:</span>
+                        <span class="hour-value" id="adminTopEmployee">-</span>
+                    </div>
+                    <div class="hour-row">
+                        <span class="hour-day">📈 Promedio general:</span>
+                        <span class="hour-value" id="adminAvgHours">0 hrs</span>
+                    </div>
+                </div>
+                <div id="adminOvertimeList" style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 8px; display: none;">
+                    <div style="font-weight: bold; color: #856404; margin-bottom: 10px;">⚠️ Empleados cerca de overtime:</div>
+                    <div id="overtimeEmployees"></div>
+                </div>
+
+                <!-- TABLA DE HORAS POR EMPLEADO -->
+                <div id="adminWeekTable" style="margin-top: 15px;"></div>
+            </div>
+            
+            <button class="btn" style="width: 100%; background: #27ae60; color: white !important; margin-bottom: 15px; -webkit-text-fill-color: white;" onclick="app.adminExportWeek()">
+                📤 Exportar Esta Semana
+            </button>
+            
+            <button class="btn" style="width: 100%; background: #3498db; color: white !important; margin-bottom: 15px; -webkit-text-fill-color: white;" onclick="app.adminExportAll()">
+                📦 Exportar Todos los Datos
+            </button>
+
+            <button class="btn" id="driveBtn" style="width: 100%; background: #e67e22; color: white !important; margin-bottom: 15px; -webkit-text-fill-color: white;" onclick="app.driveSync()">
+                ☁️ <span id="driveBtnLabel">Conectar Drive</span>
+            </button>
+            
+            <button class="btn" style="width: 100%; background: #2d5016; color: white; margin-bottom: 15px;" onclick="app.importConfig()">
+                📥 Importar Empleados
+            </button>
+            
+            <button class="btn" style="width: 100%; background: #1b5e20; color: white; margin-bottom: 15px;" onclick="app.importAttendancesFromNomina()">
+                📋 Importar Asistencias de Nómina
+            </button>
+            
+            <button class="btn-logout" onclick="app.logout()">🔙 Cerrar Sesión</button>
+        </div>
+    </div>
+    
+    <!-- Confirmation Overlay -->
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-box">
+            <div class="confirm-icon" id="confirmIcon">✅</div>
+            <div class="confirm-name" id="confirmName"></div>
+            <div class="confirm-type" id="confirmType"></div>
+            <div class="confirm-time" id="confirmTime"></div>
+            <div class="confirm-hours" id="confirmHours"></div>
+        </div>
+    </div>
+
+    <script>
+        const app = {
+            pin: '',
+            currentEmployee: null,
+            adminPin: '0000',
+            employees: [],
+            attendances: [],
+            workConfig: {
+                startTime: '08:00',
+                lateTolerance: 15
+            },
+            driveToken: null,
+            driveConnected: false,
+            driveFolderId: null,
+            tokenExpiry: null,
+            autoSyncInterval: null,
+            isSyncing: false,
+            pendingSync: false,
+            CLIENT_ID: '1032764332702-uvnqg0ccaer5gp2hr12gmniqe38ria1t.apps.googleusercontent.com',
+            FOLDER_NAME: 'WacoLandscapesNomina',
+            SCOPES: 'https://www.googleapis.com/auth/drive.file',
+            
+            init() {
+                this.loadData();
+                this.updateClock();
+                setInterval(() => this.updateClock(), 1000);
+                this.updateTodayPanel();
+                setInterval(() => this.updateTodayPanel(), 60000);
+                // Limpiar IDs duplicados automáticamente al cargar
+                this.cleanDuplicateIds();
+                
+                // Datos de ejemplo
+                if (this.employees.length === 0) {
+                    this.employees = [
+                        { id: 'emp001', name: 'Juan Pérez', pin: '1234', rate: 15 },
+                        { id: 'emp002', name: 'María García', pin: '5678', rate: 12 },
+                        { id: 'emp003', name: 'Pedro López', pin: '9999', rate: 14 }
+                    ];
+                    this.save();
+                }
+            },
+            
+            updateClock() {
+                const now = new Date();
+                const time = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const date = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                
+                document.getElementById('clock').textContent = time;
+                document.getElementById('date').textContent = date;
+            },
+            
+            addDigit(digit) {
+                if (this.pin.length < 4) {
+                    this.pin += digit;
+                    this.updatePinDisplay();
+                }
+            },
+            
+            clearPin() {
+                this.pin = '';
+                this.updatePinDisplay();
+                document.getElementById('errorMsg').style.display = 'none';
+            },
+            
+            updatePinDisplay() {
+                const display = document.getElementById('pinDisplay');
+                if (this.pin.length === 0) {
+                    display.textContent = 'Ingresa tu PIN';
+                } else {
+                    display.textContent = '•'.repeat(this.pin.length);
+                }
+            },
+            
+            verifyPin() {
+                if (this.pin.length !== 4) {
+                    this.showError('PIN debe tener 4 dígitos');
+                    return;
+                }
+                
+                // Verificar si es admin
+                if (this.pin === this.adminPin) {
+                    this.showAdminScreen();
+                    return;
+                }
+                
+                // Verificar si es empleado
+                const employee = this.employees.find(e => e.pin === this.pin);
+                
+                if (employee) {
+                    this.currentEmployee = employee;
+                    this.showEmployeeScreen();
+                } else {
+                    this.showError('PIN incorrecto');
+                    this.pin = '';
+                    this.updatePinDisplay();
+                }
+            },
+            
+            showError(msg) {
+                const errorMsg = document.getElementById('errorMsg');
+                errorMsg.textContent = '❌ ' + msg;
+                errorMsg.style.display = 'block';
+                setTimeout(() => {
+                    errorMsg.style.display = 'none';
+                }, 3000);
+            },
+            
+            showConfirm(icon, name, type, time, extra, color, autoLogout = false) {
+                document.getElementById('confirmIcon').textContent = icon;
+                document.getElementById('confirmName').textContent = name;
+                document.getElementById('confirmType').textContent = type;
+                document.getElementById('confirmType').style.color = color;
+                document.getElementById('confirmTime').textContent = time;
+                document.getElementById('confirmTime').style.color = color;
+                document.getElementById('confirmHours').textContent = extra;
+                document.getElementById('confirmOverlay').classList.add('show');
+                setTimeout(() => {
+                    document.getElementById('confirmOverlay').classList.remove('show');
+                    if (autoLogout) this.logout();
+                }, 3000);
+            },
+
+            showSuccess(msg) {
+                const successMsg = document.getElementById('successMsg');
+                successMsg.textContent = '✅ ' + msg;
+                successMsg.style.display = 'block';
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+            },
+            
+            showEmployeeScreen() {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('employeeScreen').style.display = 'block';
+                document.getElementById('employeeName').textContent = this.currentEmployee.name;
+                
+                this.updateEmployeeHours();
+                this.clearPin();
+            },
+            
+            updateEmployeeHours() {
+                const weekStart = this.getWeekStart();
+                const weekAttendances = this.attendances.filter(a => 
+                    a.employeeId === this.currentEmployee.id && 
+                    new Date(a.date) >= weekStart
+                );
+                
+                const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                const hoursByDay = {};
+                let totalHours = 0;
+                
+                // Agrupar por día
+                weekAttendances.forEach(a => {
+                    if (a.checkOut) {
+                        const hours = this.calculateHours(a.checkIn, a.checkOut);
+                        const dayName = dayNames[new Date(a.date).getDay()];
+                        hoursByDay[dayName] = (hoursByDay[dayName] || 0) + hours;
+                        totalHours += hours;
+                    }
+                });
+                
+                // Mostrar horas (Lunes a Domingo)
+                let html = '';
+                for (let i = 1; i <= 7; i++) {
+                    const day = dayNames[i % 7];
+                    const hours = hoursByDay[day] || 0;
+                    html += `
+                        <div class="hour-row">
+                            <span class="hour-day">${day}:</span>
+                            <span class="hour-value">${hours.toFixed(1)} hrs</span>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('hoursList').innerHTML = html;
+                document.getElementById('totalHours').textContent = totalHours.toFixed(1) + ' hrs';
+                
+                // Última entrada
+                const today = new Date().toISOString().split('T')[0];
+                const todayAttendances = this.attendances.filter(a => 
+                    a.employeeId === this.currentEmployee.id && a.date === today
+                );
+                
+                if (todayAttendances.length > 0) {
+                    const last = todayAttendances[todayAttendances.length - 1];
+                    const type = last.checkOut ? 'Salida' : 'Entrada';
+                    const time = last.checkOut || last.checkIn;
+                    document.getElementById('lastEntry').textContent = `Última ${type}: Hoy ${time}`;
+                } else {
+                    document.getElementById('lastEntry').textContent = 'Sin registros hoy';
+                }
+            },
+            
+            isLate(checkInTime) {
+                if (!checkInTime) return false;
+                
+                const [startHour, startMin] = this.workConfig.startTime.split(':').map(Number);
+                const [checkHour, checkMin] = checkInTime.split(':').map(Number);
+                
+                const startMinutes = startHour * 60 + startMin;
+                const checkMinutes = checkHour * 60 + checkMin;
+                
+                const diff = checkMinutes - startMinutes;
+                
+                return diff > this.workConfig.lateTolerance;
+            },
+            
+            checkIn() {
+                const now = new Date();
+                const date = now.toISOString().split('T')[0];
+                const time = now.toTimeString().split(' ')[0].substring(0, 5);
+                
+                // Verificar si ya hay entrada hoy sin salida
+                const todayAttendances = this.attendances.filter(a => 
+                    a.employeeId === this.currentEmployee.id && a.date === date
+                );
+                
+                const hasOpenEntry = todayAttendances.some(a => !a.checkOut);
+                
+                if (hasOpenEntry) {
+                    this.showError('Ya tienes una entrada registrada sin salida');
+                    return;
+                }
+                
+                this.attendances.push({
+                    id: Date.now(),
+                    employeeId: this.currentEmployee.id,
+                    employeeName: this.currentEmployee.name,
+                    date: date,
+                    checkIn: time,
+                    checkOut: null
+                });
+                
+                this.save();
+                this.exportDaily();
+                this.updateTodayPanel(); // Actualizar lista inmediatamente
+                if (this.driveConnected) this.driveSyncNow();
+                
+                // Verificar si llegó tarde
+                const late = this.isLate(time);
+                if (late) {
+                    this.showConfirm('⚠️', this.currentEmployee.name, 'ENTRADA TARDE', time, `Hora oficial: ${this.workConfig.startTime}`, '#e67e22', true);
+                } else {
+                    this.showConfirm('✅', this.currentEmployee.name, 'ENTRADA REGISTRADA', time, '', '#27ae60', true);
+                }
+                
+                this.updateEmployeeHours();
+            },
+            
+            checkOut() {
+                const now = new Date();
+                const date = now.toISOString().split('T')[0];
+                const time = now.toTimeString().split(' ')[0].substring(0, 5);
+                
+                // Buscar entrada sin salida
+                const openEntry = this.attendances.find(a => 
+                    a.employeeId === this.currentEmployee.id && 
+                    a.date === date && 
+                    !a.checkOut
+                );
+                
+                if (!openEntry) {
+                    this.showError('No tienes una entrada registrada hoy');
+                    return;
+                }
+                
+                openEntry.checkOut = time;
+                openEntry.hours = this.calculateHours(openEntry.checkIn, openEntry.checkOut);
+                
+                this.save();
+                this.exportDaily();
+                this.updateTodayPanel(); // Actualizar lista inmediatamente
+                if (this.driveConnected) this.driveSyncNow();
+                
+                // Calcular horas de la semana
+                const weekStart = this.getWeekStart();
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+                
+                const weekHours = this.attendances
+                    .filter(a => {
+                        const attDate = new Date(a.date + 'T00:00:00');
+                        return a.employeeId === this.currentEmployee.id && 
+                               attDate >= weekStart && 
+                               attDate <= weekEnd &&
+                               a.hours;
+                    })
+                    .reduce((sum, a) => sum + a.hours, 0);
+                
+                const hoursDetail = `Hoy: ${openEntry.hours.toFixed(1)} hrs   |   Semana: ${weekHours.toFixed(1)} hrs`;
+                this.showConfirm('👋', this.currentEmployee.name, 'SALIDA REGISTRADA', time, hoursDetail, '#2980b9', true);
+                
+                setTimeout(() => this.logout(), 3500);
+            },
+            
+            calculateHours(checkIn, checkOut) {
+                const [inH, inM] = checkIn.split(':').map(Number);
+                const [outH, outM] = checkOut.split(':').map(Number);
+                
+                const inMinutes = inH * 60 + inM;
+                const outMinutes = outH * 60 + outM;
+                
+                return (outMinutes - inMinutes) / 60;
+            },
+            
+            getWeekStart() {
+                const now = new Date();
+                const day = now.getDay();
+                const diff = day === 0 ? -6 : 1 - day; // Lunes como inicio
+                const monday = new Date(now);
+                monday.setDate(now.getDate() + diff);
+                monday.setHours(0, 0, 0, 0);
+                return monday;
+            },
+            
+            showAdminScreen() {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('employeeScreen').style.display = 'none';
+                document.getElementById('adminScreen').style.display = 'block';
+                
+                this.updateAdminStats();
+                this.clearPin();
+            },
+            
+            cleanDuplicateIds() {
+                // IDs viejos del Reloj que causan duplicados en la Nómina
+                const idMap = {
+                    'emp1772918357157': 'emp1772913505187', // Fidel
+                    'emp1772918413597': 'emp1772913619812'  // Jesus
+                };
+                const nameMap = {
+                    'emp1772913505187': 'Fidel De La Cruz',
+                    'emp1772913619812': 'Jesus Perez'
+                };
+                let fixed = 0;
+
+                // Normalizar asistencias
+                this.attendances.forEach(a => {
+                    if (idMap[a.employeeId]) {
+                        a.employeeId = idMap[a.employeeId];
+                        a.employeeName = nameMap[a.employeeId] || a.employeeName;
+                        fixed++;
+                    }
+                });
+
+                // Eliminar asistencias duplicadas
+                const seen = {};
+                const before = this.attendances.length;
+                this.attendances = this.attendances.filter(a => {
+                    const key = a.employeeId + '_' + a.date;
+                    if (seen[key]) return false;
+                    seen[key] = true;
+                    return true;
+                });
+                const removed = before - this.attendances.length;
+
+                // Eliminar empleados con IDs viejos
+                const oldIds = Object.keys(idMap);
+                this.employees = this.employees.filter(e => !oldIds.includes(e.id));
+
+                if (fixed > 0 || removed > 0) {
+                    console.log(`✅ Limpieza automática: ${fixed} asistencias normalizadas, ${removed} duplicados eliminados`);
+                    this.save();
+                }
+            },
+
+            updateSyncStatus(status, lastTime) {
+                const btn = document.getElementById('syncMainBtn');
+                const txt = document.getElementById('syncStatusText');
+                const icon = document.getElementById('syncBtnIcon');
+                const sub = document.getElementById('syncLastTime');
+                const legacyBtn = document.getElementById('syncNowBtn');
+                if (!btn) return;
+                if (status === 'connected') {
+                    btn.style.background = '#27ae60';
+                    btn.style.color = 'white';
+                    icon.textContent = '☁️';
+                    txt.textContent = 'Drive conectado';
+                    txt.style.color = 'white';
+                    if (legacyBtn) { legacyBtn.style.background = '#27ae60'; legacyBtn.textContent = '🔄 Sync'; }
+                } else if (status === 'syncing') {
+                    btn.style.background = '#f39c12';
+                    icon.textContent = '🔄';
+                    txt.textContent = 'Sincronizando...';
+                    txt.style.color = 'white';
+                } else if (status === 'error') {
+                    btn.style.background = '#e74c3c';
+                    icon.textContent = '⚠️';
+                    txt.textContent = 'Reconectar Drive';
+                    txt.style.color = 'white';
+                    if (legacyBtn) { legacyBtn.style.background = '#e74c3c'; legacyBtn.textContent = '🔁 Reconectar'; }
+                } else {
+                    btn.style.background = '#e74c3c';
+                    icon.textContent = '☁️';
+                    txt.textContent = 'Sin conectar';
+                    txt.style.color = 'white';
+                }
+                if (lastTime && sub) sub.textContent = 'Última sync: ' + lastTime;
+            },
+
+            async manualSync() {
+                if (!this.driveConnected) {
+                    this.updateSyncStatus('error');
+                    this.driveConnect();
+                    return;
+                }
+                this.updateSyncStatus('syncing');
+                try {
+                    this.cleanDuplicateIds();
+                    await this.driveSyncNow();
+                    await this.driveDownloadFromNomina();
+                    const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    this.updateSyncStatus('connected', now);
+                } catch(e) {
+                    this.updateSyncStatus('error');
+                }
+            },
+
+            toggleSyncPanel() {
+                const panel = document.getElementById('syncStatusPanel');
+                const todayPanel = document.getElementById('todayPanel');
+                const isVisible = panel.style.display !== 'none';
+                panel.style.display = isVisible ? 'none' : 'flex';
+                if (!isVisible) todayPanel.style.display = 'none'; // cerrar el otro
+            },
+            
+            handleSyncBtn() {
+                // Si está conectado → sync inmediato; si no → abrir panel para reconectar
+                if (this.driveConnected && this.driveToken && Date.now() < this.tokenExpiry) {
+                    this.syncWithDrive();
+                } else {
+                    this.toggleSyncPanel();
+                }
+            },
+
+            toggleTodayPanel() {
+                const panel = document.getElementById('todayPanel');
+                const syncPanel = document.getElementById('syncStatusPanel');
+                const isVisible = panel.style.display !== 'none';
+                panel.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) syncPanel.style.display = 'none'; // cerrar el otro
+                if (!isVisible) this.updateTodayPanel(); // actualizar al abrir
+            },
+
+            updateTodayPanel() {
+                const today = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long' });
+                document.getElementById('todayDate').textContent = todayStr;
+
+                const rows = this.employees.map(emp => {
+                    const att = this.attendances.find(a =>
+                        a.date === today && (
+                            a.employeeId === emp.id ||
+                            (a.employeeName && emp.name &&
+                             a.employeeName.trim().toLowerCase() === emp.name.trim().toLowerCase())
+                        )
+                    );
+                    return { emp, att };
+                });
+
+                // Ordenar: primero los que registraron, luego pendientes
+                rows.sort((a, b) => {
+                    if (a.att && !b.att) return -1;
+                    if (!a.att && b.att) return 1;
+                    if (a.att && b.att) return a.att.checkIn.localeCompare(b.att.checkIn);
+                    return a.emp.name.localeCompare(b.emp.name);
+                });
+
+                const fmt = (t) => {
+                    if (!t) return '--:--';
+                    const [h, m] = t.split(':').map(Number);
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const h12 = h % 12 || 12;
+                    return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+                };
+
+                document.getElementById('todayList').innerHTML = rows.map(({ emp, att }) => {
+                    if (!att) {
+                        // Sin registro
+                        return `<div class="today-row">
+                            <div class="today-dot" style="background:#e0e0e0;"></div>
+                            <div class="today-name">${emp.name}</div>
+                            <span class="today-status" style="background:#f5f5f5; color:#aaa;">⏳ Pendiente</span>
+                        </div>`;
+                    } else if (att.checkIn && !att.checkOut) {
+                        // Solo entrada
+                        return `<div class="today-row">
+                            <div class="today-dot" style="background:#f39c12;"></div>
+                            <div class="today-name">${emp.name}</div>
+                            <div class="today-time">✅ ${fmt(att.checkIn)}</div>
+                            <span class="today-status" style="background:#fff3cd; color:#856404;">En turno</span>
+                        </div>`;
+                    } else {
+                        // Entrada y salida
+                        return `<div class="today-row">
+                            <div class="today-dot" style="background:#27ae60;"></div>
+                            <div class="today-name">${emp.name}</div>
+                            <div class="today-time">✅ ${fmt(att.checkIn)} — 🏁 ${fmt(att.checkOut)}</div>
+                            <span class="today-status" style="background:#d4edda; color:#155724;">Completo</span>
+                        </div>`;
+                    }
+                }).join('');
+            },
+
+            updateAdminStats() {
+                const weekStart = this.getWeekStart();
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+                
+                // Calcular horas por empleado esta semana (match por nombre o ID)
+                const employeeHours = {};
+                this.employees.forEach(emp => {
+                    const empWeekAtt = this.attendances.filter(a => {
+                        const date = new Date(a.date + 'T00:00:00');
+                        const matchId   = a.employeeId === emp.id;
+                        const matchName = a.employeeName && emp.name &&
+                            a.employeeName.trim().toLowerCase() === emp.name.trim().toLowerCase();
+                        return (matchId || matchName) && date >= weekStart && date <= weekEnd && a.hours;
+                    });
+                    const totalHours = Math.round(empWeekAtt.reduce((sum, a) => sum + a.hours, 0) * 100) / 100;
+                    employeeHours[emp.name] = { name: emp.name, hours: totalHours };
+                });
+                
+                // Empleado con más horas
+                const employees = Object.values(employeeHours);
+                if (employees.length > 0) {
+                    const topEmp = employees.reduce((max, emp) => 
+                        emp.hours > max.hours ? emp : max
+                    );
+                    document.getElementById('adminTopEmployee').textContent = 
+                        `${topEmp.name}: ${topEmp.hours.toFixed(1)} hrs`;
+                    
+                    // Promedio general
+                    const avgHours = employees.reduce((sum, emp) => sum + emp.hours, 0) / employees.length;
+                    document.getElementById('adminAvgHours').textContent = avgHours.toFixed(1) + ' hrs';
+                    
+                    // Empleados cerca de overtime (>38 hrs)
+                    const overtimeThreshold = 38;
+                    const nearOT = employees.filter(emp => emp.hours >= overtimeThreshold);
+                    
+                    if (nearOT.length > 0) {
+                        document.getElementById('adminOvertimeList').style.display = 'block';
+                        let html = '';
+                        nearOT.forEach(emp => {
+                            html += `<div style="padding: 5px 0;">• ${emp.name}: ${emp.hours.toFixed(1)} hrs</div>`;
+                        });
+                        document.getElementById('overtimeEmployees').innerHTML = html;
+                    } else {
+                        document.getElementById('adminOvertimeList').style.display = 'none';
+                    }
+                } else {
+                    document.getElementById('adminTopEmployee').textContent = 'Sin registros';
+                    document.getElementById('adminAvgHours').textContent = '0 hrs';
+                    document.getElementById('adminOvertimeList').style.display = 'none';
+                }
+
+                // Tabla completa de todos los empleados
+                const allEmps = Object.values(employeeHours).sort((a,b) => a.name.localeCompare(b.name));
+                const totalAllHours = Math.round(allEmps.reduce((s,e) => s + e.hours, 0) * 100) / 100;
+                const weekLabel = weekStart.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+                    ' – ' + weekEnd.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+                let tableHtml = `
+                    <div style="font-weight:bold; color:#1b5e20; margin-bottom:8px; font-size:0.95rem;">
+                        📋 Horas semana (${weekLabel})
+                    </div>`;
+                if (allEmps.length === 0) {
+                    tableHtml += `<div style="color:#888; font-size:0.85rem; padding:8px 0;">Sin registros esta semana</div>`;
+                } else {
+                    allEmps.forEach(e => {
+                        const bar = Math.min(100, Math.round((e.hours / 48) * 100));
+                        const color = e.hours >= 40 ? '#e74c3c' : e.hours >= 32 ? '#e67e22' : '#27ae60';
+                        tableHtml += `
+                        <div style="margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:2px;">
+                                <span>${e.name}</span>
+                                <span style="font-weight:bold; color:${color};">${e.hours.toFixed(1)} hrs</span>
+                            </div>
+                            <div style="background:#e0e0e0; border-radius:4px; height:6px;">
+                                <div style="width:${bar}%; background:${color}; border-radius:4px; height:6px;"></div>
+                            </div>
+                        </div>`;
+                    });
+                    tableHtml += `
+                    <div style="border-top:2px solid #1b5e20; margin-top:10px; padding-top:8px; display:flex; justify-content:space-between; font-weight:bold; font-size:0.9rem;">
+                        <span>TOTAL</span>
+                        <span style="color:#1b5e20;">${totalAllHours.toFixed(1)} hrs</span>
+                    </div>`;
+                }
+                const tableEl = document.getElementById('adminWeekTable');
+                if (tableEl) tableEl.innerHTML = tableHtml;
+                // Bloque else original ya cerrado arriba — quitar el else duplicado
+                if (false) {
+                }
+            },
+            
+            // MANUAL ATTENDANCE
+            toggleManualForm() {
+                const form = document.getElementById('manualForm');
+                if (form.style.display === 'none') {
+                    // Mostrar formulario
+                    form.style.display = 'block';
+                    
+                    // Poblar empleados
+                    const select = document.getElementById('manualEmpSelect');
+                    select.innerHTML = '<option value="">Selecciona empleado</option>';
+                    this.employees.forEach(emp => {
+                        select.innerHTML += `<option value="${emp.id}">${emp.name}</option>`;
+                    });
+                    
+                    // Fecha de hoy
+                    document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('manualCheckIn').value = '';
+                    document.getElementById('manualCheckOut').value = '';
+                    document.getElementById('manualHours').textContent = '-';
+                    
+                    // Listeners para calcular horas
+                    document.getElementById('manualCheckIn').onchange = () => this.updateManualHours();
+                    document.getElementById('manualCheckOut').onchange = () => this.updateManualHours();
+                } else {
+                    // Ocultar formulario
+                    form.style.display = 'none';
+                }
+            },
+            
+            updateManualHours() {
+                const checkIn = document.getElementById('manualCheckIn').value;
+                const checkOut = document.getElementById('manualCheckOut').value;
+                
+                if (checkIn && checkOut) {
+                    const [inH, inM] = checkIn.split(':').map(Number);
+                    const [outH, outM] = checkOut.split(':').map(Number);
+                    const hours = (outH + outM/60) - (inH + inM/60);
+                    document.getElementById('manualHours').textContent = hours.toFixed(2) + ' hrs';
+                } else {
+                    document.getElementById('manualHours').textContent = '-';
+                }
+            },
+            
+            saveManualAttendance() {
+                const empId = document.getElementById('manualEmpSelect').value;
+                const date = document.getElementById('manualDate').value;
+                const checkIn = document.getElementById('manualCheckIn').value;
+                const checkOut = document.getElementById('manualCheckOut').value;
+                
+                if (!empId || !date || !checkIn) {
+                    alert('Por favor completa al menos: Empleado, Fecha y Hora de entrada');
+                    return;
+                }
+                
+                const emp = this.employees.find(e => e.id === empId);
+                
+                // Calcular horas
+                let hours = 0;
+                if (checkIn && checkOut) {
+                    const [inH, inM] = checkIn.split(':').map(Number);
+                    const [outH, outM] = checkOut.split(':').map(Number);
+                    hours = (outH + outM/60) - (inH + inM/60);
+                }
+                
+                // Agregar registro
+                this.attendances.push({
+                    id: 'att' + Date.now(),
+                    employeeId: empId,
+                    employeeName: emp.name,
+                    date,
+                    checkIn,
+                    checkOut,
+                    hours: checkOut ? hours : null
+                });
+                
+                this.save();
+                alert('✅ Registro agregado correctamente');
+                this.toggleManualForm();
+                this.updateAdminStats();
+            },
+            
+            adminExportWeek() {
+                this.downloadWeekly();
+                this.showSuccess('Archivo de la semana descargado');
+            },
+            
+            adminExportAll() {
+                const exportData = {
+                    employees: this.employees,
+                    attendances: this.attendances,
+                    exportDate: new Date().toISOString(),
+                    exportType: 'complete'
+                };
+                
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `reloj_completo_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                
+                this.showSuccess('Datos completos exportados');
+            },
+            
+            adminViewAll() {
+                if (this.attendances.length === 0) {
+                    alert('No hay registros para mostrar');
+                    return;
+                }
+                
+                let report = '📋 TODOS LOS REGISTROS\n\n';
+                
+                const sorted = [...this.attendances].sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                sorted.forEach(att => {
+                    report += `${att.employeeName}\n`;
+                    report += `Fecha: ${new Date(att.date).toLocaleDateString('es-MX')}\n`;
+                    report += `Entrada: ${att.checkIn} | Salida: ${att.checkOut || 'Pendiente'}\n`;
+                    report += `Horas: ${att.hours ? att.hours.toFixed(1) : '-'} hrs\n`;
+                    report += '-------------------\n';
+                });
+                
+                alert(report);
+            },
+            
+            logout() {
+                this.currentEmployee = null;
+                this.clearPin();
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('employeeScreen').style.display = 'none';
+                document.getElementById('adminScreen').style.display = 'none';
+            },
+            
+            openAdmin() {
+                alert('Para acceder al panel de administrador:\n\n1. Ingresa el PIN: 0000\n2. Verás las opciones de exportar y estadísticas\n\n💡 Puedes cambiar el PIN desde la App de Nómina');
+            },
+            
+            importAttendancesFromNomina() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            
+                            // Validate format
+                            if (!data.attendances || !Array.isArray(data.attendances)) {
+                                alert('❌ Archivo inválido. Usa el archivo exportado desde la App de Nómina.');
+                                return;
+                            }
+                            
+                            let added = 0;
+                            let skipped = 0;
+                            
+                            data.attendances.forEach(att => {
+                                // Check for duplicates by employeeId + date
+                                const exists = this.attendances.find(a => 
+                                    a.employeeId === att.employeeId && a.date === att.date
+                                );
+                                if (exists) {
+                                    skipped++;
+                                } else {
+                                    this.attendances.push({
+                                        id: att.id || ('att' + Date.now() + Math.random()),
+                                        employeeId: att.employeeId,
+                                        employeeName: att.employeeName,
+                                        date: att.date,
+                                        checkIn: att.checkIn,
+                                        checkOut: att.checkOut,
+                                        hours: att.hours
+                                    });
+                                    added++;
+                                }
+                            });
+                            
+                            this.save();
+                            this.updateAdminStats();
+                            alert(`✅ Importación completada\n\n` +
+                                  `✅ Agregados: ${added} registros\n` +
+                                  `⏭️ Omitidos (ya existían): ${skipped} registros`);
+                        } catch (err) {
+                            alert('❌ Error al importar: ' + err.message);
+                        }
+                    };
+                    reader.readAsText(e.target.files[0]);
+                };
+                input.click();
+            },
+
+            importConfig() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                
+                input.onchange = (e) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            
+                            if (data.employees) {
+                                this.employees = data.employees;
+                            }
+                            
+                            if (data.adminPin) {
+                                this.adminPin = data.adminPin;
+                            }
+                            
+                            if (data.workConfig) {
+                                this.workConfig = data.workConfig;
+                            }
+                            
+                            this.save();
+                            alert('✅ Configuración importada correctamente\n\n' +
+                                  `Empleados: ${this.employees.length}\n` +
+                                  `PIN Admin: ${this.adminPin}\n` +
+                                  `Hora entrada: ${this.workConfig.startTime}`);
+                        } catch (err) {
+                            alert('❌ Error al importar: ' + err.message);
+                        }
+                    };
+                    reader.readAsText(e.target.files[0]);
+                };
+                
+                input.click();
+            },
+            
+            save() {
+                localStorage.setItem('waco_employees', JSON.stringify(this.employees));
+                localStorage.setItem('waco_attendances', JSON.stringify(this.attendances));
+                localStorage.setItem('waco_adminPin', this.adminPin);
+                localStorage.setItem('waco_workConfig', JSON.stringify(this.workConfig));
+            },
+            
+            loadData() {
+                // MIGRACIÓN AUTOMÁTICA: Importar datos de versiones anteriores
+                if (!localStorage.getItem('waco_employees')) {
+                    const oldKeys = ['rc_employees', 'employees', 'reloj_employees', 'checador_employees'];
+                    for (const key of oldKeys) {
+                        const oldData = localStorage.getItem(key);
+                        if (oldData) {
+                            localStorage.setItem('waco_employees', oldData);
+                            console.log('✅ Empleados migrados desde', key);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!localStorage.getItem('waco_attendances')) {
+                    const oldKeys = ['rc_attendances', 'attendances', 'reloj_attendances', 'checador_attendances'];
+                    for (const key of oldKeys) {
+                        const oldData = localStorage.getItem(key);
+                        if (oldData) {
+                            localStorage.setItem('waco_attendances', oldData);
+                            console.log('✅ Asistencias migradas desde', key);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!localStorage.getItem('waco_adminPin')) {
+                    const oldKeys = ['rc_adminPin', 'adminPin', 'reloj_adminPin', 'checador_adminPin'];
+                    for (const key of oldKeys) {
+                        const oldData = localStorage.getItem(key);
+                        if (oldData) {
+                            localStorage.setItem('waco_adminPin', oldData);
+                            console.log('✅ PIN admin migrado desde', key);
+                            break;
+                        }
+                    }
+                }
+                
+                // Cargar datos normalmente
+                this.employees = JSON.parse(localStorage.getItem('waco_employees') || '[]');
+                this.attendances = JSON.parse(localStorage.getItem('waco_attendances') || '[]');
+                this.adminPin = localStorage.getItem('waco_adminPin') || '0000';
+                this.workConfig = JSON.parse(localStorage.getItem('waco_workConfig') || '{"startTime":"08:00","lateTolerance":15}');
+                // FIX: Aplicar lista de eliminados al arrancar — eliminar del localStorage los que ya no deben estar
+                const savedDeleted = JSON.parse(localStorage.getItem('waco_reloj_deletedEmployees') || '[]').map(String);
+                if (savedDeleted.length > 0) {
+                    this.employees = this.employees.filter(e => !savedDeleted.includes(String(e.id)));
+                    localStorage.setItem('waco_employees', JSON.stringify(this.employees));
+                }
+            },
+            
+            exportDaily() {
+                // Preparar datos para exportar
+                const today = new Date().toISOString().split('T')[0];
+                const todayAttendances = this.attendances.filter(a => a.date === today);
+                
+                const exportData = {
+                    fecha: today,
+                    registros: todayAttendances
+                };
+                
+                // Guardar en localStorage con prefijo para que la app de nómina lo lea
+                const allExports = JSON.parse(localStorage.getItem('waco_exports') || '{}');
+                allExports[today] = exportData;
+                localStorage.setItem('waco_exports', JSON.stringify(allExports));
+                
+                console.log('📤 Exportado:', today);
+            },
+            
+            downloadWeekly() {
+                const weekStart = this.getWeekStart();
+                const weekAttendances = this.attendances.filter(a => new Date(a.date) >= weekStart);
+                
+                const exportData = {
+                    periodo: `${weekStart.toISOString().split('T')[0]} a ${new Date().toISOString().split('T')[0]}`,
+                    registros: weekAttendances
+                };
+                
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `asistencias_semana_${weekStart.toISOString().split('T')[0]}.json`;
+                a.click();
+            },
+
+            // ==================== GOOGLE DRIVE SYNC ====================
+
+            driveSync() {
+                if (this.driveConnected) {
+                    this.driveSyncNow();
+                } else {
+                    this.driveConnect();
+                }
+            },
+
+            driveConnect() {
+                this.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: this.CLIENT_ID,
+                    scope: this.SCOPES,
+                    prompt: '',
+                    callback: async (response) => {
+                        if (response.error) { alert('❌ Error: ' + response.error); return; }
+                        this.driveToken = response.access_token;
+                        this.driveConnected = true;
+                        this.tokenExpiry = Date.now() + (55 * 60 * 1000);
+                        document.getElementById('driveBtnLabel').textContent = 'Sincronizar';
+                        document.getElementById('driveBtn').style.background = '#27ae60';
+                        await this.driveGetOrCreateFolder();
+                        this.cleanDuplicateIds();        // Limpiar antes de subir
+                        await this.driveSyncNow();       // Subir primero datos locales
+                        await this.driveDownloadFromNomina(); // Luego bajar de Nómina
+                        this.startAutoSync();
+                        if (!this.firstConnect) {
+                            const toast = document.createElement('div');
+                            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#27ae60;color:white;padding:15px 20px;border-radius:10px;z-index:9999;font-size:1rem;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+                            toast.innerHTML = '☁️ Conectado a Google Drive<br><small>Sincronización automática activada</small>';
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 3000);
+                        }
+                        const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        this.updateSyncStatus('connected', nowStr);
+                        this.firstConnect = false;
+                    }
+                });
+                this.firstConnect = true;
+                this.tokenClient.requestAccessToken({ prompt: '' });
+            },
+
+            async refreshTokenIfNeeded() {
+                if (!this.tokenClient) return;
+                if (!this.tokenExpiry || Date.now() > this.tokenExpiry) {
+                    // Token expirado — detener autosync y avisar visualmente
+                    this.driveConnected = false;
+                    if (this.autoSyncInterval) {
+                        clearInterval(this.autoSyncInterval);
+                        this.autoSyncInterval = null;
+                    }
+                    this.updateSyncStatus('error');
+                    // Intentar renovar sin prompt (silencioso)
+                    this.tokenClient.requestAccessToken({ prompt: '' });
+                    throw new Error('Token expirado');
+                }
+            },
+
+            async driveGetOrCreateFolder() {
+                const res = await fetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name='${this.FOLDER_NAME}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false`,
+                    { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                );
+                const data = await res.json();
+                if (data.files && data.files.length > 0) {
+                    this.driveFolderId = data.files[0].id;
+                } else {
+                    const r = await fetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${this.driveToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: this.FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+                    });
+                    const d = await r.json();
+                    this.driveFolderId = d.id;
+                }
+            },
+
+            async driveSyncNow() {
+                if (!this.driveConnected || !this.driveFolderId) return;
+                // Si ya hay un sync en curso, verificar si lleva más de 30 seg bloqueado
+                if (this.isSyncing) {
+                    const elapsed = this.syncStartTime ? Date.now() - this.syncStartTime : 99999;
+                    if (elapsed < 30000) {
+                        this.pendingSync = true;
+                        return;
+                    }
+                    // Más de 30 seg — resetear el flag y continuar
+                    console.warn('isSyncing bloqueado por más de 30s — reseteando');
+                }
+                this.isSyncing = true;
+                this.syncStartTime = Date.now();
+                await this.refreshTokenIfNeeded();
+                try {
+                    document.getElementById('driveBtnLabel').textContent = 'Sincronizando...';
+                    const data = {
+                        exportType: 'reloj_sync', exportDate: new Date().toISOString(),
+                        source: 'Waco Landscapes Reloj',
+                        attendances: this.attendances,
+                        adminPin: this.adminPin, workConfig: this.workConfig
+                    };
+                    const fileName = 'waco_reloj_sync.json';
+                    const searchRes = await fetch(
+                        `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+'${this.driveFolderId}'+in+parents+and+trashed=false`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const searchData = await searchRes.json();
+                    const fileId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+                    const metadata = { name: fileName, parents: fileId ? undefined : [this.driveFolderId] };
+                    const form = new FormData();
+                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                    form.append('file', new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+                    await fetch(
+                        fileId ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+                               : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+                        { method: fileId ? 'PATCH' : 'POST', headers: { Authorization: `Bearer ${this.driveToken}` }, body: form }
+                    );
+                    const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('driveBtnLabel').textContent = `Sync ${now}`;
+                    document.getElementById('driveBtn').style.background = '#27ae60';
+                    this.updateSyncStatus('connected', now);
+                } catch(err) {
+                    document.getElementById('driveBtnLabel').textContent = '⚠️ Error';
+                    document.getElementById('driveBtn').style.background = '#e74c3c';
+                    this.updateSyncStatus('error');
+                } finally {
+                    this.isSyncing = false;
+                    // Si hubo registros mientras sincronizaba, volver a sincronizar
+                    if (this.pendingSync) {
+                        this.pendingSync = false;
+                        setTimeout(() => this.driveSyncNow(), 500);
+                    }
+                }
+            },
+
+            startAutoSync() {
+                if (this.autoSyncInterval) clearInterval(this.autoSyncInterval);
+                this.autoSyncInterval = setInterval(async () => {
+                    if (this.driveConnected) {
+                        await this.driveSyncNow(); // Primero sube datos del Reloj
+                        await this.driveDownloadFromNomina(); // Luego baja cambios de Nómina
+                    }
+                }, 5 * 60 * 1000); // 5 min — sync automático de respaldo
+            },
+
+            async driveDownloadFromNomina() {
+                if (!this.driveConnected || !this.driveFolderId) return;
+                try {
+                    const res = await fetch(
+                        `https://www.googleapis.com/drive/v3/files?q=name='waco_nomina_sync.json'+and+'${this.driveFolderId}'+in+parents+and+trashed=false`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const data = await res.json();
+                    if (!data.files || data.files.length === 0) return;
+                    const fileRes = await fetch(
+                        `https://www.googleapis.com/drive/v3/files/${data.files[0].id}?alt=media`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const nominaData = await fileRes.json();
+                    if (nominaData.employees && nominaData.employees.length > 0) {
+                        // Respetar lista de empleados eliminados
+                        const deletedEmps = (nominaData.deletedEmployees || []).map(String);
+                        // FIX: Guardar lista de eliminados en localStorage del Reloj
+                        if (deletedEmps.length > 0) {
+                            localStorage.setItem('waco_reloj_deletedEmployees', JSON.stringify(deletedEmps));
+                        }
+                        this.employees = nominaData.employees.filter(e => !deletedEmps.includes(String(e.id)));
+                        // FIX: Persistir empleados limpios en localStorage
+                        localStorage.setItem('waco_reloj_employees', JSON.stringify(this.employees));
+                        // Normalizar IDs viejos en asistencias locales usando los empleados actualizados
+                        this.attendances.forEach(a => {
+                            const emp = this.employees.find(e =>
+                                e.name && a.employeeName &&
+                                e.name.trim().toLowerCase() === a.employeeName.trim().toLowerCase()
+                            );
+                            if (emp && emp.id !== a.employeeId) {
+                                a.employeeId = emp.id;
+                                a.employeeName = emp.name;
+                            }
+                        });
+                        // Limpiar IDs hardcodeados por si acaso
+                        this.cleanDuplicateIds();
+                    }
+                    if (nominaData.workConfig) this.workConfig = nominaData.workConfig;
+                    if (nominaData.adminPin) this.adminPin = nominaData.adminPin;
+                    if (nominaData.attendances) {
+                        const deletedIds = (nominaData.deletedAttendances || []).map(String);
+                        // Filtrar borrados
+                        const nominaAtts = nominaData.attendances.filter(a => !deletedIds.includes(String(a.id)));
+
+                        // Merge: empezar con Nómina como base
+                        const merged = [...nominaAtts];
+
+                        // Aplicar todos los registros locales — el local gana si:
+                        // 1. No existe en Nómina → agregar
+                        // 2. Local tiene checkOut y remoto no → local gana (salida registrada en Reloj)
+                        // 3. Local tiene manualEdit → nunca sobreescribir
+                        // 4. Ambos tienen checkOut → gana el más reciente por updatedAt
+                        this.attendances.forEach(local => {
+                            if (deletedIds.includes(String(local.id))) return;
+                            const idx = merged.findIndex(n =>
+                                n.date === local.date && String(n.employeeId) === String(local.employeeId)
+                            );
+                            if (idx < 0) {
+                                // No existe en Nómina — agregar (sin heredar manualEdit)
+                                const toAdd = { ...local };
+                                delete toAdd.manualEdit;
+                                merged.push(toAdd);
+                            } else {
+                                const remote = merged[idx];
+                                // Local tiene checkOut y remoto no → local gana
+                                if (local.checkOut && !remote.checkOut) {
+                                    const winner = { ...local };
+                                    delete winner.manualEdit; // El Reloj nunca hereda manualEdit
+                                    merged[idx] = winner;
+                                }
+                                // Ambos tienen checkOut → gana el más reciente
+                                else if (local.checkOut && remote.checkOut) {
+                                    const localTime = local.updatedAt || local.checkOut || '';
+                                    const remoteTime = remote.updatedAt || remote.checkOut || '';
+                                    if (localTime > remoteTime) {
+                                        const winner = { ...local };
+                                        delete winner.manualEdit;
+                                        merged[idx] = winner;
+                                    }
+                                }
+                                // Si remoto tiene manualEdit pero local tiene checkOut más reciente → local gana
+                                if (remote.manualEdit && local.checkOut) {
+                                    const localTime = local.updatedAt || local.checkOut || '';
+                                    const remoteTime = remote.updatedAt || remote.checkOut || '';
+                                    if (localTime > remoteTime) {
+                                        const winner = { ...local };
+                                        delete winner.manualEdit;
+                                        merged[idx] = winner;
+                                    }
+                                }
+                            }
+                        });
+                        // Nunca dejar manualEdit en registros del Reloj
+                        this.attendances = merged.map(a => { const r = {...a}; delete r.manualEdit; return r; });
+                    }
+                    this.save();
+                    this.updateAdminStats();
+                    this.updateTodayPanel();
+                    const syncNow = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('driveBtnLabel').textContent = `Sync ${syncNow}`;
+                    document.getElementById('driveBtn').style.background = '#27ae60';
+                } catch(err) {
+                    console.warn('driveDownloadFromNomina error:', err);
+                }
+            }
+        };
+        
+        app.init();
+
+        // ── Detectar cambios en localStorage desde Nómina (misma PC/navegador) ──
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'waco_employees') {
+                const nuevos = JSON.parse(e.newValue || '[]');
+                app.employees = nuevos;
+                localStorage.setItem('waco_employees', JSON.stringify(nuevos));
+                app.renderEmployees && app.renderEmployees();
+                app.render && app.render();
+                console.log('👥 Lista de empleados actualizada desde Nómina:', nuevos.length, 'empleados');
+            }
+        });
+
+        // ── Detectar cuando el iPad vuelve al primer plano ──
+        // Safari suspende setInterval cuando la pantalla se apaga o se cambia de app
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                console.log('App visible de nuevo — verificando sync...');
+                if (app.driveConnected) {
+                    // Verificar si el token expiró mientras estaba en background
+                    if (!app.tokenExpiry || Date.now() > app.tokenExpiry) {
+                        console.log('Token expirado — reconectando...');
+                        app.updateSyncStatus('error');
+                        app.driveConnect();
+                    } else {
+                        // Token válido — sincronizar inmediatamente
+                        console.log('Token válido — sincronizando...');
+                        app.cleanDuplicateIds();
+                        await app.driveSyncNow();
+                        await app.driveDownloadFromNomina();
+                        const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        app.updateSyncStatus('connected', now);
+                        // Reiniciar autosync por si se congeló
+                        app.startAutoSync();
+                    }
+                }
+            }
+        });
+
+        // pageshow cubre el caso de volver desde otra pestaña en Safari
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                // La página viene del cache de Safari (bfcache)
+                console.log('Página restaurada desde bfcache — reiniciando...');
+                app.startAutoSync();
+                app.updateTodayPanel();
+            }
+        });
+
+    </script>
+</body>
+</html>
