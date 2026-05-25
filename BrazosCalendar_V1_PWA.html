@@ -266,6 +266,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     <button onclick="navWeek(-1)" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;">◀</button>
     <div class="day-strip" id="dayStrip" style="flex:1;overflow-x:auto;"></div>
     <button onclick="navWeek(1)" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;">▶</button>
+    <button onclick="irAHoy()" style="background:var(--brand);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">Hoy</button>
   </div>
   <div id="viewDay"><div class="agenda" id="agendaEl"></div></div>
   <div id="viewWeek" style="display:none"><div class="wg"><div class="wgh" id="wgHead"></div><div class="wgc-wrap" id="wgCells"></div></div></div>
@@ -832,6 +833,12 @@ function launch(save){
 function navWeek(delta){
   S.weekStart=addDays(S.weekStart, delta*7);
   saveSess(); buildStrip();
+}
+
+function irAHoy(){
+  S.selectedDate=today();
+  S.weekStart=mondayOf(today());
+  saveSess(); buildStrip(); renderView();
 }
 
 function buildStrip(){
