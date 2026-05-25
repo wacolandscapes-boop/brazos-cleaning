@@ -25,7 +25,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -42,21 +42,9 @@ async function checkForUpdate() {
   } catch(e) {}
 }
 
+// Desregistrar cualquier Service Worker previo para siempre cargar versión fresca
 if('serviceWorker' in navigator){
-  const _sw=`const CACHE='brazozcalendar-v${APP_VERSION}';const ASSETS=['./'];self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('./'))));});`;
-  navigator.serviceWorker.register(URL.createObjectURL(new Blob([_sw],{type:'text/javascript'}))).then(reg=>{
-    reg.addEventListener('updatefound',()=>{
-      const newWorker=reg.installing;
-      newWorker.addEventListener('statechange',()=>{
-        if(newWorker.state==='installed'&&navigator.serviceWorker.controller){
-          const banner=document.createElement('div');
-          banner.style.cssText='position:fixed;top:0;left:0;right:0;background:#0ea5e9;color:white;padding:12px 16px;z-index:9999;display:flex;justify-content:space-between;align-items:center;font-family:Barlow Condensed,sans-serif;font-size:15px;font-weight:700;';
-          banner.innerHTML='🔄 Nueva versión disponible <button onclick="window.location.reload()" style="background:white;color:#0ea5e9;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">Actualizar</button>';
-          document.body.appendChild(banner);
-        }
-      });
-    });
-  }).catch(()=>{});
+  navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
 }
 let _installPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); _installPrompt=null; }); // Deshabilitar instalación PWA
