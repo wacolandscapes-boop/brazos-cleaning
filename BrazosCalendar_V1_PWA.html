@@ -262,7 +262,11 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <div class="wtab" id="tabWeek" onclick="setView('week')">SEMANA</div>
     </div>
   </div>
-  <div class="day-strip" id="dayStrip"></div>
+  <div style="display:flex;align-items:center;gap:4px;padding:0 8px;">
+    <button onclick="navWeek(-1)" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;">◀</button>
+    <div class="day-strip" id="dayStrip" style="flex:1;overflow-x:auto;"></div>
+    <button onclick="navWeek(1)" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;">▶</button>
+  </div>
   <div id="viewDay"><div class="agenda" id="agendaEl"></div></div>
   <div id="viewWeek" style="display:none"><div class="wg"><div class="wgh" id="wgHead"></div><div class="wgc-wrap" id="wgCells"></div></div></div>
 </div>
@@ -517,7 +521,7 @@ async function loadSyncFile(){
     const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${mod}`);
     // Si ya hay grupo seleccionado (sesión restaurada), descargar horarios
-    if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
+    try{ await loadHorariosFromDrive(); }catch(e){}
     buildEmpsList();
     // Solo mostrar pantalla de selección si NO hay empleado ya seleccionado
     if(!S.empId){
@@ -536,8 +540,7 @@ async function dGet(url){
 }
 
 async function saveHorariosToDrive(){
-  if(!S.driveToken||!S.folderId||!S.group) return;
-  // Verificar token expirado
+  if(!S.driveToken||!S.folderId||!S.selectedDate) return;
   const exp=parseInt(localStorage.getItem(TEXP)||'0');
   if(exp && Date.now() > exp){
     S.driveToken=null;
@@ -546,11 +549,29 @@ async function saveHorariosToDrive(){
     return;
   }
   try{
-    var fname=horariosFile(S.group), key=horariosKey(S.group);
+    var date=S.selectedDate;
+    var fname=horariosFile(date), key=horariosKey(date);
     var data=JSON.parse(localStorage.getItem(key)||'{}');
     if(!Object.keys(data).length) return;
+    // Merge con Drive para no sobreescribir datos de otros empleados
     var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
-    var form=new FormData(), blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    var merged=Object.assign({},data);
+    if(sr.files&&sr.files.length){
+      try{
+        var driveData=await dGet('https://www.googleapis.com/drive/v3/files/'+sr.files[0].id+'?alt=media');
+        // Merge: para cada empId en Drive, conservar si no está en local
+        Object.keys(driveData||{}).forEach(function(eid){
+          if(!merged[eid]) merged[eid]=driveData[eid];
+          else{
+            // Local gana si es más reciente
+            var lt=new Date(merged[eid].savedAt||0).getTime();
+            var dt=new Date(driveData[eid].savedAt||0).getTime();
+            if(dt>lt) merged[eid]=driveData[eid];
+          }
+        });
+      }catch(e2){}
+    }
+    var form=new FormData(), blob=new Blob([JSON.stringify(merged)],{type:'application/json'});
     var url2,method;
     if(sr.files&&sr.files.length){
       form.append('metadata',new Blob([JSON.stringify({name:fname})],{type:'application/json'}));
@@ -657,37 +678,49 @@ async function saveSyncToDrive(){
   }
 }
 async function loadHorariosFromDrive(){
-  if(!S.driveToken || !S.folderId || !S.group) return;
+  if(!S.driveToken || !S.folderId) return;
   try{
-    const fname = horariosFile(S.group);
-    const key   = horariosKey(S.group);
-    const local = JSON.parse(localStorage.getItem(key)||'{}');
-    const sr = await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id)`);
-    if(!sr.files||!sr.files.length){
-      // No existe en Drive aún — subir local si hay datos
-      if(Object.keys(local).length) saveHorariosToDrive();
-      S.reports={};
-      Object.keys(local).forEach(function(date){
-        if(!S.reports[date]) S.reports[date]={};
-        S.reports[date][S.group]=local[date];
-      });
-      return;
+    // Cargar archivos de las últimas 2 semanas + próximas 2 semanas
+    const dates=[];
+    const base=new Date(today()+'T12:00:00');
+    for(let i=-14;i<=14;i++){
+      const d=new Date(base); d.setDate(d.getDate()+i);
+      dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
     }
-    const drive = await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-    // Merge: local gana si es más reciente
-    const merged = Object.assign({}, drive||{});
-    Object.keys(local).forEach(function(date){
-      const lt = new Date((local[date]||{}).savedAt||0).getTime();
-      const dt = new Date((merged[date]||{}).savedAt||0).getTime();
-      if(lt >= dt) merged[date] = local[date];
-    });
-    localStorage.setItem(key, JSON.stringify(merged));
     S.reports={};
-    Object.keys(merged).forEach(function(date){
-      if(!S.reports[date]) S.reports[date]={};
-      S.reports[date][S.group]=merged[date];
-    });
-    toast('✅ Horarios cargados');
+    await Promise.all(dates.map(async function(date){
+      var fname=horariosFile(date), key=horariosKey(date);
+      var local=JSON.parse(localStorage.getItem(key)||'{}');
+      try{
+        var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
+        if(!sr.files||!sr.files.length){
+          // No en Drive — guardar local si hay datos
+          if(Object.keys(local).length){
+            if(!S.reports[date]) S.reports[date]={};
+            Object.keys(local).forEach(function(eid){ S.reports[date][eid]=local[eid]; });
+          }
+          return;
+        }
+        var drive=await dGet('https://www.googleapis.com/drive/v3/files/'+sr.files[0].id+'?alt=media');
+        // Merge: para cada empId, el más reciente gana
+        var merged=Object.assign({},drive||{});
+        Object.keys(local).forEach(function(eid){
+          var lt=new Date((local[eid]||{}).savedAt||0).getTime();
+          var dt=new Date((merged[eid]||{}).savedAt||0).getTime();
+          if(lt>=dt) merged[eid]=local[eid];
+        });
+        localStorage.setItem(key,JSON.stringify(merged));
+        if(!S.reports[date]) S.reports[date]={};
+        Object.keys(merged).forEach(function(eid){ S.reports[date][eid]=merged[eid]; });
+      }catch(e2){
+        // Error descargando — usar local
+        if(Object.keys(local).length){
+          if(!S.reports[date]) S.reports[date]={};
+          Object.keys(local).forEach(function(eid){ S.reports[date][eid]=local[eid]; });
+        }
+      }
+    }));
+    toast('✅ Horarios sincronizados');
   }catch(e){ console.warn('loadHorariosFromDrive:',e.message); }
 }
 
@@ -796,10 +829,15 @@ function launch(save){
 }
 
 /* ── WEEK STRIP ── */
+function navWeek(delta){
+  S.weekStart=addDays(S.weekStart, delta*7);
+  saveSess(); buildStrip();
+}
+
 function buildStrip(){
   const strip=document.getElementById('dayStrip'); strip.innerHTML='';
   const td=today();
-  for(let i=0;i<7;i++){
+  for(let i=0;i<14;i++){
     const d=addDays(S.weekStart,i), svcs=getSvcs(d);
     const rpts=getReportsForDay(d);
     const done=svcs.some(s=>rpts[s.id]?.status==='done');
@@ -831,17 +869,25 @@ function renderView(){
 
 /* ── AGENDA (read-only) ── */
 function getReportsForDay(date){
-  // Read from S.reports which is structured as reports[date][group]
-  return (S.reports[date]&&S.reports[date][S.group]&&S.reports[date][S.group].services)
-    ? S.reports[date][S.group].services.reduce((acc,svc)=>{acc[svc.id]=svc;return acc;},{})
-    : {};
+  // S.reports[date][empId].services — buscar por empId del empleado actual
+  if(!S.reports||!S.reports[date]) return {};
+  var empId=S.empId;
+  if(empId && S.reports[date][empId] && S.reports[date][empId].services){
+    return S.reports[date][empId].services.reduce(function(acc,svc){acc[svc.id]=svc;return acc;},{});
+  }
+  // Fallback: combinar todos los registros del día
+  var acc={};
+  Object.values(S.reports[date]).forEach(function(empData){
+    if(empData&&empData.services) empData.services.forEach(function(svc){acc[svc.id]=svc;});
+  });
+  return acc;
 }
 
 function renderAgenda(){
   const el=document.getElementById('agendaEl'); el.innerHTML='';
   const svcs=getSvcs(S.selectedDate);
   const rpts=getReportsForDay(S.selectedDate);
-  const dayRpt=S.reports[S.selectedDate]&&S.reports[S.selectedDate][S.group];
+  const dayRpt=S.reports[S.selectedDate]&&(S.reports[S.selectedDate][S.empId]||Object.values(S.reports[S.selectedDate])[0]);
 
   if(!svcs.length){
     el.innerHTML=`<div class="no-sv"><strong>Sin servicios</strong>No hay servicios para hoy.<br>¡Día libre! 🎉</div>`;
@@ -957,32 +1003,32 @@ function renderAgenda(){
 
 function tog(id){document.getElementById(`blk_${id}`)?.classList.toggle('open');}
 
-function horariosKey(g){ return 'brazos_horarios_'+g.toLowerCase().replace(/\s+/g,'_'); }
-function horariosFile(g){ return 'brazos_horarios_'+g.toLowerCase().replace(/\s+/g,'_')+'.json'; }
+function horariosKey(date){ return 'brazos_horarios_'+date; }
+function horariosFile(date){ return 'brazos_horarios_'+date+'.json'; }
 
 function suplenteGetReports(){
-  try{ return JSON.parse(localStorage.getItem(horariosKey(S.group||''))||'{}'); }catch(e){ return {}; }
+  try{ return JSON.parse(localStorage.getItem(horariosKey(S.selectedDate||today()))||'{}'); }catch(e){ return {}; }
 }
 function suplenteUpdTime(id, field, val){
-  var date=S.selectedDate, group=S.group;
-  if(!date||!group){ toast('⚠ Sin fecha/grupo'); return; }
-  var key=horariosKey(group);
+  var date=S.selectedDate, empId=S.empId, group=S.group;
+  if(!date||!empId){ toast('⚠ Sin fecha o empleado'); return; }
+  var key=horariosKey(date);
   var all=JSON.parse(localStorage.getItem(key)||'{}');
-  if(!all[date]) all[date]={group:group,date:date,services:[],savedAt:''};
-  var svc=all[date].services.find(function(s){return String(s.id)===String(id);});
+  if(!all[empId]) all[empId]={empId:empId,empName:S.empName||'',group:group,services:[],savedAt:''};
+  var svc=all[empId].services.find(function(s){return String(s.id)===String(id);});
   if(!svc){
     var orig=(S.servs||[]).find(function(s){return String(s.id)===String(id);});
     var cli=orig?(S.clis||[]).find(function(c){return String(c.id)===String(orig.cliId);})||{}:{};
     svc={id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
-    all[date].services.push(svc);
+    all[empId].services.push(svc);
   }
   svc[field]=val;
   svc.status=(svc.checkin&&svc.checkout)?'done':(svc.checkin?'active':'pending');
-  all[date].savedAt=new Date().toISOString();
+  all[empId].savedAt=new Date().toISOString();
   localStorage.setItem(key,JSON.stringify(all));
   if(!S.reports) S.reports={};
   if(!S.reports[date]) S.reports[date]={};
-  S.reports[date][group]=all[date];
+  S.reports[date][empId]=all[empId];
   toast('✅ '+(field==='checkin'?'Llegada':'Salida')+' guardada');
   setTimeout(function(){try{saveHorariosToDrive();}catch(e){}},300);
 }
@@ -1116,24 +1162,28 @@ async function refreshData(){
         }
       }
       // Recargar horarios del grupo
-      if(S.group){ try{ await loadHorariosFromDrive(); }catch(e){} }
+      try{ await loadHorariosFromDrive(); }catch(e){}
       const mod=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
       sdot('ok','Actualizado '+mod);
       document.getElementById('syncLbl').textContent='Actualizado '+mod;
       saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
       toast('✅ Datos actualizados');
     } else {
-      // localStorage fallback
-      if(S.group){
-        try{
-          const local=JSON.parse(localStorage.getItem(horariosKey(S.group))||'{}');
-          S.reports={};
-          Object.keys(local).forEach(function(date){
-            if(!S.reports[date]) S.reports[date]={};
-            S.reports[date][S.group]=local[date];
-          });
-        }catch(ex){}
-      }
+      // localStorage fallback — leer archivos por fecha
+      try{
+        S.reports={};
+        const base=new Date(today()+'T12:00:00');
+        for(var i=-14;i<=14;i++){
+          const d=new Date(base); d.setDate(d.getDate()+i);
+          const dateStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+          const key=horariosKey(dateStr);
+          const local=JSON.parse(localStorage.getItem(key)||'{}');
+          if(Object.keys(local).length){
+            S.reports[dateStr]={};
+            Object.keys(local).forEach(function(eid){ S.reports[dateStr][eid]=local[eid]; });
+          }
+        }
+      }catch(ex){}
       sdot('ok','Datos locales');
       document.getElementById('syncLbl').textContent='Datos locales actualizados';
       saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
