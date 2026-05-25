@@ -863,7 +863,11 @@ function setView(v){
 }
 function renderView(){
   const d=new Date(S.selectedDate+'T12:00:00');
-  document.getElementById('weekLabel').textContent=S.selectedDate===today()?'Hoy':`${DAYS[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+  const ws=new Date(S.weekStart+'T12:00:00'), we=new Date(ws); we.setDate(we.getDate()+13);
+  const monthLabel = ws.getMonth()===we.getMonth()
+    ? MON[ws.getMonth()]+' '+ws.getFullYear()
+    : MON[ws.getMonth()]+' – '+MON[we.getMonth()]+' '+we.getFullYear();
+  document.getElementById('weekLabel').textContent=S.selectedDate===today()?'Hoy · '+monthLabel:monthLabel;
   S.view==='day'?renderAgenda():renderWeek();
 }
 
