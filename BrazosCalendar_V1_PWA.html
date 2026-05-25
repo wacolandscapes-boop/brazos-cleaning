@@ -881,9 +881,12 @@ function renderAgenda(){
 
   svcs.forEach(svc=>{
     const rpt=rpts[svc.id]||{status:'pending',checkin:null,checkout:null};
-    const st=rpt.status||'pending';
-    const sc=st==='done'?'std':st==='active'?'sta':'stp';
-    const sx=st==='done'?'Terminado':st==='active'?'En servicio':'Pendiente';
+    // Buscar si el servicio está cancelado en S.servs
+    const origSvc=(S.servs||[]).find(s=>String(s.id)===String(svc.id));
+    const isCancelled=!!(origSvc&&origSvc.cancelled);
+    const st=isCancelled?'cancelled':(rpt.status||'pending');
+    const sc=st==='done'?'std':st==='active'?'sta':st==='cancelled'?'stp':'stp';
+    const sx=st==='done'?'Terminado':st==='active'?'En servicio':st==='cancelled'?'❌ Cancelado':'Pendiente';
 
     const tl=document.createElement('div');
     tl.className='tslot';
@@ -893,6 +896,13 @@ function renderAgenda(){
     const blk=document.createElement('div');
     blk.className=`sb ${st}`;
     blk.id=`blk_${svc.id}`;
+    if(isCancelled){
+      blk.style.opacity='0.6';
+      blk.style.textDecoration='line-through';
+      blk.style.textDecorationColor='#ef4444';
+      blk.style.textDecorationThickness='2px';
+      blk.style.border='1px solid #ef4444';
+    }
 
     const timeStr=bts(svc,rpt);
     const hasCheckin=!!(rpt.checkin);
@@ -1019,7 +1029,7 @@ function renderWeek(){
 function getSvcs(date){
   const members=(S.grupos[S.group]||[]).map(String);
   return S.servs
-    .filter(s=>!s.cancelled && s.date===date && (s.empId===S.group||members.includes(String(s.empId))))
+    .filter(s=>s.date===date && (s.empId===S.group||members.includes(String(s.empId))))
     .sort((a,b)=>{
       const ta=a.timeStart||'',tb=b.timeStart||'';
       if(ta&&tb) return ta.localeCompare(tb);
