@@ -252,6 +252,10 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <button class="hdr-btn" id="btnSuplente" onclick="openSuplenteModal()" title="Modo Suplente" style="display:none;">🔑</button>
       <button class="hdr-btn" id="btnSupervisor" onclick="openSupervisorModal()" title="Modo Supervisor" style="display:none;">🔐</button>
       <button class="hdr-btn" onclick="openSett()">⚙</button>
+      <button id="btnDriveHeader" onclick="connectDriveFromHeader()" 
+        style="border:none;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;background:#ef4444;color:white;">
+        ☁️ Drive
+      </button>
     </div>
   </div>
   <div class="sync"><div class="sdot" id="syncDot"></div><span id="syncLbl">—</span></div>
@@ -382,6 +386,7 @@ let allEmpsList = [];
 
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible'){
+    updateDriveHeaderBtn();
     // Verificar si token está expirado o por expirar
     const exp=parseInt(localStorage.getItem(TEXP)||'0');
     if(S.driveToken && exp && Date.now() > exp - (5*60*1000)){
@@ -446,7 +451,9 @@ function tryRestoreSession(){
       launch(false);
       const tok=localStorage.getItem(TKEY);
       const exp=parseInt(localStorage.getItem(TEXP)||'0');
-      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); } try{checkBtnSuplente();}catch(e){} try{checkBtnSupervisor();}catch(e2){}
+      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); } 
+      setTimeout(updateDriveHeaderBtn, 500);
+      try{checkBtnSuplente();}catch(e){} try{checkBtnSupervisor();}catch(e2){}
       return;
     }
   }catch(e){}
@@ -503,6 +510,7 @@ function markConnected(){
   const b=document.getElementById('btnDrive');
   b.classList.add('connected');
   b.innerHTML='✅ Drive conectado';
+  updateDriveHeaderBtn();
 }
 
 async function loadSyncFile(){
@@ -723,6 +731,35 @@ async function loadHorariosFromDrive(){
     }));
     toast('✅ Horarios sincronizados');
   }catch(e){ console.warn('loadHorariosFromDrive:',e.message); }
+}
+
+
+function updateDriveHeaderBtn(){
+  const btn = document.getElementById('btnDriveHeader');
+  if(!btn) return;
+  const exp = parseInt(localStorage.getItem(TEXP)||'0');
+  if(S.driveToken && exp && Date.now() < exp){
+    btn.style.background = '#22c55e'; // Verde — conectado
+    btn.textContent = '☁️ Drive ✓';
+    btn.title = 'Drive conectado — toca para reconectar';
+  } else if(S.driveToken && (!exp || Date.now() >= exp)){
+    btn.style.background = '#ef4444'; // Rojo — token expirado
+    btn.textContent = '☁️ Drive ⚠';
+    btn.title = 'Token expirado — toca para reconectar';
+  } else {
+    btn.style.background = '#ef4444'; // Rojo — desconectado
+    btn.textContent = '☁️ Drive';
+    btn.title = 'Toca para conectar Drive';
+  }
+}
+
+function connectDriveFromHeader(){
+  // Si token válido — reconectar de todas formas para refrescar
+  S.driveToken = null;
+  localStorage.removeItem(TKEY);
+  const btn = document.getElementById('btnDriveHeader');
+  if(btn){ btn.style.background = '#f59e0b'; btn.textContent = '☁️ Conectando...'; }
+  connectDrive();
 }
 
 
