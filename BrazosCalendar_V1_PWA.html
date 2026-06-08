@@ -945,7 +945,7 @@ function renderAgenda(){
     return;
   }
 
-  el.innerHTML=`<div class="grp-lbl">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group}</div>`;
+  el.innerHTML=`<div class="grp-lbl" onclick="showEmpSection()" style="cursor:pointer;display:flex;align-items:center;gap:6px;">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group} <span style="font-size:10px;opacity:0.6;">✏️</span></div>`;
 
   // Shop info card (read-only)
   if(dayRpt&&(dayRpt.shopOut||dayRpt.shopBack)){
