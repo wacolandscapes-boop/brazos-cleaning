@@ -539,6 +539,7 @@ async function loadSyncFile(){
       showEmpSelected(S.empName, S.group);
     }
     renderView();
+    try{checkNotesBadge();}catch(e2){}
   }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
 }
 
@@ -864,6 +865,7 @@ function launch(save){
   document.getElementById('syncLbl').textContent=S.driveToken?`Drive · ${FILE}`:'Datos locales';
   buildStrip(); renderView();
   updateInfoScreen();
+  try{checkNotesBadge();}catch(e){}
 }
 
 /* ── WEEK STRIP ── */
