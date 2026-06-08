@@ -260,7 +260,10 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
   </div>
   <div class="sync"><div class="sdot" id="syncDot"></div><span id="syncLbl">—</span></div>
   <div class="week-nav">
-    <div class="week-label" id="weekLabel">Hoy</div>
+    <div class="week-label" id="weekLabel" style="display:flex;align-items:center;gap:5px;cursor:pointer;" onclick="showEmpSection()">
+      <span id="weekLabelText">—</span>
+      <span style="font-size:0.7rem;opacity:0.6;">✏️</span>
+    </div>
     <div class="week-tabs">
       <div class="wtab active" id="tabDay" onclick="setView('day')">DÍA</div>
       <div class="wtab" id="tabWeek" onclick="setView('week')">SEMANA</div>
@@ -914,7 +917,11 @@ function renderView(){
   const monthLabel = ws.getMonth()===we.getMonth()
     ? MON[ws.getMonth()]+' '+ws.getFullYear()
     : MON[ws.getMonth()]+' – '+MON[we.getMonth()]+' '+we.getFullYear();
-  document.getElementById('weekLabel').textContent=S.selectedDate===today()?'Hoy · '+monthLabel:monthLabel;
+  const firstName = (S.empName||'').split(' ')[0];
+  const grpLabel = S.group ? S.group.replace('Grupo ','G') : '';
+  const empGrpLabel = (grpLabel && firstName) ? `${grpLabel} · ${firstName}` : (grpLabel || firstName || monthLabel);
+  const wlt = document.getElementById('weekLabelText');
+  if (wlt) wlt.textContent = empGrpLabel + ' · ' + monthLabel;
   S.view==='day'?renderAgenda():renderWeek();
 }
 
