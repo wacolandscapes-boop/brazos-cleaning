@@ -163,7 +163,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 .wgdn{font-size:9px;color:var(--muted);text-align:center}.wgdd{font-size:15px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;margin-bottom:3px}.wgc.today .wgdd{color:var(--brand)}
 
 /* Bottom nav */
-.bnav{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:var(--s1);border-top:1px solid var(--border);display:none;padding:8px 0 12px}
+.bnav{display:none!important}
 .bnav-i{display:flex}.ni{flex:1;text-align:center;cursor:pointer;padding:3px 0;display:flex;flex-direction:column;align-items:center;gap:2px}
 .ni-ic{font-size:19px}.ni-lb{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.4px}.ni.active .ni-lb{color:var(--brand)}
 
@@ -945,7 +945,7 @@ function renderAgenda(){
     return;
   }
 
-  el.innerHTML=`<div class="grp-lbl">👥 ${S.group}</div>`;
+  el.innerHTML=`<div class="grp-lbl">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group}</div>`;
 
   // Shop info card (read-only)
   if(dayRpt&&(dayRpt.shopOut||dayRpt.shopBack)){
