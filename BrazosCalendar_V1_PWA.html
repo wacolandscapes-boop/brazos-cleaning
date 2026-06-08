@@ -541,6 +541,7 @@ async function loadSyncFile(){
     renderView();
     try{checkNotesBadge();}catch(e2){}
   }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
+  try{checkNotesBadge();}catch(e3){}
 }
 
 async function dGet(url){
@@ -1049,6 +1050,24 @@ function renderAgenda(){
   });
 
   grid.appendChild(tc); grid.appendChild(bc); el.appendChild(grid);
+
+  // ── NOTAS DEL SUPERVISOR AL FINAL DEL DÍA ──
+  const dayNotes = (S.cellNotes || {})[S.selectedDate + '__' + S.group] || [];
+  if (dayNotes.length > 0) {
+    const notesDiv = document.createElement('div');
+    notesDiv.style.cssText = 'margin:16px 0 8px;border-radius:10px;overflow:hidden;';
+    notesDiv.innerHTML = `
+      <div style="background:#f39c12;color:white;padding:8px 14px;font-size:0.82rem;font-weight:700;">
+        📋 Notas del Supervisor (${dayNotes.length})
+      </div>
+      ${dayNotes.map(n => `
+        <div style="background:#fff8e1;border-left:3px solid #f39c12;padding:10px 14px;font-size:0.88rem;color:#333;border-bottom:1px solid #ffeaa7;">
+          ${n}
+        </div>
+      `).join('')}
+    `;
+    el.appendChild(notesDiv);
+  }
 }
 
 function tog(id){document.getElementById(`blk_${id}`)?.classList.toggle('open');}
