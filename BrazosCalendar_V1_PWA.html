@@ -945,7 +945,9 @@ function renderAgenda(){
     return;
   }
 
-  el.innerHTML=`<div class="grp-lbl" onclick="showEmpSection()" style="cursor:pointer;display:flex;align-items:center;gap:6px;">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group} <span style="font-size:10px;opacity:0.6;">✏️</span></div>`;
+  el.innerHTML=`<div class="grp-lbl" id="grpLblBtn" style="cursor:pointer;display:flex;align-items:center;gap:6px;">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group} <span style="font-size:10px;opacity:0.6;">✏️</span></div>`;
+  const grpBtn = document.getElementById('grpLblBtn');
+  if (grpBtn) grpBtn.addEventListener('click', function(){ showEmpSection(); });
 
   // Shop info card (read-only)
   if(dayRpt&&(dayRpt.shopOut||dayRpt.shopBack)){
