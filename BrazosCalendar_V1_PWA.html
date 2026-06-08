@@ -260,7 +260,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
   </div>
   <div class="sync"><div class="sdot" id="syncDot"></div><span id="syncLbl">—</span></div>
   <div class="week-nav">
-    <div class="week-label" id="weekLabel" style="display:flex;align-items:center;gap:5px;cursor:pointer;" onclick="showEmpSection()">
+    <div class="week-label" id="weekLabel" style="display:flex;align-items:center;gap:5px;cursor:pointer;" onclick="window.showEmpSection&&window.showEmpSection()">
       <span id="weekLabelText">—</span>
       <span style="font-size:0.7rem;opacity:0.6;">✏️</span>
     </div>
@@ -952,9 +952,7 @@ function renderAgenda(){
     return;
   }
 
-  el.innerHTML=`<div class="grp-lbl" id="grpLblBtn" style="cursor:pointer;display:flex;align-items:center;gap:6px;">👤 ${S.empName||''} &nbsp;·&nbsp; 👥 ${S.group} <span style="font-size:10px;opacity:0.6;">✏️</span></div>`;
-  const grpBtn = document.getElementById('grpLblBtn');
-  if (grpBtn) grpBtn.addEventListener('click', function(){ showEmpSection(); });
+  el.innerHTML="";
 
   // Shop info card (read-only)
   if(dayRpt&&(dayRpt.shopOut||dayRpt.shopBack)){
