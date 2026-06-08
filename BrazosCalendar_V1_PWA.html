@@ -260,7 +260,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
   </div>
   <div class="sync"><div class="sdot" id="syncDot"></div><span id="syncLbl">—</span></div>
   <div class="week-nav">
-    <div class="week-label" id="weekLabel" style="display:flex;align-items:center;gap:5px;cursor:pointer;" onclick="window.showEmpSection&&window.showEmpSection()">
+    <div class="week-label" id="weekLabel" style="display:flex;align-items:center;gap:5px;cursor:pointer;">
       <span id="weekLabelText">—</span>
       <span style="font-size:0.7rem;opacity:0.6;">✏️</span>
     </div>
@@ -798,6 +798,12 @@ function buildEmpsList(){
 
 function showEmpSection(){
   document.getElementById('empSection').style.display='block';
+  // Add listener to weekLabel if not already added
+  const wl = document.getElementById('weekLabel');
+  if (wl && !wl._hasEmpListener) {
+    wl._hasEmpListener = true;
+    wl.addEventListener('click', function(){ showEmpSection(); });
+  }
   // If we already have a saved employee, show selected state
   if(S.empId){
     showEmpSelected(S.empName, S.group);
@@ -885,6 +891,11 @@ function irAHoy(){
 }
 
 function buildStrip(){
+  const wl = document.getElementById('weekLabel');
+  if (wl && !wl._hasEmpListener) {
+    wl._hasEmpListener = true;
+    wl.addEventListener('click', function(){ showEmpSection(); });
+  }
   const strip=document.getElementById('dayStrip'); strip.innerHTML='';
   const td=today();
   for(let i=0;i<14;i++){
