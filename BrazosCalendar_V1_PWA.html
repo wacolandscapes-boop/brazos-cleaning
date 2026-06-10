@@ -967,7 +967,7 @@ function renderAgenda(){
 
   // Banda delgada: Salida del Shop (arriba)
   {
-    const soVal=dayRpt?.shopOut||'';
+    const soVal=(dayRpt&&dayRpt.shopOut)||'';
     const bandOut=document.createElement('div');
     bandOut.id='shopOutBand';
     bandOut.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin-bottom:8px;background:var(--s2);border:1px solid '+(soVal?'#f59e0b':'var(--border)')+';border-radius:10px;cursor:pointer;';
@@ -1077,8 +1077,8 @@ function renderAgenda(){
 
   // Banda delgada: Regreso al Shop (abajo)
   {
-    const sbVal=dayRpt?.shopBack||'';
-    const soVal=dayRpt?.shopOut||'';
+    const sbVal=(dayRpt&&dayRpt.shopBack)||'';
+    const soVal=(dayRpt&&dayRpt.shopOut)||'';
     const bandBack=document.createElement('div');
     bandBack.id='shopBackBand';
     bandBack.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin-top:8px;background:var(--s2);border:1px solid '+(sbVal?'#22c55e':'var(--border)')+';border-radius:10px;cursor:pointer;';
@@ -1132,7 +1132,8 @@ function suplenteUpdTime(id, field, val){
   var svc=all[empId].services.find(function(s){return String(s.id)===String(id);});
   if(!svc){
     var orig=(S.servs||[]).find(function(s){return String(s.id)===String(id);});
-    var cli=orig?(S.clis||[]).find(function(c){return String(c.id)===String(orig.cliId);})||{}:{};
+    var cli=orig?(S.clis||[]).find(function(c){return String(c.id)===String(orig.cliId);})||
+                  (S.clis||[]).find(function(c){return c.name&&orig.clientName&&c.name.trim().toLowerCase()===orig.clientName.trim().toLowerCase();})||{}:{};
     svc={id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
     all[empId].services.push(svc);
   }
@@ -1232,9 +1233,10 @@ function getSvcs(date){
       return (parseInt(a.priority)||999)-(parseInt(b.priority)||999);
     })
     .map(s=>{
-      const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
+      const c=S.clis.find(x=>String(x.id)===String(s.cliId)) ||
+               S.clis.find(x=>x.name&&s.clientName&&x.name.trim().toLowerCase()===s.clientName.trim().toLowerCase()) || {};
       const showProp=(c.type==='airbnb'||c.type==='unico'||c.type==='construccion');
-      const clientName=(showProp&&(s.propId||c.propId))?c.name+' / '+(s.propId||c.propId):c.name||`Cliente ${s.cliId}`;
+      const clientName=(showProp&&(s.propId||c.propId))?c.name+' / '+(s.propId||c.propId):c.name||s.clientName||`Cliente ${s.cliId}`;
       // Para construccion/airbnb/unico usar propId como dirección si existe
       let address = [c.address,c.city].filter(Boolean).join(', ');
       if(showProp){
