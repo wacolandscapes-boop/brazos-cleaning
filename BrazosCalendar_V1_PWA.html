@@ -975,7 +975,17 @@ function renderAgenda(){
   const el=document.getElementById('agendaEl'); el.innerHTML='';
   const svcs=getSvcs(S.selectedDate);
   const rpts=getReportsForDay(S.selectedDate);
-  const dayRpt=S.reports[S.selectedDate]&&(S.reports[S.selectedDate][S.empId]||Object.values(S.reports[S.selectedDate])[0]);
+  // Combinar shopOut/shopBack de todos los empleados del grupo
+  var dayRpt=null;
+  if(S.reports&&S.reports[S.selectedDate]){
+    // Empezar con los datos de la empleada actual
+    dayRpt=Object.assign({},S.reports[S.selectedDate][S.empId]||Object.values(S.reports[S.selectedDate])[0]||{});
+    // Completar shopOut/shopBack de otros empleados si faltan
+    Object.values(S.reports[S.selectedDate]).forEach(function(empData){
+      if(!dayRpt.shopOut && empData.shopOut) dayRpt.shopOut=empData.shopOut;
+      if(!dayRpt.shopBack && empData.shopBack) dayRpt.shopBack=empData.shopBack;
+    });
+  }
 
   if(!svcs.length){
     el.innerHTML=`<div class="no-sv"><strong>Sin servicios</strong>No hay servicios para hoy.<br>¡Día libre! 🎉</div>`;
