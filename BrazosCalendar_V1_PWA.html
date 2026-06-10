@@ -938,16 +938,16 @@ function renderView(){
 
 /* ── AGENDA (read-only) ── */
 function getReportsForDay(date){
-  // S.reports[date][empId].services — buscar por empId del empleado actual
   if(!S.reports||!S.reports[date]) return {};
-  var empId=S.empId;
-  if(empId && S.reports[date][empId] && S.reports[date][empId].services){
-    return S.reports[date][empId].services.reduce(function(acc,svc){acc[svc.id]=svc;return acc;},{});
-  }
-  // Fallback: combinar todos los registros del día
+  // Combinar registros de todos los empleados del grupo
   var acc={};
   Object.values(S.reports[date]).forEach(function(empData){
-    if(empData&&empData.services) empData.services.forEach(function(svc){acc[svc.id]=svc;});
+    if(empData&&empData.services) empData.services.forEach(function(svc){
+      // Si el servicio ya existe, conservar el más reciente o el que tenga más datos
+      if(!acc[svc.id] || (svc.checkin && !acc[svc.id].checkin) || (svc.checkout && !acc[svc.id].checkout)){
+        acc[svc.id]=svc;
+      }
+    });
   });
   return acc;
 }
