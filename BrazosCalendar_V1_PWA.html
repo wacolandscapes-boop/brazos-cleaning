@@ -939,15 +939,34 @@ function renderView(){
 /* ── AGENDA (read-only) ── */
 function getReportsForDay(date){
   if(!S.reports||!S.reports[date]) return {};
-  // Combinar registros de todos los empleados del grupo
+  // Combinar registros de todos los empleados del grupo (solo visualización)
+  // Priorizar los registros de la empleada actual para edición
   var acc={};
+  // Primero cargar registros de OTROS empleados
   Object.values(S.reports[date]).forEach(function(empData){
+    if(empData.empId===S.empId) return; // dejar los propios para después
     if(empData&&empData.services) empData.services.forEach(function(svc){
-      // Si el servicio ya existe, conservar el más reciente o el que tenga más datos
-      if(!acc[svc.id] || (svc.checkin && !acc[svc.id].checkin) || (svc.checkout && !acc[svc.id].checkout)){
-        acc[svc.id]=svc;
+      if(!acc[svc.id]){
+        acc[svc.id]=Object.assign({},svc,{_readOnly:true});
+      } else {
+        if(svc.checkin && !acc[svc.id].checkin) acc[svc.id].checkin=svc.checkin;
+        if(svc.checkout && !acc[svc.id].checkout) acc[svc.id].checkout=svc.checkout;
+        if(svc.status==='done') acc[svc.id].status='done';
+        if(svc.clientName && !acc[svc.id].clientName) acc[svc.id].clientName=svc.clientName;
       }
     });
+  });
+  // Después cargar registros PROPIOS — sobreescriben para permitir edición
+  var ownData=S.reports[date][S.empId];
+  if(ownData&&ownData.services) ownData.services.forEach(function(svc){
+    if(!acc[svc.id]){
+      acc[svc.id]=svc;
+    } else {
+      // Combinar: los propios tienen prioridad, completar con datos de otros
+      var merged=Object.assign({},acc[svc.id],svc);
+      merged._readOnly=false;
+      acc[svc.id]=merged;
+    }
   });
   return acc;
 }
@@ -1116,6 +1135,14 @@ function suplenteUpdTime(id, field, val){
   if(!all[empId]) all[empId]={empId:empId,empName:S.empName||'',group:group,services:[],savedAt:''};
   var svc=all[empId].services.find(function(s){return String(s.id)===String(id);});
   if(!svc){
+    // Si el servicio pertenece a otra empleada del grupo, no duplicar
+    var isOtherEmp=false;
+    Object.keys(all).forEach(function(eid){
+      if(eid!==empId && all[eid].services && all[eid].services.find(function(s){return String(s.id)===String(id);})){
+        isOtherEmp=true;
+      }
+    });
+    if(isOtherEmp){ toast('⚠ Servicio registrado por otra empleada'); return; }
     var orig=(S.servs||[]).find(function(s){return String(s.id)===String(id);});
     var cli=orig?(S.clis||[]).find(function(c){return String(c.id)===String(orig.cliId);})||{}:{};
     svc={id:String(id),clientName:cli.name||'',address:[cli.address,cli.city].filter(Boolean).join(', '),checkin:'',checkout:'',status:'pending',note:''};
