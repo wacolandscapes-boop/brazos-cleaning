@@ -965,17 +965,23 @@ function renderAgenda(){
 
   el.innerHTML="";
 
-  // Shop info card (read-only)
-  if(dayRpt&&(dayRpt.shopOut||dayRpt.shopBack)){
-    const shopDiv=document.createElement('div');
-    shopDiv.className='shop-info'+(dayRpt.shopOut&&dayRpt.shopBack?' active':'');
-    shopDiv.innerHTML=`
-      <div class="shop-row"><div class="shop-lbl">🚐 Salida del Shop</div><div class="${dayRpt.shopOut?'shop-time':'shop-none'}">${dayRpt.shopOut?fmt12(dayRpt.shopOut):'Pendiente'}</div></div>
-      <hr class="shop-divider">
-      <div class="shop-row"><div class="shop-lbl">🏠 Regreso al Shop</div><div class="${dayRpt.shopBack?'shop-time':'shop-none'}">${dayRpt.shopBack?fmt12(dayRpt.shopBack):'Pendiente'}</div></div>
-      ${dayRpt.shopOut&&dayRpt.shopBack?`<hr class="shop-divider"><div class="shop-row"><div style="font-size:12px;color:var(--muted)">Jornada total</div><div class="shop-time">${calcDur(dayRpt.shopOut,dayRpt.shopBack)}</div></div>`:''}
-    `;
-    el.appendChild(shopDiv);
+  // Banda delgada: Salida del Shop (arriba)
+  {
+    const soVal=dayRpt?.shopOut||'';
+    const bandOut=document.createElement('div');
+    bandOut.id='shopOutBand';
+    bandOut.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin-bottom:8px;background:var(--s2);border:1px solid '+(soVal?'#f59e0b':'var(--border)')+';border-radius:10px;cursor:pointer;';
+    bandOut.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:13px;">🚐</span>
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--muted);">Salida del Shop</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:${soVal?'#f59e0b':'var(--muted)'};">${soVal?fmt12(soVal):'— Toca para registrar'}</span>
+        <span style="font-size:11px;color:var(--muted);">✏️</span>
+      </div>`;
+    bandOut.onclick=()=>openShopTimeEditor('shopOut', soVal);
+    el.appendChild(bandOut);
   }
 
   const grid=document.createElement('div'); grid.className='ag-grid';
@@ -1069,6 +1075,27 @@ function renderAgenda(){
 
   grid.appendChild(tc); grid.appendChild(bc); el.appendChild(grid);
 
+  // Banda delgada: Regreso al Shop (abajo)
+  {
+    const sbVal=dayRpt?.shopBack||'';
+    const soVal=dayRpt?.shopOut||'';
+    const bandBack=document.createElement('div');
+    bandBack.id='shopBackBand';
+    bandBack.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 12px;margin-top:8px;background:var(--s2);border:1px solid '+(sbVal?'#22c55e':'var(--border)')+';border-radius:10px;cursor:pointer;';
+    bandBack.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:13px;">🏠</span>
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--muted);">Regreso al Shop</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:${sbVal?'#22c55e':'var(--muted)'};">${sbVal?fmt12(sbVal):'— Toca para registrar'}</span>
+        ${soVal&&sbVal?`<span style="font-size:11px;color:var(--muted);">${calcDur(soVal,sbVal)}</span>`:''}
+        <span style="font-size:11px;color:var(--muted);">✏️</span>
+      </div>`;
+    bandBack.onclick=()=>openShopTimeEditor('shopBack', sbVal);
+    el.appendChild(bandBack);
+  }
+
   // ── NOTAS DEL SUPERVISOR AL FINAL DEL DÍA ──
   const dayNotes = (S.cellNotes || {})[S.selectedDate + '__' + S.group] || [];
   if (dayNotes.length > 0) {
@@ -1121,6 +1148,53 @@ function suplenteUpdTime(id, field, val){
 }
 function suplenteUpdNote(id, val){
   suplenteUpdTime(id,'note',val);
+}
+
+function openShopTimeEditor(field, currentVal){
+  var old=document.getElementById('shopTimeModal'); if(old) old.remove();
+  var label=field==='shopOut'?'🚐 Salida del Shop':'🏠 Regreso al Shop';
+  var color=field==='shopOut'?'#f59e0b':'#22c55e';
+  var now=new Date();
+  var nowStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  var modal=document.createElement('div');
+  modal.id='shopTimeModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML=`
+    <div style="background:var(--bg);border-radius:16px;padding:24px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text);margin-bottom:16px;text-align:center;">${label}</div>
+      <input type="time" id="shopTimeInput" value="${currentVal||nowStr}"
+        style="width:100%;background:transparent;border:none;border-bottom:2px solid ${color};color:var(--text);font-size:28px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:8px 0;outline:none;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('shopTimeModal').remove();"
+          style="padding:12px;background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:10px;font-weight:700;cursor:pointer;font-size:0.9rem;">Cancelar</button>
+        <button onclick="var v=document.getElementById('shopTimeInput').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}saveShopTime('${field}',null,v);document.getElementById('shopTimeModal').remove();"
+          style="padding:12px;background:${color};color:white;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.9rem;">💾 Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+}
+
+function saveShopTime(field, inputId, directVal){
+  var date=S.selectedDate, empId=S.empId, group=S.group;
+  if(!date||!empId){ toast('⚠ Sin fecha o empleado'); return; }
+  var val = directVal || (inputId ? (document.getElementById(inputId)||{}).value : '');
+  if(!val){
+    var n=new Date();
+    val=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  }
+  var key=horariosKey(date);
+  var all=JSON.parse(localStorage.getItem(key)||'{}');
+  if(!all[empId]) all[empId]={empId:empId,empName:S.empName||'',group:group,services:[],savedAt:''};
+  all[empId][field]=val;
+  all[empId].savedAt=new Date().toISOString();
+  localStorage.setItem(key,JSON.stringify(all));
+  if(!S.reports) S.reports={};
+  if(!S.reports[date]) S.reports[date]={};
+  S.reports[date][empId]=all[empId];
+  toast('✅ '+(field==='shopOut'?'Salida del Shop':'Regreso al Shop')+' guardado: '+val);
+  setTimeout(function(){try{saveHorariosToDrive();}catch(e){}},300);
+  renderView();
 }
 
 /* ── WEEK VIEW ── */
