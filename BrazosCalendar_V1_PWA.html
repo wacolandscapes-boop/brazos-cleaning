@@ -525,7 +525,7 @@ async function loadSyncFile(){
     const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${FILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
     if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado`);return;}
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-    if(!data||data.exportType!=='anaCS_sync'){setDS('err','⚠ Archivo inválido');return;}
+    if(!data||(data.exportType!=='anaCS_sync'&&data.exportType!=='brazosCS_sync')){setDS('err','⚠ Archivo inválido');return;}
     S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[];
     S.cellNotes=data.cellNotes||{};
     if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
@@ -1349,7 +1349,7 @@ async function refreshData(){
       const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${FILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
       if(sr.files&&sr.files.length){
         const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-        if(data&&data.exportType==='anaCS_sync'){
+        if(data&&(data.exportType==='anaCS_sync'||data.exportType==='brazosCS_sync')){
           S.servs=data.servs||[]; S.clis=data.clis||[]; S.grupos=data.grupos||{}; S.emps=data.emps||[];
           S.cellNotes=data.cellNotes||{};
           if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
