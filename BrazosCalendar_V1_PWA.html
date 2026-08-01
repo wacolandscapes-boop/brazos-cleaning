@@ -74,6 +74,13 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .hdr-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif}
 .sync{display:flex;align-items:center;gap:7px;padding:7px 16px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
 .sdot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0}.sdot.ok{background:var(--green)}.sdot.err{background:#ef4444}.sdot.spin{background:var(--yellow);animation:blink 1s infinite}
+/* ALERTA de sincronización: cuando no se pudo subir a Drive (token vencido / reconecta),
+   TODA la barra parpadea en rojo con texto grande y blanco. Un puntito de 6px es fácil de
+   no notar en el celular y la empleada seguía registrando sin subir. NO toca cómo se
+   registran ni suben los horarios; sólo hace el aviso imposible de ignorar. */
+@keyframes syncAlertaParpadeo { 0%,100%{background:#7f1010} 50%{background:#ef4444} }
+.sync.sync-alerta{ animation:syncAlertaParpadeo 1s ease-in-out infinite; color:#fff !important; font-weight:800; font-size:13px; padding:11px 16px; }
+.sync.sync-alerta .sdot{ background:#fff !important; width:9px; height:9px; }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* ── SETUP / WELCOME ── */
@@ -777,6 +784,10 @@ function sdot(t,m){
   const d=document.getElementById('syncDot'),l=document.getElementById('syncLbl');
   if(d)d.className='sdot '+(t==='ok'?'ok':t==='err'?'err':t==='spin'?'spin':'');
   if(l&&m)l.textContent=m;
+  // Cuando hay error de sync (token vencido / sin subir a Drive), hacer parpadear TODA
+  // la barra en rojo para que la empleada no lo ignore. En cualquier otro estado se quita.
+  const bar=d&&d.closest('.sync');
+  if(bar)bar.classList.toggle('sync-alerta', t==='err');
 }
 
 /* ── EMPLOYEE LIST ── */
