@@ -1231,6 +1231,13 @@
                                     </label>
                                     <div style="font-size:0.72rem; color:#856404; margin-top:2px;">El cliente/propiedad sigue programándose normal en el calendario, pero nunca aparece en Pendientes, Urgentes ni se le genera factura desde aquí.</div>
                                 </div>
+                                <div style="grid-column:span 2; background:#e7f3ff; border:1px solid #3b82f6; border-radius:6px; padding:8px; margin-top:6px;">
+                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700; color:#1e40af; cursor:pointer;">
+                                        <input type="checkbox" id="cliAbrirManual" style="width:auto;">
+                                        ✏️ Abrir sus facturas como Manual (editar descripción y precio)
+                                    </label>
+                                    <div style="font-size:0.72rem; color:#1e40af; margin-top:2px;">Actívala para clientes como 254 Lawns o JGM cuya factura quieres editar a mano. Construcción y servicio único ya se abren en Manual solos, sin necesidad de esto.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -7594,6 +7601,23 @@ class Scheduler {
         this.refreshGeneratedInvoices();
     }
 
+    // Limpia el cliente y las líneas de AMBAS pestañas (Generar y Manual) del modal de
+    // factura. Se llama al abrir una factura para editar, para que la pestaña que NO se
+    // llene no conserve el cliente/datos de la factura ANTERIOR — antes, al cambiar de
+    // pestaña a mano, aparecía otra factura/cliente (riesgo de editar al equivocado).
+    _limpiarPestanasFactura() {
+        const selGen = document.getElementById('invoiceClient');
+        if (selGen) selGen.value = '';
+        const mCli = document.getElementById('manualInvClient');
+        if (mCli) mCli.value = '';
+        const mSearch = document.getElementById('manualInvClientSearch');
+        if (mSearch) mSearch.value = '';
+        const mList = document.getElementById('manualInvItemsList');
+        if (mList) mList.innerHTML = '';
+        const mEmail = document.getElementById('manualInvEmail');
+        if (mEmail) mEmail.value = '';
+    }
+
     openInvoiceForEdit(id) {
         const invoice = (this.generatedInvoices || []).find(inv => 
             (inv.id && inv.id == id) || inv.invoiceNumber == id
@@ -7604,6 +7628,12 @@ class Scheduler {
         this.openInvoice();
 
         setTimeout(() => {
+            // Limpiar AMBAS pestañas ANTES de llenar la que corresponda: así la pestaña que
+            // NO se use no queda con el cliente/datos de otra factura. Antes, al abrir una
+            // factura y cambiar de pestaña a mano, aparecía la factura anterior (p.ej. abrir
+            // Home Abstract y ver a Andrew Hall en la otra pestaña) — riesgo de editar al
+            // cliente equivocado.
+            this._limpiarPestanasFactura();
             // Detectar si es una factura manual (tiene items pero no servicios del calendario)
             // Usar clientIds (la propiedad exacta) cuando exista, no solo el nombre —
             // en clientes multipropiedad como JGM, "el nombre" solo no identifica cuál.
@@ -7620,11 +7650,21 @@ class Scheduler {
             // puede editar la descripción. Por eso se revisa primero la marca `isManual` y,
             // para facturas viejas que no la tienen, si NINGUNA línea está ligada a un
             // servicio del calendario (sin `id`), se trata como manual.
-            const itemsSinVinculo = (invoice.items && invoice.items.length > 0)
-                && !invoice.items.some(it => it && it.id);
-            const isManual = invoice.isManual === true
-                || itemsSinVinculo
-                || invoice.type === 'construccion' || (invoice.items && invoice.items.length > 0 &&
+            // DETECCIÓN Manual/Generada. Se abre en MANUAL (para editar descripción/precio,
+            // con las líneas desglosadas) cuando el CLIENTE es de construcción o de servicio
+            // único, o su ficha tiene marcada la casilla "Abrir facturas como Manual" (254,
+            // JGM-casa); o la factura es de construcción; o (respaldo) no hay NINGÚN servicio
+            // del cliente en el rango (manuales puras sin nada en el calendario).
+            // Ya NO se usa la marca `isManual` (se contaminó al usar "Editar como Manual" en
+            // facturas generadas), ni "líneas sin id" (daba falso positivo: Home Abstract es
+            // generada real pero sus líneas no guardaron id).
+            const _cliFactura = (this.clis || []).find(c => invClientIds.includes(String(c.id)));
+            const _tipoCli = _cliFactura ? (_cliFactura.serviceType || '') : '';
+            const _clienteEsManual = !!(_cliFactura && (_cliFactura.abrirManual === true
+                || _tipoCli === 'construccion' || _tipoCli === 'unico'));
+            const isManual = _clienteEsManual
+                || invoice.type === 'construccion'
+                || (invoice.items && invoice.items.length > 0 &&
                 !this.servs.some(s => invClientIds.includes(String(s.cliId)) &&
                     s.date >= invoice.startDate && s.date <= invoice.endDate));
 
@@ -7676,7 +7716,7 @@ class Scheduler {
                 // no se cargaba nada aquí, así que al editar una factura el checkbox quedaba
                 // como estuviera de la vez anterior y la factura salía SIN impuestos aunque
                 // el cliente sí los cobre.
-                this._cargarImpuestoDelCliente(cli, 'manualInvApplyTax', 'manualInvTaxRate', 'toggleManualTaxField');
+                this._cargarImpuestoDeFactura(invoice, cli, 'manualInvApplyTax', 'manualInvTaxRate', 'toggleManualTaxField');
                 const hiddenNum = document.getElementById('editingInvoiceNumber');
                 if (hiddenNum) hiddenNum.value = invoice.invoiceNumber;
                 this._updateEditingInvoiceBadge();
@@ -7705,7 +7745,7 @@ class Scheduler {
                 const _cliGen = (invoice.clientIds && invoice.clientIds.length > 0)
                     ? this.clis.find(c => String(c.id) === String(invoice.clientIds[0]))
                     : this.clis.find(c => c.name === invoice.clientName);
-                this._cargarImpuestoDelCliente(_cliGen, 'invoiceApplyTax', 'invoiceTaxRate', 'toggleTaxField');
+                this._cargarImpuestoDeFactura(invoice, _cliGen, 'invoiceApplyTax', 'invoiceTaxRate', 'toggleTaxField');
                 const hiddenNum = document.getElementById('editingInvoiceNumber');
                 if (hiddenNum) hiddenNum.value = invoice.invoiceNumber;
                 this._updateEditingInvoiceBadge();
@@ -7723,6 +7763,27 @@ class Scheduler {
         chk.checked = cli.cobraImpuestos !== false;
         if (rate) rate.value = parseFloat(cli.taxRate) || 8.25;
         if (typeof this[nombreToggle] === 'function') this[nombreToggle]();
+    }
+
+    // Pone el checkbox y la tasa de impuesto según LA FACTURA MISMA (su invoiceConfig).
+    // Así, al reeditar, la factura MANDA sobre su propio impuesto y ya NO se re-marca desde
+    // el perfil del cliente. El perfil NUNCA se modifica aquí. Sólo si la factura no guardó
+    // su decisión (facturas viejas de antes de este arreglo) se cae al perfil como respaldo.
+    _cargarImpuestoDeFactura(invoice, cli, idCheckbox, idTasa, nombreToggle) {
+        const cfg = invoice && invoice.invoiceConfig;
+        // ¿La factura ya tiene su propia decisión de impuesto guardada?
+        if (cfg && cfg.applyTax !== undefined && cfg.applyTax !== null) {
+            const chk = document.getElementById(idCheckbox);
+            const rate = document.getElementById(idTasa);
+            if (chk) chk.checked = !!cfg.applyTax;
+            if (rate) rate.value = (cfg.taxRate !== undefined && cfg.taxRate !== null && cfg.taxRate !== '')
+                ? parseFloat(cfg.taxRate)
+                : (parseFloat(cli && cli.taxRate) || 8.25);
+            if (typeof this[nombreToggle] === 'function') this[nombreToggle]();
+            return;
+        }
+        // Factura vieja sin decisión propia → respaldo: el perfil del cliente
+        this._cargarImpuestoDelCliente(cli, idCheckbox, idTasa, nombreToggle);
     }
 
     // Muestra/oculta el indicador de "Editando factura #XXXX" en el encabezado, según si
@@ -10476,6 +10537,7 @@ Motivo de cancelación (opcional):`);
                 const taxRate = document.getElementById('cliTaxRate') ? parseFloat(document.getElementById('cliTaxRate').value) || 8.25 : (this.clis[idx].taxRate || 8.25);
                 const cobraImpuestos = document.getElementById('cliApplyTax') ? document.getElementById('cliApplyTax').checked : (this.clis[idx].cobraImpuestos !== false);
                 const excludeInvoicing = document.getElementById('cliExcludeInvoicing') ? document.getElementById('cliExcludeInvoicing').checked : (this.clis[idx].excludeInvoicing || false);
+                const abrirManual = document.getElementById('cliAbrirManual') ? document.getElementById('cliAbrirManual').checked : (this.clis[idx].abrirManual || false);
                 const servicePaused = document.getElementById('cliServicePaused') ? document.getElementById('cliServicePaused').checked : (this.clis[idx].servicePaused || false);
                 const pausedSince = document.getElementById('cliPausedSince') ? (document.getElementById('cliPausedSince').value || '') : (this.clis[idx].pausedSince || '');
 
@@ -10526,6 +10588,7 @@ Motivo de cancelación (opcional):`);
                         c.taxRate = taxRate;
                         c.cobraImpuestos = cobraImpuestos;
                         c.excludeInvoicing = excludeInvoicing;
+                        c.abrirManual = abrirManual;
                         c.servicePaused = servicePaused;
                         c.pausedSince = pausedSince;
                         if (stripeCustomerId) c.stripeCustomerId = stripeCustomerId;
@@ -10616,7 +10679,7 @@ Motivo de cancelación (opcional):`);
                         id: this.clis[idx].id,
                         name, propId, price, tel, email, address, city, zip,
                         type, serviceType, billingPeriod, invoicingType,
-                        excludeInvoicing,
+                        excludeInvoicing, abrirManual,
                         taxRate, cobraImpuestos,
                         servicePaused, pausedSince
                     };
@@ -10708,6 +10771,7 @@ Motivo de cancelación (opcional):`);
             const taxRate = document.getElementById('cliTaxRate') ? parseFloat(document.getElementById('cliTaxRate').value) || 8.25 : 8.25;
             const cobraImpuestos = document.getElementById('cliApplyTax') ? document.getElementById('cliApplyTax').checked : true;
             const excludeInvoicingNew = document.getElementById('cliExcludeInvoicing') ? document.getElementById('cliExcludeInvoicing').checked : false;
+            const abrirManualNew = document.getElementById('cliAbrirManual') ? document.getElementById('cliAbrirManual').checked : false;
             const servicePausedNew = document.getElementById('cliServicePaused') ? document.getElementById('cliServicePaused').checked : false;
             const pausedSinceNew = document.getElementById('cliPausedSince') ? (document.getElementById('cliPausedSince').value || '') : '';
             const newCli = {
@@ -10729,6 +10793,7 @@ Motivo de cancelación (opcional):`);
                 taxRate: taxRate,
                 cobraImpuestos: cobraImpuestos,
                 excludeInvoicing: excludeInvoicingNew,
+                abrirManual: abrirManualNew,
                 servicePaused: servicePausedNew,
                 pausedSince: pausedSinceNew,
             };
@@ -10782,6 +10847,9 @@ Motivo de cancelación (opcional):`);
             }
             if (document.getElementById('cliExcludeInvoicing')) {
                 document.getElementById('cliExcludeInvoicing').checked = cli.excludeInvoicing || false;
+            }
+            if (document.getElementById('cliAbrirManual')) {
+                document.getElementById('cliAbrirManual').checked = cli.abrirManual || false;
             }
             if (document.getElementById('cliServicePaused')) {
                 document.getElementById('cliServicePaused').checked = cli.servicePaused || false;
@@ -13241,8 +13309,16 @@ Motivo de cancelación (opcional):`);
             const lastPrice = rows.length ? rows[rows.length - 1].querySelector('.manualInvPrice') : null;
             if (lastPrice) lastPrice.value = parseFloat(client.price) || 0;
         }
-        // Impuesto del perfil.
-        this._cargarImpuestoDelCliente(client, 'manualInvApplyTax', 'manualInvTaxRate', 'toggleManualTaxField');
+        // Impuesto: si esta conversión viene de una factura YA registrada (editingInvoiceNumber
+        // tiene valor), respetar SU decisión de impuesto — la factura manda, no se re-marca del
+        // perfil. Si es una factura NUEVA, usar el perfil del cliente como punto de partida.
+        const _editNumC = parseInt(document.getElementById('editingInvoiceNumber')?.value || '');
+        const _facEditC = _editNumC ? (this.generatedInvoices || []).find(i => i.invoiceNumber === _editNumC) : null;
+        if (_facEditC) {
+            this._cargarImpuestoDeFactura(_facEditC, client, 'manualInvApplyTax', 'manualInvTaxRate', 'toggleManualTaxField');
+        } else {
+            this._cargarImpuestoDelCliente(client, 'manualInvApplyTax', 'manualInvTaxRate', 'toggleManualTaxField');
+        }
         this.updateManualInvoiceTotals?.();
         // Marcar que esta factura es manual, para que al reabrirla vuelva a Manual.
         if (window.currentPDFData) window.currentPDFData._isManual = true;
@@ -13960,13 +14036,29 @@ Motivo de cancelación (opcional):`);
 
         const estadoAntes = existing.status;
 
-        // Actualizar SOLO los datos — el estado NO se toca
+        // Actualizar los datos editables (fechas, total, líneas, impuestos).
         existing.invoiceConfig = pdfData.invoiceConfig || existing.invoiceConfig;
         if (pdfData.serviceCount !== undefined) existing.serviceCount = pdfData.serviceCount;
         if (pdfData.total !== undefined && pdfData.total !== null) existing.total = pdfData.total;
         if (pdfData.startDate) existing.startDate = pdfData.startDate;
         if (pdfData.endDate) existing.endDate = pdfData.endDate;
         if (pdfData._services) existing.items = this.buildInvoiceItems(pdfData._services, pdfData.client);
+
+        // Recalcular el estatus SOLO hacia lo evidente, tras cambiar el total:
+        //   pagos cubren el total → pagada · hay pagos pero no cubren → parcial · sin pagos → NO se toca.
+        // Salvaguardas: nunca tocar CANCELADAS ni facturas por STRIPE (se manejan solas); centavos vía _cubreTotal.
+        const _esStripe = (existing.paymentMethod || '').toLowerCase().includes('stripe')
+            || (existing.payments || []).some(p => (p.method || '').toLowerCase().includes('stripe'));
+        if (existing.status !== 'cancelada' && !_esStripe) {
+            const _totalPaid = (existing.payments && existing.payments.length)
+                ? existing.payments.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
+                : parseFloat(existing.paidAmount || 0);
+            if (_totalPaid > 0) {
+                existing.status = this._cubreTotal(_totalPaid, existing.total) ? 'pagada' : 'parcial';
+            }
+            // si no hay pagos (_totalPaid === 0) → el estatus se queda como está
+        }
+
         existing.updatedAt = new Date().toISOString();
 
         this.save();
@@ -13975,10 +14067,11 @@ Motivo de cancelación (opcional):`);
         this.closeInvoice?.();
 
         const periodo = `${existing.startDate} → ${existing.endDate}`;
+        const _estadoCambio = existing.status !== estadoAntes;
         alert(`💾 Cambios guardados en la factura #${invoiceNumber.toString().padStart(4, '0')}\n\n` +
               `Período: ${periodo}\n` +
               `Total: $${parseFloat(existing.total || 0).toFixed(2)}\n` +
-              `Estado: ${estadoAntes} (sin cambios)`);
+              `Estado: ${existing.status}${_estadoCambio ? ' (actualizado desde: ' + estadoAntes + ')' : ' (sin cambios)'}`);
     }
 
     saveAsEnviada() {
