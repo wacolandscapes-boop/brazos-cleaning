@@ -769,6 +769,7 @@
                         </button>
                         <button onclick="app.openGeneratedInvoices(); closeAllDropdowns();">📑 Enviadas</button>
                         <button onclick="app.openServiceLog(); closeAllDropdowns();">📋 Log</button>
+                        <button onclick="app.openRevisarDuplicados(); closeAllDropdowns();">🔍 Revisar Duplicados</button>
                         <span id="cobrosBadge" style="display:none"></span>
                     </div>
                 </div>
@@ -3409,6 +3410,88 @@ class Scheduler {
 
     // Funciones de Lógica
     getMon(d) { let r = new Date(d); r.setDate(r.getDate() - (r.getDay() || 7) + 1); return r; }
+
+    // ¿Este servicio tiene horas reales registradas (check-in de la empleada)?
+    _servicioTieneHoras(s) {
+        try { return !!this._getCheckInOut(s.date, s.id); } catch(e) { return false; }
+    }
+
+    // Detecta servicios que EXCEDEN la recurrencia del cliente (posibles duplicados del
+    // merge de 2 pestañas/PCs, o de mover de fecha/grupo). SÓLO cuenta servicios DE LA SERIE
+    // (con serieId) y SIN horas registradas. Respeta los ÚNICOS (sin serieId) y los que
+    // tienen check-in (se realizaron). NO borra nada — sólo devuelve la lista para revisar.
+    _detectarDuplicados() {
+        const porSemana = { 'semanal':1, '2xsemana':2, '3xsemana':3, 'diario':5 };
+        const sospechosos = [];
+        const porCli = {};
+        (this.servs || []).forEach(s => {
+            if (s.cancelled) return;
+            (porCli[s.cliId] = porCli[s.cliId] || []).push(s);
+        });
+        Object.keys(porCli).forEach(cliId => {
+            const cli = (this.clis || []).find(c => String(c.id) === String(cliId));
+            if (!cli) return;
+            const tipo = (cli.type || '').toLowerCase();
+            // Sólo servicios de la SERIE (con serieId) y SIN horas registradas
+            const candidatos = porCli[cliId].filter(s => s.serieId && s.date && !this._servicioTieneHoras(s));
+            if (!candidatos.length) return;
+            const grupos = {};
+            const agregar = (periodo, arr, esperado) => {
+                if (arr.length > esperado) sospechosos.push({
+                    cliente: cli.name || '(sin nombre)', tipo, periodo, esperado,
+                    encontrado: arr.length,
+                    servicios: arr.slice().sort((a,b) => (a.date > b.date ? 1 : -1))
+                });
+            };
+            if (porSemana[tipo]) {
+                candidatos.forEach(s => { const k = this.getMon(new Date(s.date + 'T12:00:00')).toISOString().slice(0,10); (grupos[k] = grupos[k] || []).push(s); });
+                Object.keys(grupos).forEach(k => agregar('Semana del ' + k, grupos[k], porSemana[tipo]));
+            } else if (tipo === 'mensual') {
+                candidatos.forEach(s => { const k = (s.date || '').slice(0,7); (grupos[k] = grupos[k] || []).push(s); });
+                Object.keys(grupos).forEach(k => agregar('Mes ' + k, grupos[k], 1));
+            } else if (tipo === 'quincenal') {
+                candidatos.forEach(s => { const mon = this.getMon(new Date(s.date + 'T12:00:00')); const sem = Math.floor(mon.getTime() / 604800000); const k = Math.floor(sem / 2); (grupos[k] = grupos[k] || []).push(s); });
+                Object.keys(grupos).forEach(k => agregar('Quincena (semana del ' + this.getMon(new Date(grupos[k][0].date + 'T12:00:00')).toISOString().slice(0,10) + ')', grupos[k], 1));
+            }
+            // airbnb, construccion, unico → recurrencia irregular, no se revisan
+        });
+        return sospechosos;
+    }
+
+    // Abre el panel "Revisar servicios duplicados". 1ª versión: SÓLO LISTA, no borra.
+    openRevisarDuplicados() {
+        const sosp = this._detectarDuplicados();
+        let cuerpo;
+        if (!sosp.length) {
+            cuerpo = '<div style="padding:24px; text-align:center; color:#27ae60; font-size:1rem;">✅ Todo cuadra. No se encontraron servicios de más según la recurrencia de cada cliente.</div>';
+        } else {
+            cuerpo = '<div style="padding:4px 0; font-size:0.85rem; color:#555; margin-bottom:8px;">Estos clientes tienen <b>más servicios de los que su recurrencia indica</b>. Revisa cada bloque para ver cuál sobra. Los servicios <b>únicos</b> y los que <b>ya tienen horas registradas</b> NO aparecen aquí (se respetan). Por ahora esto sólo muestra la lista — nada se borra.</div>';
+            sosp.forEach(g => {
+                cuerpo += '<div style="border:1px solid #e0e0e0; border-radius:8px; margin-bottom:10px; overflow:hidden;">' +
+                    '<div style="background:#fdecea; padding:8px 12px; font-weight:700; color:#c0392b; font-size:0.9rem;">' +
+                        g.cliente + ' <span style="font-weight:400; color:#7b241c;">(' + g.tipo + ')</span> — ' + g.periodo +
+                        '<span style="float:right; font-weight:400;">esperado: ' + g.esperado + ' · encontrado: ' + g.encontrado + '</span>' +
+                    '</div><div style="padding:4px 12px;">';
+                g.servicios.forEach(s => {
+                    cuerpo += '<div style="padding:5px 0; border-bottom:1px solid #f2f2f2; font-size:0.85rem;">📅 ' + s.date + ' · grupo: ' + (s.grupo || '-') + ' · $' + (s.price !== undefined ? s.price : '-') + ' <span style="color:#aaa; font-size:0.72rem;">id ' + s.id + '</span></div>';
+                });
+                cuerpo += '</div></div>';
+            });
+        }
+        let ov = document.getElementById('revisarDupOverlay');
+        if (ov) ov.remove();
+        ov = document.createElement('div');
+        ov.id = 'revisarDupOverlay';
+        ov.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; padding:20px;';
+        ov.innerHTML = '<div style="background:#fff; border-radius:12px; max-width:640px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.3);">' +
+            '<div style="padding:14px 18px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">' +
+                '<h3 style="margin:0; font-size:1.1rem; color:#2c3e50;">🔍 Revisar servicios duplicados</h3>' +
+                '<button onclick="document.getElementById(\'revisarDupOverlay\').remove()" style="background:#ecf0f1; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:0.9rem;">Cerrar</button>' +
+            '</div>' +
+            '<div style="padding:14px 18px; overflow-y:auto;">' + cuerpo + '</div>' +
+        '</div>';
+        document.body.appendChild(ov);
+    }
     setView(v) {
         this.view = v;
         
