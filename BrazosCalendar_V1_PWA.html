@@ -211,6 +211,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     <div class="card">
       <h3>Google Drive</h3>
       <div class="ds" id="driveStatus">Sin conectar — toca para autenticar</div>
+      <div id="avisoPendientes" style="display:none;background:#7f1d1d;color:#fff;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px;font-weight:700;text-align:center;"></div>
       <button class="btn-drive" id="btnDrive" onclick="connectDrive()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M6.28 3l5.72 9.9L6.28 3zm-3.7 6.42L.86 13.1c-.4.69-.4 1.53 0 2.22l2.97 5.14h5.94L6.28 15.2 2.58 9.42zm18.84 0L17.72 3l-5.72 9.9 3.44 5.95h5.94l2.97-5.14c.4-.69.4-1.53 0-2.22l-3.69-3.07zm-7.12 8.76H9l-2.22 3.84h10.44l-2.22-3.84z"/></svg>
         Conectar Drive
@@ -420,6 +421,7 @@ setInterval(()=>{ try{ if(S.driveToken && S.folderId) refreshData(); }catch(e){}
 
 window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(checkForUpdate, 3000);
+  setTimeout(function(){try{actualizarAvisoPendientes();}catch(e){}}, 1500);
   const tok=localStorage.getItem(TKEY), exp=parseInt(localStorage.getItem(TEXP)||'0');
   if(tok && Date.now()<exp){
     S.driveToken=tok; markConnected();
@@ -521,6 +523,7 @@ function markConnected(){
   b.classList.add('connected');
   b.innerHTML='✅ Drive conectado';
   updateDriveHeaderBtn();
+  setTimeout(function(){ try{ subirPendientes(); }catch(e){} }, 1200);
 }
 
 async function loadSyncFile(){
@@ -560,35 +563,49 @@ async function dGet(url){
   return r.json();
 }
 
-async function saveHorariosToDrive(){
-  if(!S.driveToken||!S.folderId||!S.selectedDate) return;
-  const exp=parseInt(localStorage.getItem(TEXP)||'0');
-  if(exp && Date.now() > exp){
-    S.driveToken=null;
-    sdot('err','Token expirado — reconecta Drive');
-    toast('⚠️ Token expirado. Reconecta Drive para subir horarios.');
-    return;
-  }
+// ── Cola de días PENDIENTES de subir (si el token vence, NO se pierden las horas) ──
+var PEND_KEY='brazos_cal_pendientes';
+function _getPendientes(){ try{return JSON.parse(localStorage.getItem(PEND_KEY)||'[]');}catch(e){return [];} }
+function marcarPendiente(date){
+  if(!date) return;
+  var p=_getPendientes();
+  if(p.indexOf(date)<0){ p.push(date); localStorage.setItem(PEND_KEY,JSON.stringify(p)); }
+  actualizarAvisoPendientes();
+}
+function quitarPendiente(date){
+  localStorage.setItem(PEND_KEY,JSON.stringify(_getPendientes().filter(function(d){return d!==date;})));
+  actualizarAvisoPendientes();
+}
+function actualizarAvisoPendientes(){
+  var p=_getPendientes(), el=document.getElementById('avisoPendientes');
+  if(!el) return;
+  if(p.length){ el.style.display='block'; el.textContent='⚠ '+p.length+' día(s) de horarios SIN subir al Drive — reconecta el Drive para subirlos'; }
+  else { el.style.display='none'; }
+}
+
+// Sube los horarios de UN día específico. Devuelve true si subió OK, false si falló.
+async function subirHorariosDia(date){
+  if(!S.driveToken||!S.folderId||!date) return false;
+  var exp=parseInt(localStorage.getItem(TEXP)||'0');
+  if(exp && Date.now() > exp) return false;   // token vencido → no sube (se marca pendiente)
   try{
-    var date=S.selectedDate;
     var fname=horariosFile(date), key=horariosKey(date);
     var data=JSON.parse(localStorage.getItem(key)||'{}');
-    if(!Object.keys(data).length) return;
-    // Merge con Drive para no sobreescribir datos de otros empleados
+    if(!Object.keys(data).length) return true;   // nada que subir = ok
     var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
     var merged=Object.assign({},data);
     if(sr.files&&sr.files.length){
       try{
         var driveData=await dGet('https://www.googleapis.com/drive/v3/files/'+sr.files[0].id+'?alt=media');
-        // Merge: para cada empId en Drive, conservar si no está en local
         Object.keys(driveData||{}).forEach(function(eid){
-          if(!merged[eid]) merged[eid]=driveData[eid];
-          else{
-            // Local gana si es más reciente
-            var lt=new Date(merged[eid].savedAt||0).getTime();
-            var dt=new Date(driveData[eid].savedAt||0).getTime();
-            if(dt>lt) merged[eid]=driveData[eid];
-          }
+          if(!merged[eid]){ merged[eid]=driveData[eid]; return; }
+          // Fusionar CAMPO por campo (no sobrescribir el objeto entero): así NO se pierde
+          // una punta (shopOut/shopBack) si un lado la tiene y el otro no.
+          var d=driveData[eid], m=merged[eid];
+          ['shopOut','shopBack'].forEach(function(f){ if(!m[f]&&d[f]) m[f]=d[f]; });
+          if((!m.services||!m.services.length)&&d.services&&d.services.length) m.services=d.services;
+          if(!m.empName&&d.empName) m.empName=d.empName;
+          if(!m.group&&d.group) m.group=d.group;
         });
       }catch(e2){}
     }
@@ -605,18 +622,41 @@ async function saveHorariosToDrive(){
       url2='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
       method='POST';
     }
-    await fetch(url2,{method:method,headers:{Authorization:'Bearer '+S.driveToken},body:form});
-    sdot('ok','Sync '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}));
-  }catch(e){
-    console.warn('saveHorariosToDrive:',e.message);
-    if(e.status===401){
-      S.driveToken=null;
-      localStorage.removeItem(TKEY);
-      toast('⚠️ Token expirado. Reconecta Drive para subir horarios.');
-      sdot('err','Reconecta Drive');
+    var res=await fetch(url2,{method:method,headers:{Authorization:'Bearer '+S.driveToken},body:form});
+    if(!res.ok){
+      if(res.status===401){ S.driveToken=null; localStorage.removeItem(TKEY); sdot('err','Reconecta Drive'); }
+      return false;
     }
+    return true;
+  }catch(e){ return false; }
+}
+
+// Sube el día seleccionado; si falla, lo deja en la cola de pendientes (NO se pierde).
+async function saveHorariosToDrive(){
+  if(!S.selectedDate) return;
+  var date=S.selectedDate;
+  if(!S.driveToken){ marcarPendiente(date); sdot('err','Sin Drive — pendiente'); return; }
+  var ok=await subirHorariosDia(date);
+  if(ok){ quitarPendiente(date); sdot('ok','Sync '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})); }
+  else {
+    marcarPendiente(date);
+    sdot('err','⚠ No subió — pendiente');
+    toast('⚠️ No se pudo subir al Drive (token vencido). Se GUARDÓ y se reintentará al reconectar.');
   }
 }
+
+// Sube TODOS los días pendientes (se llama al reconectar el Drive).
+async function subirPendientes(){
+  if(!S.driveToken||!S.folderId) return;
+  var p=_getPendientes();
+  if(!p.length) return;
+  var quedan=[];
+  for(var i=0;i<p.length;i++){ var ok=await subirHorariosDia(p[i]); if(!ok) quedan.push(p[i]); }
+  localStorage.setItem(PEND_KEY,JSON.stringify(quedan));
+  actualizarAvisoPendientes();
+  if(p.length>quedan.length) toast('✅ Se subieron '+(p.length-quedan.length)+' día(s) de horarios que estaban pendientes');
+}
+
 
 async function saveReportsToDrive(){
   if(!S.driveToken || !S.folderId) return;
