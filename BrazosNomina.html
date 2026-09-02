@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💰 App Nómina</title>
+    <title>💰 App Nómina v3</title>
     <style>
         * {
             margin: 0;
@@ -1029,15 +1029,15 @@
                 <!-- Panel de captura manual de horas (no depende del Reloj Checador) -->
                 <div id="manualHoursPanel" style="display:none; margin-top:20px; background:#faf5ff; border:1.5px dashed #8e44ad; border-radius:10px; padding:16px;">
                     <div style="font-weight:700; color:#8e44ad; margin-bottom:10px;">✏️ Captura Manual de Horas</div>
-                    <p style="font-size:0.85rem; color:#666; margin:0 0 14px;">Escribe directamente las horas de cada empleado para este período. No se leen ni modifican datos del Reloj Checador.</p>
+                    <p style="font-size:0.85rem; color:#666; margin:0 0 14px;">Escribe directamente las horas de cada empleado para este período. No se leen ni modifican datos del Reloj Checador. Si "Nómina x %" del Scheduler ya envió esta semana, aparece precargada con la etiqueta 📤 Scheduler — usa Lunes como Fecha Inicio y Domingo como Fecha Fin de esa misma semana para que coincida exacto.</p>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
                         <div class="form-group">
                             <label>Fecha Inicio del Período:</label>
-                            <input type="date" id="manualPayrollStart" style="padding:10px; width:100%;">
+                            <input type="date" id="manualPayrollStart" style="padding:10px; width:100%;" onchange="app.renderManualHoursList()">
                         </div>
                         <div class="form-group">
                             <label>Fecha Fin del Período:</label>
-                            <input type="date" id="manualPayrollEnd" style="padding:10px; width:100%;">
+                            <input type="date" id="manualPayrollEnd" style="padding:10px; width:100%;" onchange="app.renderManualHoursList()">
                         </div>
                     </div>
                     <table style="margin-bottom:14px;">
@@ -1342,10 +1342,30 @@
                         </div>
                     </div>
                     <div id="form1099Content"></div>
+
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 30px 0 20px;">
+                        <h3 style="margin-top: 0;">📄 Resumen Anual (preparación Form W-2)</h3>
+                        <p style="color:#666; font-size:0.85rem; margin-bottom:15px;">
+                            Total del año por empleado W-2 (Formal + Simplificado) con las cajas del W-2: salario federal (Caja 1),
+                            federal retenido (Caja 2), salario y retención de Seguro Social (Cajas 3-4) y Medicare (Cajas 5-6).
+                            Empleados en modo <b>Simplificado</b> salen con $0 en las cajas de impuesto — su % de deducción no se
+                            reporta como retención real (ver aviso abajo); revísalos antes de emitir su W-2.
+                        </p>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Año:</label>
+                                <select id="taxW2Year" onchange="app.renderW2Summary()" style="padding:10px;"></select>
+                            </div>
+                            <div class="form-group" style="display:flex; align-items:flex-end;">
+                                <button class="btn btn-success" onclick="app.exportW2CSV()">📥 Exportar CSV</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="formW2Content"></div>
                 </div>
             </div>
         </div>
-        
+
         <!-- TAB CHEQUES -->
         <div class="tab-content" id="tabChecks">
             <div class="card">
@@ -1543,6 +1563,7 @@
         const app = {
             employees: [],
             attendances: [],
+            horasManualScheduler: [], // Semanas de "Nómina x %" (Reg/OT/Bonus) enviadas desde el Scheduler
             payrollRecords: [],
             checks: [], // Cheques generados (separado de payrollRecords)
             expenses: [], // Gastos con cheque
@@ -3638,9 +3659,17 @@
                         ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 7px; border-radius:10px; font-size:0.75rem; font-weight:500;">✓ Completo</span>`
                         : `<span style="background:#fff8e1; color:#f57f17; padding:2px 7px; border-radius:10px; font-size:0.75rem; font-weight:500;">⏳ Pendiente</span>`;
 
+                    // Sep2: si esta asistencia la rellenó el Scheduler (Shop→Shop de
+                    // BrazosCalendar), no vino del Reloj Checador — mostrarlo. (Las
+                    // semanas de "Nómina x %" NO llegan aquí: van a Captura Manual,
+                    // ver renderManualHoursList()).
+                    const origenBadge = att.source === 'calendario'
+                        ? ` <span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Vino del Scheduler: Shop→Shop de BrazosCalendar, no del Reloj Checador">📅 Calendario</span>`
+                        : '';
+
                     html += `
                         <tr style="background:${rowBg}; border-bottom:1px solid #f0f0f0;">
-                            <td style="padding:6px 10px; ${nameBold}">${lateIcon}${att.employeeName}</td>
+                            <td style="padding:6px 10px; ${nameBold}">${lateIcon}${att.employeeName}${origenBadge}</td>
                             <td style="padding:6px 10px; color:#555; white-space:nowrap;">${dateShort}</td>
                             <td style="padding:6px 10px; text-align:center; color:${isLate ? '#c0392b' : '#2c3e50'}; font-weight:500;">${this.formatTime12Hour(att.checkIn)}</td>
                             <td style="padding:6px 10px; text-align:center; color:#555;">${hasCheckOut ? this.formatTime12Hour(att.checkOut) : '<span style="color:#ccc;">—</span>'}</td>
@@ -4028,24 +4057,50 @@
                 };
             },
 
+            // Sep2: separado de openManualHoursPanel() para poder refrescar la
+            // lista cuando cambian las fechas del período, o cuando llega una
+            // semana nueva del Scheduler mientras el panel ya está abierto.
+            renderManualHoursList() {
+                const list = document.getElementById('manualHoursList');
+                if (!list || !this.employees || this.employees.length === 0) return;
+                const startStr = document.getElementById('manualPayrollStart')?.value || '';
+                const endStr = document.getElementById('manualPayrollEnd')?.value || '';
+                list.innerHTML = this.employees.map(emp => {
+                    // Si "Nómina x %" del Scheduler ya envió una semana para este
+                    // empleado que coincide con el período elegido, precargar
+                    // Reg/OT/Bonus — Ranu sólo revisa y da "Calcular". Si aún no
+                    // hay fechas elegidas, toma la más reciente que haya llegado.
+                    const candidatos = (this.horasManualScheduler || []).filter(en => String(en.employeeId) === String(emp.id));
+                    const pre = (startStr && endStr)
+                        ? candidatos.find(en => en.weekStart === startStr && en.weekEnd === endStr)
+                        : candidatos[candidatos.length - 1];
+                    const regVal = pre ? pre.regularHours : 0;
+                    const otVal = pre ? pre.overtimeHours : 0;
+                    const bonusVal = pre ? pre.bonus : 0;
+                    const badge = pre
+                        ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Precargado desde el Scheduler (Nómina x %), semana ${pre.weekStart} a ${pre.weekEnd}">📤 Scheduler</span>`
+                        : '';
+                    return `
+                    <tr>
+                        <td><strong>${emp.name}</strong>${badge}</td>
+                        <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
+                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${emp.reimbursement || 0}" style="width:90px; padding:6px;"></td>
+                    </tr>
+                `;
+                }).join('');
+            },
+
             openManualHoursPanel() {
                 const panel = document.getElementById('manualHoursPanel');
-                const list = document.getElementById('manualHoursList');
-                if (!panel || !list) return;
+                if (!panel) return;
                 if (!this.employees || this.employees.length === 0) {
                     alert('No hay empleados capturados todavía. Agrega empleados primero.');
                     return;
                 }
-                list.innerHTML = this.employees.map(emp => `
-                    <tr>
-                        <td><strong>${emp.name}</strong></td>
-                        <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
-                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="0" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="0" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="0" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${emp.reimbursement || 0}" style="width:90px; padding:6px;"></td>
-                    </tr>
-                `).join('');
+                this.renderManualHoursList();
                 panel.style.display = 'block';
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             },
@@ -5773,7 +5828,7 @@
                 setBtn('histBtnTaxes', isTaxes);
                 if (isCheques) this.refreshHistory();
                 else if (isNomina) this.renderSavedPayrollList();
-                else if (isTaxes) { this.populateTaxYearSelectors(); this.renderForm941Summary(); this.render1099Summary(); }
+                else if (isTaxes) { this.populateTaxYearSelectors(); this.renderForm941Summary(); this.render1099Summary(); this.renderW2Summary(); }
             },
 
             populateTaxYearSelectors() {
@@ -5781,7 +5836,7 @@
                 (this.checks || []).forEach(c => { const d = new Date(c.date); if (!isNaN(d)) years.add(d.getFullYear()); });
                 years.add(new Date().getFullYear());
                 const sorted = [...years].sort((a, b) => b - a);
-                ['tax941Year', 'tax1099Year'].forEach(id => {
+                ['tax941Year', 'tax1099Year', 'taxW2Year'].forEach(id => {
                     const sel = document.getElementById(id);
                     if (!sel) return;
                     const cur = sel.value;
@@ -5956,6 +6011,113 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = `1099_Resumen_${year}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            /**
+             * Junta los cheques de empleados W-2 (Formal + Simplificado) de todo el año
+             * y arma las cajas del Form W-2: Caja 1 (salario federal), Caja 2 (federal retenido),
+             * Cajas 3-4 (salario/impuesto Seguro Social) y Cajas 5-6 (salario/impuesto Medicare).
+             * Los Simplificado no calculan retención real, así que sus cajas de impuesto salen en $0
+             * (su % de deducción no es retención fiscal itemizada) — hay que revisarlos antes de emitir el W-2.
+             */
+            getW2Data(year) {
+                const checks = (this.checks || []).filter(c => {
+                    if (c.workerType === 'contractor_1099') return false; // 1099 no lleva W-2, lleva 1099-NEC
+                    const d = new Date(c.date);
+                    return d.getFullYear() === year;
+                });
+                const byEmployee = {};
+                checks.forEach(c => {
+                    if (!byEmployee[c.employeeId]) {
+                        byEmployee[c.employeeId] = {
+                            name: c.employeeName,
+                            workerType: c.workerType || 'w2_formal',
+                            count: 0,
+                            box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0
+                        };
+                    }
+                    const e = byEmployee[c.employeeId];
+                    const gross = parseFloat(c.gross) || 0;
+                    const federalTax = parseFloat(c.federalTax) || 0;
+                    const ssTax = parseFloat(c.socialSecurityTax) || 0;
+                    const medicareTax = parseFloat(c.medicareTax) || 0;
+                    e.count++;
+                    e.box1 += gross;      // Salario federal sujeto a impuesto
+                    e.box2 += federalTax; // Federal retenido
+                    e.box4 += ssTax;      // Impuesto Seguro Social retenido (empleado)
+                    e.box5 += gross;      // Salario sujeto a Medicare
+                    e.box6 += medicareTax; // Impuesto Medicare retenido (empleado)
+                });
+                Object.values(byEmployee).forEach(e => {
+                    // Caja 3: salario gravable de Seguro Social, calculado hacia atrás desde el impuesto retenido
+                    e.box3 = this.TAX_TABLES_2026.ssRate > 0 ? Math.round((e.box4 / this.TAX_TABLES_2026.ssRate) * 100) / 100 : 0;
+                    // Tope del salario base de Seguro Social del año
+                    if (e.box3 > this.TAX_TABLES_2026.ssWageBase) e.box3 = this.TAX_TABLES_2026.ssWageBase;
+                });
+                return byEmployee;
+            },
+
+            renderW2Summary() {
+                const year = parseInt(document.getElementById('taxW2Year')?.value) || new Date().getFullYear();
+                const data = this.getW2Data(year);
+                const fmt = (n) => '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const rows = Object.values(data);
+                if (rows.length === 0) {
+                    document.getElementById('formW2Content').innerHTML = `<div class="empty-state"><div class="empty-state-icon">📄</div><h3>Sin cheques W-2 en ${year}</h3></div>`;
+                    return;
+                }
+                const tipoLabel = (t) => t === 'w2_simplificado' ? 'Simplificado' : 'Formal';
+                let html = `
+                    <table>
+                        <thead><tr>
+                            <th>Empleado</th><th>Tipo</th><th>Cheques</th>
+                            <th>Caja 1<br>Salario Federal</th><th>Caja 2<br>Fed. Retenido</th>
+                            <th>Caja 3<br>Salario SS</th><th>Caja 4<br>SS Retenido</th>
+                            <th>Caja 5<br>Salario Medicare</th><th>Caja 6<br>Medicare Retenido</th>
+                        </tr></thead>
+                        <tbody>
+                            ${rows.map(e => {
+                                const simplificadoSinRetencion = e.workerType === 'w2_simplificado' && e.box2 === 0 && e.box4 === 0 && e.box6 === 0;
+                                const badge = simplificadoSinRetencion
+                                    ? ` <span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Simplificado no calcula retención itemizada — revisa antes de emitir su W-2">⚠️ revisar</span>`
+                                    : '';
+                                return `
+                                <tr>
+                                    <td>${e.name}${badge}</td>
+                                    <td>${tipoLabel(e.workerType)}</td>
+                                    <td>${e.count}</td>
+                                    <td>${fmt(e.box1)}</td>
+                                    <td>${fmt(e.box2)}</td>
+                                    <td>${fmt(e.box3)}</td>
+                                    <td>${fmt(e.box4)}</td>
+                                    <td>${fmt(e.box5)}</td>
+                                    <td>${fmt(e.box6)}</td>
+                                </tr>
+                            `; }).join('')}
+                        </tbody>
+                    </table>
+                    <p style="font-size:0.78rem; color:#888; margin-top:10px;">
+                        ⚠️ Esto es una PREPARACIÓN para ayudarte a llenar el Form W-2 de cada empleado — no sustituye revisión de tu contador.
+                        Los empleados en modo <b>Simplificado</b> no calculan retención fiscal itemizada, por lo que sus cajas de impuesto
+                        (2, 4 y 6) pueden salir en $0 aunque se les haya descontado un % — revísalos con tu contador antes de emitir su W-2.
+                    </p>`;
+                document.getElementById('formW2Content').innerHTML = html;
+            },
+
+            exportW2CSV() {
+                const year = parseInt(document.getElementById('taxW2Year')?.value) || new Date().getFullYear();
+                const data = this.getW2Data(year);
+                const tipoLabel = (t) => t === 'w2_simplificado' ? 'Simplificado' : 'Formal';
+                let csv = 'Empleado,Tipo,Cheques,Caja1 Salario Federal,Caja2 Federal Retenido,Caja3 Salario SS,Caja4 SS Retenido,Caja5 Salario Medicare,Caja6 Medicare Retenido\n';
+                Object.values(data).forEach(e => {
+                    csv += `"${e.name}",${tipoLabel(e.workerType)},${e.count},${e.box1.toFixed(2)},${e.box2.toFixed(2)},${e.box3.toFixed(2)},${e.box4.toFixed(2)},${e.box5.toFixed(2)},${e.box6.toFixed(2)}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `W2_Resumen_${year}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
             },
@@ -6705,9 +6867,79 @@
                         this.refreshAttendances();
                         console.log(`🕐 Reloj sync: +${added} nuevas, ~${updated} actualizadas`);
                     }
+                    // Después del Reloj (que ya tiene prioridad si reportó), completar
+                    // huecos con las horas que calcula el Scheduler (Calendario/Shop o
+                    // Nómina x %) — ver driveDownloadHorasScheduler().
+                    await this.driveDownloadHorasScheduler();
                     document.getElementById('driveSyncLabel').textContent = `Sync ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
                 } catch(err) {
                     console.error('driveDownloadClock error:', err.message);
+                }
+            },
+
+            // Sep2: lee appronto_horas_produccion.json que sube BrazosScheduler.
+            // Trae DOS listas independientes:
+            //  - entries: horas por DÍA (Shop→Shop de BrazosCalendar). Rellenan
+            //    SÓLO los huecos que ni el Reloj Checador ni una captura manual
+            //    ya cubrieron para ese empleado+fecha — nunca pisan una
+            //    asistencia existente. Por eso esto corre DESPUÉS de bajar el
+            //    Reloj, no antes.
+            //  - manualPayroll: semanas de "Nómina x %" ya convertidas a
+            //    Regular+Overtime+Bonus (esto NO es por día — ese módulo nunca
+            //    calculó horas diarias). Se guardan aparte para precargar el
+            //    panel "✏️ Captura Manual de Horas" — ver openManualHoursPanel().
+            async driveDownloadHorasScheduler() {
+                if (!this.driveConnected) return;
+                try {
+                    // Búsqueda GLOBAL (sin filtrar por carpeta): el Scheduler guarda
+                    // este archivo en su propia carpeta de Drive (BrazosCleaningApp),
+                    // distinta de la nuestra (AppProntoApp) — misma cuenta de Google,
+                    // así que buscar por nombre sin carpeta lo encuentra igual.
+                    const res = await fetch(
+                        `https://www.googleapis.com/drive/v3/files?q=name='appronto_horas_produccion.json'+and+trashed=false&fields=files(id)`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const data = await res.json();
+                    if (!data.files || data.files.length === 0) {
+                        console.log('appronto_horas_produccion.json no existe aún - skipping');
+                        return;
+                    }
+                    const fileRes = await fetch(
+                        `https://www.googleapis.com/drive/v3/files/${data.files[0].id}?alt=media`,
+                        { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                    );
+                    const schedData = await fileRes.json();
+                    let added = 0;
+                    (schedData.entries || []).forEach(en => {
+                        const existe = this.attendances.some(a =>
+                            String(a.employeeId) === String(en.employeeId) && a.date === en.date);
+                        if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
+                        this.attendances.push({
+                            id: 'sched_' + en.employeeId + '_' + en.date,
+                            employeeId: String(en.employeeId),
+                            employeeName: en.employeeName,
+                            date: en.date,
+                            checkIn: en.checkIn || null,
+                            checkOut: en.checkOut || null,
+                            hours: en.hours || 0,
+                            source: en.source || 'scheduler',
+                            fromScheduler: true
+                        });
+                        added++;
+                    });
+                    if (added > 0) {
+                        this.save();
+                        this.refreshAttendances();
+                        console.log(`📥 Horas del Scheduler: +${added} nuevas`);
+                    }
+                    // "Nómina x %" — guardar tal cual para precargar Captura Manual.
+                    this.horasManualScheduler = Array.isArray(schedData.manualPayroll) ? schedData.manualPayroll : [];
+                    localStorage.setItem('ap_nomina_horasManualScheduler', JSON.stringify(this.horasManualScheduler));
+                    // Si el panel de Captura Manual ya está abierto, refrescarlo.
+                    const panelAbierto = document.getElementById('manualHoursPanel');
+                    if (panelAbierto && panelAbierto.style.display !== 'none') this.renderManualHoursList();
+                } catch(err) {
+                    console.error('driveDownloadHorasScheduler error:', err.message);
                 }
             },
 
@@ -6904,6 +7136,7 @@
                 // Cargar datos normalmente
                 this.employees = JSON.parse(localStorage.getItem('ap_nomina_employees') || '[]');
                 this.attendances = JSON.parse(localStorage.getItem('ap_nomina_attendances') || '[]');
+                this.horasManualScheduler = JSON.parse(localStorage.getItem('ap_nomina_horasManualScheduler') || '[]');
                 this.payrollRecords = JSON.parse(localStorage.getItem('ap_nomina_payroll') || '[]');
                 this.checks   = JSON.parse(localStorage.getItem('ap_nomina_checks')   || '[]');
                 this.expenses = JSON.parse(localStorage.getItem('ap_nomina_expenses') || '[]');
