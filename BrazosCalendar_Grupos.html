@@ -59,14 +59,19 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .wtbtn.active{background:var(--brand);border-color:var(--brand);color:#fff}
 #rangeLabel{font-size:13px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700}
 
-.grid-scroll{overflow-x:auto;padding:14px 20px 8px}
-.cal-grid{display:grid;grid-template-columns:150px repeat(7,minmax(118px,1fr));gap:5px;min-width:970px}
+.scroll-hint{display:none;font-size:10px;color:var(--muted);text-align:center;padding:8px 20px 0}
+@media (max-width:900px){ .scroll-hint{display:block} }
+.grid-scroll{overflow-x:auto;padding:14px 20px 8px;-webkit-overflow-scrolling:touch}
+.cal-grid{display:grid;grid-template-columns:128px repeat(7,minmax(104px,1fr));gap:5px;min-width:860px}
 .gh{padding:8px 6px;text-align:center;border-radius:8px;background:var(--s1)}
 .gh.today{background:var(--bbg);border:1px solid var(--brand)}
 .gh .dn{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .gh .dd{font-size:18px;font-weight:800;font-family:'Barlow Condensed',sans-serif}
-.corner{background:transparent}
-.row-label{background:var(--s1);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+/* Columna de nombre de grupo fija a la izquierda: en celular, al deslizar para
+   ver los demás días, siempre se sabe a qué grupo pertenece cada renglón. */
+.corner,.row-label{position:sticky;left:0;z-index:5}
+.corner{background:var(--bg)}
+.row-label{background:var(--s1);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:3px;box-shadow:4px 0 8px -4px rgba(0,0,0,.4)}
 .row-label .gname{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;color:var(--brand)}
 .row-label .gteam{font-size:10px;color:var(--muted);line-height:1.5}
 .cell{background:var(--s2);border:1px solid var(--border);border-radius:9px;padding:6px 6px;min-height:78px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
@@ -77,6 +82,19 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .pill b{color:var(--brand);font-weight:700}
 .more{font-size:9px;color:var(--muted);text-align:center;margin-top:1px}
 .cell .none{font-size:10px;color:var(--muted);text-align:center;margin:auto}
+
+/* Celular en horizontal: la mayoría mide 650-900px de ancho ahí — encoger
+   columnas para que quepan los 7 días de un vistazo, sin tener que deslizar. */
+@media (orientation:landscape) and (max-height:500px){
+  .cal-grid{grid-template-columns:88px repeat(7,minmax(76px,1fr));gap:4px;min-width:0}
+  .row-label{padding:6px 8px}
+  .row-label .gname{font-size:12px}
+  .row-label .gteam{font-size:8.5px;line-height:1.35}
+  .cell{min-height:58px;padding:4px}
+  .pill{font-size:8.5px;padding:2px 4px}
+  .gh .dd{font-size:15px}
+  .scroll-hint{display:none}
+}
 
 .foot-note{text-align:center;font-size:11px;color:var(--muted);padding:14px 20px 4px;line-height:1.6}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--s2);border:1px solid var(--border);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;color:var(--text);opacity:0;transition:all .28s;pointer-events:none;z-index:300;white-space:nowrap}
@@ -143,6 +161,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
       </div>
       <div id="rangeLabel"></div>
     </div>
+    <div class="scroll-hint">◄ desliza para ver los demás días ►</div>
 
     <div class="grid-scroll">
       <div class="cal-grid" id="calGrid"></div>
