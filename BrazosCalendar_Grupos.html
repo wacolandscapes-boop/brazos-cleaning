@@ -297,14 +297,27 @@ function empName(id){
 function membersOf(grp){
   return (S.grupos[grp]||[]).map(String).filter(Boolean).map(empName).filter(Boolean);
 }
+
+// Muchos servicios (los generados por recurrencia) no traen clientName/address propios:
+// solo cliId. Hay que resolverlos contra S.clis, igual que hace BrazosCalendar.
+// El horario también puede venir como timeStart/timeEnd (recurrentes) o scheduledStart/scheduledEnd.
+function resolveSvc(s){
+  const cli=(S.clis||[]).find(c=>String(c.id)===String(s.cliId));
+  const clientName=s.clientName || (cli && cli.name) || '(sin cliente)';
+  const address=s.address || (cli ? [cli.address,cli.city].filter(Boolean).join(', ') : '');
+  const start=s.scheduledStart || s.timeStart || '';
+  const end=s.scheduledEnd || s.timeEnd || '';
+  return {clientName, address, start, end};
+}
+
 function svcsOf(grp,date){
   const members=(S.grupos[grp]||[]).map(String);
   return (S.servs||[])
-    .filter(s=>s.date===date && !s.cancelled && (String(s.empId)===String(grp) || members.includes(String(s.empId))))
+    .filter(s=>s.date===date && !s.cancelled && (String(s.empId)===String(grp) || String(s.grupo)===String(grp) || members.includes(String(s.empId))))
+    .map(s=>Object.assign({}, s, resolveSvc(s)))
     .sort((a,b)=>{
-      const ta=a.scheduledStart||a.timeStart||'', tb=b.scheduledStart||b.timeStart||'';
-      if(ta&&tb) return ta.localeCompare(tb);
-      if(ta&&!tb) return -1; if(!ta&&tb) return 1;
+      if(a.start&&b.start) return a.start.localeCompare(b.start);
+      if(a.start&&!b.start) return -1; if(!a.start&&b.start) return 1;
       return 0;
     });
 }
@@ -344,7 +357,7 @@ function renderGrid(){
       const cell=document.createElement('div'); cell.className='cell'+(d===td?' today':'')+(svcs.length?'':' empty');
       if(svcs.length){
         const shown=svcs.slice(0,3);
-        cell.innerHTML=shown.map(s=>`<div class="pill"><b>${s.scheduledStart?fmt12(s.scheduledStart):'—'}</b> ${s.clientName||''}</div>`).join('')
+        cell.innerHTML=shown.map(s=>`<div class="pill"><b>${s.start?fmt12(s.start):'—'}</b> ${s.clientName||''}</div>`).join('')
           + (svcs.length>3?`<div class="more">+${svcs.length-3} más</div>`:'');
       } else {
         cell.innerHTML='<div class="none">Sin servicios</div>';
@@ -368,7 +381,7 @@ function openDetail(grp,date){
   const body=document.getElementById('dmBody');
   body.innerHTML = (svcs.length ? svcs.map(s=>`
       <div class="dm-svc">
-        <div class="dm-time">${s.scheduledStart?fmt12(s.scheduledStart)+(s.scheduledEnd?' – '+fmt12(s.scheduledEnd):''):'Sin horario'}</div>
+        <div class="dm-time">${s.start?fmt12(s.start)+(s.end?' – '+fmt12(s.end):''):'Sin horario'}</div>
         <div style="flex:1;min-width:0">
           <div class="dm-name">${s.clientName||'—'}</div>
           <div class="dm-addr">${s.address||''}</div>
