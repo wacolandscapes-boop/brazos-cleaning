@@ -325,7 +325,10 @@ function svcsOf(grp,date){
 /* ── CUADRÍCULA: grupos (filas) x días de la semana activa (columnas) ── */
 function renderGrid(){
   const grid=document.getElementById('calGrid'); grid.innerHTML='';
-  const grpNames=Object.keys(S.grupos||{}).sort();
+  // Respetar el orden real de los grupos en el archivo (Grupo A, B, C... F, G),
+  // NO alfabético: "F"/"G" son más cortos que "Grupo A", así que un sort() los
+  // ponía primero por accidente.
+  const grpNames=Object.keys(S.grupos||{});
   const ws=activeWeekStart(), td=today();
 
   // Fila de encabezado: esquina vacía + 7 días
