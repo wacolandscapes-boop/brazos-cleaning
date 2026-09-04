@@ -4631,7 +4631,80 @@
                 const summaryM = cardsPerPage === 1 ? (hasExtras ? '6px' : '10px') : '6px';
                 const sigMt = cardsPerPage === 1 ? (hasExtras ? '12px' : '30px') : '10px';
                 const sigPt = cardsPerPage === 1 ? (hasExtras ? '10px' : '20px') : '8px';
-                
+
+                // FIX 2026-09-04: cuando las horas del empleado vienen de "Nómina x %"
+                // (captura semanal sin registro diario), periodAtt sale vacío y la Time
+                // Card mostraba toda la semana en "Off" con 0.00 horas totales, aunque
+                // sí hubiera horas capturadas. Ahora, si no hay asistencias diarias pero
+                // sí hay un registro de Nómina% (ya guardado en el historial de nómina,
+                // o pendiente de "Calcular"/"Guardar" recién llegado del Scheduler) para
+                // este empleado en este período exacto, se muestra un resumen con las
+                // horas totales en vez de la tabla diaria vacía.
+                if (periodAtt.length === 0) {
+                    const fmtISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    const startISO = fmtISO(startDate);
+                    const endISO = fmtISO(endDate);
+                    let nominaPct = null;
+                    const savedPeriod = (this.savedPayrollPeriods || []).find(pp => pp.start === startISO && pp.end === endISO);
+                    if (savedPeriod) {
+                        const entry = (savedPeriod.payroll || []).find(p => String(p.employeeId) === String(emp.id));
+                        if (entry && entry.totalHours > 0) nominaPct = entry;
+                    }
+                    if (!nominaPct) {
+                        const pending = (this.horasManualScheduler || []).find(en => String(en.employeeId) === String(emp.id) && en.weekStart === startISO && en.weekEnd === endISO);
+                        if (pending && ((pending.regularHours || 0) + (pending.overtimeHours || 0)) > 0) {
+                            nominaPct = {
+                                regularHours: pending.regularHours || 0,
+                                overtimeHours: pending.overtimeHours || 0,
+                                totalHours: (pending.regularHours || 0) + (pending.overtimeHours || 0),
+                                bonus: pending.bonus || 0,
+                                reimbursement: emp.reimbursement || 0
+                            };
+                        }
+                    }
+                    if (nominaPct) {
+                        const regHrs = nominaPct.regularHours || 0;
+                        const otHrs = nominaPct.overtimeHours || 0;
+                        const totHrs = nominaPct.totalHours || (regHrs + otHrs);
+                        return `
+                            <div class="timecard-printable tc-card" style="background: white; border: 2px solid #333; padding: ${padBase}; margin: ${marginBase}; max-width: 800px; font-family: Arial; box-sizing: border-box;">
+                                <div class="tc-header-center" style="text-align: center; margin-bottom: ${headerMb};">
+                                    <h1 style="margin: 0; color: #00b5ad; font-size: ${fs1}; font-weight: 900; letter-spacing: 1px;">${this.getCompanyName()}</h1>
+                                    <h2 style="margin: 4px 0 0 0; color: #34495e; font-size: ${fs2};">TIME CARD</h2>
+                                </div>
+                                <div class="tc-info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: ${infoMb}; padding: 10px 12px; background: #ecf0f1; border-radius: 5px; font-size: ${infoFs};">
+                                    <div><strong>Employee:</strong> ${emp.name}</div>
+                                    <div><strong>Pay Rate:</strong> $${this.formatMoney(emp.rate)}/hr</div>
+                                    <div><strong>Period:</strong> ${formatDateUSA(startDate)} - ${formatDateUSA(endDate)}</div>
+                                    <div><strong>Employee ID:</strong> ${emp.id}</div>
+                                </div>
+                                <div class="tc-summary" style="background: #ede9fe; padding: ${summaryP}; border-radius: 5px; margin: ${summaryM} 0; border-left: 4px solid #6d28d9;">
+                                    <h3 style="margin-top: 0; color: #6d28d9; font-size: ${cardsPerPage === 1 ? '1rem' : '0.8rem'};">📤 Horas de Nómina x % (sin detalle diario)</h3>
+                                    <div style="margin: 3px 0; font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.78rem'};">Regular Hours: ${regHrs.toFixed(2)} hrs</div>
+                                    ${otHrs > 0 ? `<div style="margin: 3px 0; font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.78rem'};">Overtime Hours: ${otHrs.toFixed(2)} hrs</div>` : ''}
+                                    <div style="margin: 6px 0; padding-top: 6px; border-top: 2px solid #6d28d9; font-size: ${cardsPerPage === 1 ? '1.1rem' : '0.85rem'};"><strong>TOTAL HOURS: ${totHrs.toFixed(2)} hrs</strong></div>
+                                    ${(nominaPct.bonus > 0) ? `<div style="margin: 3px 0; color: #8e44ad; font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.78rem'};">Bonus: +$${this.formatMoney(nominaPct.bonus)}</div>` : ''}
+                                    ${(nominaPct.reimbursement > 0) ? `<div style="margin: 3px 0; color: #16a085; font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.78rem'};">Reembolso: +$${this.formatMoney(nominaPct.reimbursement)}</div>` : ''}
+                                </div>
+                                <div class="tc-signatures" style="margin-top: ${sigMt}; padding-top: ${sigPt}; border-top: 2px solid #333;">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: ${cardsPerPage === 1 ? '30px' : '15px'};">
+                                        <div style="font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.75rem'};">
+                                            <div>Employee Signature:</div>
+                                            <div class="tc-sig-line" style="border-bottom: 2px solid #333; margin: ${cardsPerPage === 1 ? '20px 0 8px 0' : '10px 0 4px 0'};"></div>
+                                            <div class="tc-sig-date" style="text-align: center; color: #666; font-size: ${cardsPerPage === 1 ? '0.85rem' : '0.7rem'};">Date: ______________</div>
+                                        </div>
+                                        <div style="font-size: ${cardsPerPage === 1 ? '0.9rem' : '0.75rem'};">
+                                            <div>Supervisor Signature:</div>
+                                            <div class="tc-sig-line" style="border-bottom: 2px solid #333; margin: ${cardsPerPage === 1 ? '20px 0 8px 0' : '10px 0 4px 0'};"></div>
+                                            <div class="tc-sig-date" style="text-align: center; color: #666; font-size: ${cardsPerPage === 1 ? '0.85rem' : '0.7rem'};">Date: ______________</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
                 let html = `
                     <div class="timecard-printable tc-card" style="background: white; border: 2px solid #333; padding: ${padBase}; margin: ${marginBase}; max-width: 800px; font-family: Arial; box-sizing: border-box;">
                         <div class="tc-header-center" style="text-align: center; margin-bottom: ${headerMb};">
