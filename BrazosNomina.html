@@ -904,7 +904,7 @@
                         style="padding:6px 10px; font-size:0.9rem; border:1px solid #ddd; border-radius:6px;">
                         <option value="today">📅 Hoy</option>
                         <option value="week">Esta semana</option>
-                        <option value="lastweek">Semana pasada</option>
+                        <option value="lastweek" selected>Semana pasada</option>
                         <option value="month">Este mes</option>
                         <option value="lastmonth">Mes pasado</option>
                         <option value="last15">Últimos 15 días</option>
@@ -4290,20 +4290,51 @@
                             ? ` <span style="background:#e8f6f3; color:#117a65; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Horas fijas semanales configuradas en el perfil del empleado">🔁 Fijas</span>`
                             : '');
                     const prodHrs = prodHorasPorEmpleado[emp.id] || 0;
-                    const prodBadge = prodHrs > 0
+                    // FIX 2026-09-04: si el empleado ya tiene horas de Producción (Reloj
+                    // Checador/Scheduler Shop→Shop) en este período, se muestran los
+                    // números REALES directamente en los campos de Horas Regulares/Extra
+                    // (en vez de solo un badge al lado del nombre), pero esos campos se
+                    // bloquean (readonly) para que no puedan editarse ni sumarse otra vez
+                    // en calculateManualPayroll() — esas horas ya se pagan aparte con
+                    // "Calcular Nómina (Reloj Checador)". Bono/Reembolso siguen editables.
+                    const prodLock = prodHrs > 0;
+                    const regValFinal = prodLock ? prodHrs.toFixed(2) : regVal;
+                    const otValFinal = prodLock ? (otVal || 0) : otVal;
+                    const prodBadge = prodLock
                         ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
                         : '';
+                    const lockAttrs = prodLock ? ` disabled data-prodlock="1" title="Horas ya registradas en Producción — se calculan aparte con 'Calcular Nómina (Reloj Checador)'" style="width:90px; padding:6px; background:#f2f3f4; color:#1e8449; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
                     return `
                     <tr>
                         <td><strong>${emp.name}</strong>${badge}${prodBadge}</td>
                         <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
-                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regVal}" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regValFinal}"${lockAttrs}></td>
+                        <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otValFinal}"${lockAttrs}></td>
                         <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
                         <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
                     </tr>
                 `;
                 }).join('');
+            },
+
+            // FIX 2026-09-04: calcula el mismo rango Lunes-Domingo que usa
+            // calculatePayroll() para "Esta semana"/"Semana pasada" (respetando
+            // weekStartDay), para poder precargar solas las fechas de la Captura
+            // Manual — antes había que escribirlas a mano cada vez.
+            getWeekRangeFor(period) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const weekStartDay = this.workConfig.weekStartDay || 5;
+                const dayOfWeek = today.getDay();
+                const daysBack = (dayOfWeek - weekStartDay + 7) % 7;
+                const thisWeekStart = new Date(today);
+                thisWeekStart.setDate(today.getDate() - daysBack);
+                let startDate = new Date(thisWeekStart);
+                if (period === 'lastweek') startDate.setDate(thisWeekStart.getDate() - 7);
+                const endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+                const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                return { start: toISO(startDate), end: toISO(endDate) };
             },
 
             openManualHoursPanel() {
@@ -4312,6 +4343,18 @@
                 if (!this.employees || this.employees.length === 0) {
                     alert('No hay empleados capturados todavía. Agrega empleados primero.');
                     return;
+                }
+                // FIX 2026-09-04: precargar Fecha Inicio/Fin solas la primera vez que
+                // se abre el panel (si aún están vacías), usando la misma semana que
+                // tenga elegida "Período de Nómina" (Esta semana/Semana pasada) — así
+                // Ranu ya no tiene que escribirlas a mano cada vez que captura horas.
+                const startInput = document.getElementById('manualPayrollStart');
+                const endInput = document.getElementById('manualPayrollEnd');
+                if (startInput && endInput && !startInput.value && !endInput.value) {
+                    const mainPeriod = document.getElementById('payrollPeriod')?.value;
+                    const range = this.getWeekRangeFor(mainPeriod === 'week' ? 'week' : 'lastweek');
+                    startInput.value = range.start;
+                    endInput.value = range.end;
                 }
                 this.renderManualHoursList();
                 panel.style.display = 'block';
@@ -4335,9 +4378,14 @@
                     const empId = input.dataset.emp;
                     const emp = this.employees.find(e => String(e.id) === String(empId));
                     if (!emp) return;
-                    const regHours = parseFloat(input.value) || 0;
+                    // FIX 2026-09-04: si el campo está bloqueado (data-prodlock="1"),
+                    // esas horas ya vienen de Producción y se pagan aparte con
+                    // "Calcular Nómina (Reloj Checador)" — no se vuelven a contar aquí,
+                    // aunque el número siga visible en el campo. Bono/Reembolso de ese
+                    // mismo empleado sí se toman en cuenta normalmente más abajo.
+                    const regHours = (input.dataset.prodlock === '1') ? 0 : (parseFloat(input.value) || 0);
                     const otInput = document.querySelector(`.manualOtHours[data-emp="${empId}"]`);
-                    const otHours = otInput ? (parseFloat(otInput.value) || 0) : 0;
+                    const otHours = otInput ? ((otInput.dataset.prodlock === '1') ? 0 : (parseFloat(otInput.value) || 0)) : 0;
                     const bonusInput = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
                     const bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
                     const reimbInput = document.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
@@ -5528,70 +5576,70 @@
                 const rightStyle = 'padding:2px 6px; text-align:right;';
                 const centerStyle = 'padding:2px 6px; text-align:center;';
 
-                let payRows = `<tr><td style="${rowStyle}">Sueldo Regular</td><td style="${centerStyle}">${regHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate)}</td><td style="${rightStyle}">$${fmt(regPay)}</td><td style="${rightStyle}">$${fmt(ytd.regularPay)}</td></tr>`;
+                let payRows = `<tr><td style="${rowStyle}">Regular Pay</td><td style="${centerStyle}">${regHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate)}</td><td style="${rightStyle}">$${fmt(regPay)}</td><td style="${rightStyle}">$${fmt(ytd.regularPay)}</td></tr>`;
                 if (otHrs > 0 || ytd.overtimePay > 0) {
-                    payRows += `<tr><td style="${rowStyle}">Tiempo Extra</td><td style="${centerStyle}">${otHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate * 1.5)}</td><td style="${rightStyle}">$${fmt(otPay)}</td><td style="${rightStyle}">$${fmt(ytd.overtimePay)}</td></tr>`;
+                    payRows += `<tr><td style="${rowStyle}">Overtime</td><td style="${centerStyle}">${otHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate * 1.5)}</td><td style="${rightStyle}">$${fmt(otPay)}</td><td style="${rightStyle}">$${fmt(ytd.overtimePay)}</td></tr>`;
                 }
                 if (bonusPay > 0 || ytd.bonus > 0) {
-                    payRows += `<tr><td style="${rowStyle}">Bono</td><td style="${centerStyle}">—</td><td style="${centerStyle}">—</td><td style="${rightStyle}">$${fmt(bonusPay)}</td><td style="${rightStyle}">$${fmt(ytd.bonus)}</td></tr>`;
+                    payRows += `<tr><td style="${rowStyle}">Bonus</td><td style="${centerStyle}">—</td><td style="${centerStyle}">—</td><td style="${rightStyle}">$${fmt(bonusPay)}</td><td style="${rightStyle}">$${fmt(ytd.bonus)}</td></tr>`;
                 }
 
                 let taxRows = '';
-                if (fedTax > 0 || ytd.federalTax > 0) taxRows += `<tr><td style="${rowStyle}">Impuesto Federal</td><td style="${rightStyle}">$${fmt(fedTax)}</td><td style="${rightStyle}">$${fmt(ytd.federalTax)}</td></tr>`;
-                if (ssTax > 0 || ytd.socialSecurity > 0) taxRows += `<tr><td style="${rowStyle}">Seguro Social</td><td style="${rightStyle}">$${fmt(ssTax)}</td><td style="${rightStyle}">$${fmt(ytd.socialSecurity)}</td></tr>`;
+                if (fedTax > 0 || ytd.federalTax > 0) taxRows += `<tr><td style="${rowStyle}">Federal Tax</td><td style="${rightStyle}">$${fmt(fedTax)}</td><td style="${rightStyle}">$${fmt(ytd.federalTax)}</td></tr>`;
+                if (ssTax > 0 || ytd.socialSecurity > 0) taxRows += `<tr><td style="${rowStyle}">Social Security</td><td style="${rightStyle}">$${fmt(ssTax)}</td><td style="${rightStyle}">$${fmt(ytd.socialSecurity)}</td></tr>`;
                 if (medTax > 0 || ytd.medicare > 0) taxRows += `<tr><td style="${rowStyle}">Medicare</td><td style="${rightStyle}">$${fmt(medTax)}</td><td style="${rightStyle}">$${fmt(ytd.medicare)}</td></tr>`;
                 if (!taxRows) taxRows = `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
 
                 const dedRows = (check.deductions > 0 || ytd.deductions > 0)
-                    ? `<tr><td style="${rowStyle}">Deducción</td><td style="${rightStyle}">$${fmt(check.deductions)}</td><td style="${rightStyle}">$${fmt(ytd.deductions)}</td></tr>`
+                    ? `<tr><td style="${rowStyle}">Deduction</td><td style="${rightStyle}">$${fmt(check.deductions)}</td><td style="${rightStyle}">$${fmt(ytd.deductions)}</td></tr>`
                     : `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
 
                 const otherRows = (reimbPay > 0 || ytd.reimbursement > 0)
-                    ? `<tr><td style="${rowStyle}">Reembolso</td><td style="${rightStyle}">$${fmt(reimbPay)}</td><td style="${rightStyle}">$${fmt(ytd.reimbursement)}</td></tr>`
+                    ? `<tr><td style="${rowStyle}">Reimbursement</td><td style="${rightStyle}">$${fmt(reimbPay)}</td><td style="${rightStyle}">$${fmt(ytd.reimbursement)}</td></tr>`
                     : `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
 
                 return `
                     <div style="padding:6px 16px 2px; display:flex; justify-content:space-between; font-size:9pt; border-bottom:1px solid #ccc;">
                         <strong>${this.getCompanyName()}</strong>
-                        <span style="color:#555;">Cheque #${check.checkNumber}</span>
+                        <span style="color:#555;">Check #${check.checkNumber}</span>
                     </div>
                     <div style="text-align:center; font-size:7.5pt; color:#999; letter-spacing:1.5px; padding:2px; text-transform:uppercase;">${label}</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; padding:2px 16px; font-size:8.5pt; margin-bottom:2px;">
                         <div><strong>${check.employeeName}</strong>${check.employeeAddress ? '<br>' + check.employeeAddress : ''}${check.employeeCity ? '<br>' + check.employeeCity : ''}</div>
-                        <div style="text-align:right;">Período: ${check.period || dateUSA}<br>Fecha de Pago: ${dateUSA}</div>
+                        <div style="text-align:right;">Period: ${check.period || dateUSA}<br>Pay Date: ${dateUSA}</div>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 14px; padding:0 16px;">
                         <div>
-                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">PAGO</div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">PAY</div>
                             <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
-                                <tr style="color:#888;"><td></td><td style="text-align:center;">Hrs</td><td style="text-align:center;">Tarifa</td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                <tr style="color:#888;"><td></td><td style="text-align:center;">Hours</td><td style="text-align:center;">Rate</td><td style="text-align:right;">Current</td><td style="text-align:right;">YTD</td></tr>
                                 ${payRows}
                             </table>
-                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">OTROS PAGOS</div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">OTHER PAY</div>
                             <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
-                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Current</td><td style="text-align:right;">YTD</td></tr>
                                 ${otherRows}
                             </table>
                         </div>
                         <div>
-                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">IMPUESTOS</div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">TAXES</div>
                             <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
-                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Current</td><td style="text-align:right;">YTD</td></tr>
                                 ${taxRows}
                             </table>
-                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">DEDUCCIONES</div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">DEDUCTIONS</div>
                             <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
-                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Current</td><td style="text-align:right;">YTD</td></tr>
                                 ${dedRows}
                             </table>
                         </div>
                     </div>
                     <table style="width:calc(100% - 32px); margin:5px 16px 3px; border-collapse:collapse; font-size:7.8pt; border:1px solid #ccc;">
-                        <tr style="color:#888;"><td style="padding:2px 6px;">RESUMEN</td><td style="text-align:right; padding:2px 6px;">Actual</td><td style="text-align:right; padding:2px 6px;">Acum.Año</td></tr>
-                        <tr><td style="padding:2px 6px;">Pago Total</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayYtd)}</td></tr>
-                        <tr><td style="padding:2px 6px;">Impuestos</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesYtd)}</td></tr>
-                        <tr><td style="padding:2px 6px;">Deducciones</td><td style="text-align:right; padding:2px 6px;">$${fmt(check.deductions)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(ytd.deductions)}</td></tr>
-                        <tr style="background:#e8f5e9; font-weight:bold; color:#1565c0;"><td style="padding:3px 6px; border-top:2px solid #27ae60;">PAGO NETO</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(check.net)}</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(netYtd)}</td></tr>
+                        <tr style="color:#888;"><td style="padding:2px 6px;">SUMMARY</td><td style="text-align:right; padding:2px 6px;">Current</td><td style="text-align:right; padding:2px 6px;">YTD</td></tr>
+                        <tr><td style="padding:2px 6px;">Total Pay</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayYtd)}</td></tr>
+                        <tr><td style="padding:2px 6px;">Taxes</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesYtd)}</td></tr>
+                        <tr><td style="padding:2px 6px;">Deductions</td><td style="text-align:right; padding:2px 6px;">$${fmt(check.deductions)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(ytd.deductions)}</td></tr>
+                        <tr style="background:#e8f5e9; font-weight:bold; color:#1565c0;"><td style="padding:3px 6px; border-top:2px solid #27ae60;">NET PAY</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(check.net)}</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(netYtd)}</td></tr>
                     </table>
                 `;
             },
@@ -5720,7 +5768,11 @@
                             '<div class="cf-payee-name2">' + check.employeeName + '</div>' +
                             (check.period ? '<div class="cf-memo">' + check.period + '</div>' : '') +
                             (check.signatureUrl ? '<img src="' + check.signatureUrl + '" class="cf-signature" style="position:absolute; z-index:1; top:' + cfg.signature_top + 'in; right:' + cfg.signature_right + 'in; width:' + (cfg.signature_width || 1.5) + 'in; pointer-events:none;">' : '') +
-                            '<div class="cf-sigline"></div>' +
+                            // FIX 2026-09-04: la raya bajo la firma es para el cheque REAL
+                            // (donde el papel no la trae impresa); el cheque de MUESTRA es
+                            // solo para superponer sobre un cheque físico real y verificar
+                            // que los campos coincidan — Ranu pidió que no lleve esta línea.
+                            (check.id === 'sample' ? '' : '<div class="cf-sigline"></div>') +
                         '</div>';
 
                     // Talón helper — misma estructura para secciones 2 y 3
