@@ -1542,7 +1542,19 @@
                 <summary style="cursor:pointer; color:#1565c0; font-weight:bold; padding:8px; background:#e3f2fd; border-radius:6px;">
                     📋 Saldo Inicial YTD (si viene de QuickBooks)
                 </summary>
-                <p style="font-size:0.82rem; color:#666; margin:10px 0;">Captura aquí, UNA SOLA VEZ, los acumulados del año que ya llevaba este empleado en QuickBooks antes de migrar a Nómina (los ves en su último talón). Ponlos en 0 al iniciar un año nuevo.</p>
+                <p style="font-size:0.82rem; color:#666; margin:10px 0;">Captura aquí, UNA SOLA VEZ, los acumulados del año que ya llevaba este empleado en QuickBooks antes de migrar a Nómina (los ves en su último talón).</p>
+                <!-- FIX 2026-09-04 (re-aplicado — se había revertido por accidente):
+                     antes había que recordar poner estos campos en $0 manualmente cada
+                     enero, o el saldo inicial de 2026 se seguiría sumando para siempre
+                     en los talones de 2027, 2028, etc. Ahora se guarda el AÑO exacto al
+                     que corresponde este saldo, y getYtdBreakdown() solo lo aplica a
+                     talones de ese mismo año — no hace falta borrarlo ni acordarse de
+                     nada al cambiar de año. -->
+                <div class="form-group" style="max-width:220px; margin-bottom:10px;">
+                    <label>Año al que corresponde este saldo:</label>
+                    <input type="number" id="empYtdOpenYear" step="1" min="2020" max="2099" placeholder="2026" value="2026">
+                    <small style="color:#7f8c8d;">El saldo solo se aplicará a los cheques de ESTE año — en años siguientes se ignora solo, sin que tengas que borrarlo.</small>
+                </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div class="form-group">
                         <label>Sueldo Regular YTD ($):</label>
@@ -2724,6 +2736,7 @@
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
                 document.getElementById('empStandingHours').value = 0;
+                document.getElementById('empYtdOpenYear').value = new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = 0;
                 document.getElementById('empYtdOpenOvertimePay').value = 0;
                 document.getElementById('empYtdOpenBonus').value = 0;
@@ -2765,6 +2778,7 @@
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
                 document.getElementById('empStandingHours').value = emp.standingHours || 0;
+                document.getElementById('empYtdOpenYear').value = emp.ytdOpenYear || new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = emp.ytdOpenRegularPay || 0;
                 document.getElementById('empYtdOpenOvertimePay').value = emp.ytdOpenOvertimePay || 0;
                 document.getElementById('empYtdOpenBonus').value = emp.ytdOpenBonus || 0;
@@ -2877,6 +2891,7 @@
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
                         emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
+                        emp.ytdOpenYear = parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear();
                         emp.ytdOpenRegularPay = parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0;
                         emp.ytdOpenOvertimePay = parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0;
                         emp.ytdOpenBonus = parseFloat(document.getElementById('empYtdOpenBonus').value) || 0;
@@ -2913,6 +2928,7 @@
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
                         standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
+                        ytdOpenYear: parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear(),
                         ytdOpenRegularPay: parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0,
                         ytdOpenOvertimePay: parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0,
                         ytdOpenBonus: parseFloat(document.getElementById('empYtdOpenBonus').value) || 0,
@@ -4382,14 +4398,16 @@
                     const empId = input.dataset.emp;
                     const emp = this.employees.find(e => String(e.id) === String(empId));
                     if (!emp) return;
-                    // FIX 2026-09-04: si el campo está bloqueado (data-prodlock="1"),
-                    // esas horas ya vienen de Producción y se pagan aparte con
-                    // "Calcular Nómina (Reloj Checador)" — no se vuelven a contar aquí,
-                    // aunque el número siga visible en el campo. Bono/Reembolso de ese
-                    // mismo empleado sí se toman en cuenta normalmente más abajo.
-                    const regHours = (input.dataset.prodlock === '1') ? 0 : (parseFloat(input.value) || 0);
+                    // FIX 2026-09-04 (re-aplicado — se había revertido por accidente):
+                    // el campo bloqueado (data-prodlock="1") de horas de Producción
+                    // SÍ debe pagarse aquí con el número real que se ve en pantalla.
+                    // Zerarlo hacía que esos empleados desaparecieran por completo del
+                    // resumen final (el guard de abajo los omite si quedan en 0/0/0/0),
+                    // y mergePayrollCalc() de todas formas REEMPLAZA por empleado, no
+                    // suma — así que nunca hubo riesgo real de pagar doble.
+                    const regHours = parseFloat(input.value) || 0;
                     const otInput = document.querySelector(`.manualOtHours[data-emp="${empId}"]`);
-                    const otHours = otInput ? ((otInput.dataset.prodlock === '1') ? 0 : (parseFloat(otInput.value) || 0)) : 0;
+                    const otHours = otInput ? (parseFloat(otInput.value) || 0) : 0;
                     const bonusInput = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
                     const bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
                     const reimbInput = document.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
@@ -5534,7 +5552,12 @@
                     totals.medicare += c.medicareTax || 0;
                     totals.deductions += c.deductions || 0;
                 });
-                if (emp) {
+                // FIX 2026-09-04 (re-aplicado — se había revertido por accidente): el
+                // saldo inicial YTD ahora solo se suma si corresponde EXACTAMENTE al
+                // año que se está calculando — así ya no hay que acordarse de ponerlo
+                // en $0 cada enero; un saldo capturado para 2026 deja de aplicarse
+                // solo en los talones de 2027 en adelante.
+                if (emp && String(emp.ytdOpenYear || '') === String(year)) {
                     totals.regularPay += emp.ytdOpenRegularPay || 0;
                     totals.overtimePay += emp.ytdOpenOvertimePay || 0;
                     totals.bonus += emp.ytdOpenBonus || 0;
@@ -6761,63 +6784,19 @@
             viewSavedPayroll(id) {
                 const period = this.savedPayrollPeriods.find(p => p.id === id);
                 if (!period) return;
-                const startDate = new Date(period.start + 'T00:00:00');
-                const endDate = new Date(period.end + 'T23:59:59');
-                
-                // Recalculate from attendances
-                const periodAttendances = this.attendances.filter(a => {
-                    const d = new Date(a.date + 'T00:00:00');
-                    return d >= startDate && d <= endDate && a.checkIn;
-                });
-                
-                if (periodAttendances.length === 0) {
-                    document.getElementById('histNominaDetail').innerHTML = '<p style="color:#e74c3c; padding:20px;">⚠️ No se encontraron asistencias para este período.</p>';
+
+                // FIX 2026-09-04 (re-aplicado — se había revertido por accidente):
+                // esto recalculaba desde this.attendances (solo Reloj Checador), por lo
+                // que cualquier nómina hecha con Captura Manual/Producción salía vacía o
+                // incompleta (sin bono, sin reembolso, a veces "no se encontraron
+                // asistencias"). Ahora se usa directamente period.payroll, que es
+                // exactamente lo que se calculó y guardó con "Guardar Nómina".
+                const payrollArr = ((period.payroll || []).slice()).sort((a,b) => (a.employeeName||'').localeCompare(b.employeeName||''));
+
+                if (payrollArr.length === 0) {
+                    document.getElementById('histNominaDetail').innerHTML = '<p style="color:#e74c3c; padding:20px;">⚠️ Este período no tiene datos de nómina guardados.</p>';
                     return;
                 }
-                
-                // Build payroll same as calculatePayroll
-                const payroll = {};
-                periodAttendances.forEach(att => {
-                    if (!payroll[att.employeeId]) {
-                        const emp = this.employees.find(e => e.id === att.employeeId);
-                        payroll[att.employeeId] = { employeeId: att.employeeId, employeeName: att.employeeName, rate: emp ? emp.rate : 0, empDeduction: emp ? (emp.deduction || 0) : 0, regularHours: 0, overtimeHours: 0, totalHours: 0, totalWorkedHours: 0, lunchDeductions: 0, lateMinutes: 0, latePenalty: 0, regularPay: 0, overtimePay: 0, grossPay: 0, deductions: 0, netPay: 0 };
-                    }
-                    const p = payroll[att.employeeId];
-                    let dh = Math.round(att.hours * 100) / 100;
-                    p.totalWorkedHours = Math.round((p.totalWorkedHours + dh) * 100) / 100;
-                    if (this.workConfig.enableLunchBreak && dh >= this.workConfig.lunchThreshold) {
-                        dh = Math.round((dh - this.workConfig.lunchDuration) * 100) / 100;
-                        p.lunchDeductions = Math.round((p.lunchDeductions + this.workConfig.lunchDuration) * 100) / 100;
-                    }
-                    if (this.workConfig.enableLateDeduction && att.checkIn) {
-                        const attDay2 = new Date(att.date + 'T12:00:00').getDay();
-                        const isWeekend2 = attDay2 === 0 || attDay2 === 6;
-                        if (!isWeekend2) {
-                            const [sH, sM] = this.workConfig.startTime.split(':').map(Number);
-                            const [cH, cM] = att.checkIn.split(':').map(Number);
-                            const retraso2 = (cH * 60 + cM) - (sH * 60 + sM);
-                            const tol2 = this.workConfig.lateTolerance || 0;
-                            if (retraso2 > tol2) p.lateMinutes += Math.min(retraso2, this.workConfig.lateDeductionMax || 30);
-                        }
-                    }
-                    if (this.workConfig.enableOvertime && dh > this.workConfig.overtimeThreshold) {
-                        p.regularHours = Math.round((p.regularHours + this.workConfig.overtimeThreshold) * 100) / 100;
-                        p.overtimeHours = Math.round((p.overtimeHours + (dh - this.workConfig.overtimeThreshold)) * 100) / 100;
-                    } else {
-                        p.regularHours = Math.round((p.regularHours + dh) * 100) / 100;
-                    }
-                    p.totalHours = Math.round((p.totalHours + dh) * 100) / 100;
-                });
-                Object.values(payroll).forEach(p => {
-                    p.regularPay = p.regularHours * p.rate;
-                    p.overtimePay = p.overtimeHours * p.rate * 1.5;
-                    p.grossPay = p.regularPay + p.overtimePay;
-                    if (p.lateMinutes > 0) p.latePenalty = (p.lateMinutes / 60) * p.rate;
-                    if (p.empDeduction > 0) p.deductions = p.grossPay * p.empDeduction / 100;
-                    p.netPay = p.grossPay - p.latePenalty - p.deductions;
-                });
-                
-                const payrollArr = Object.values(payroll).sort((a,b) => a.employeeName.localeCompare(b.employeeName));
                 const totalGross = payrollArr.reduce((s,p) => s+p.grossPay, 0);
                 const totalLate = payrollArr.reduce((s,p) => s+p.latePenalty, 0);
                 const totalDed = payrollArr.reduce((s,p) => s+p.deductions, 0);
@@ -6884,33 +6863,15 @@
             exportSavedPayrollCSV(id) {
                 const period = this.savedPayrollPeriods.find(p => p.id === id);
                 if (!period) return;
-                const startDate = new Date(period.start + 'T00:00:00');
-                const endDate = new Date(period.end + 'T23:59:59');
-                const periodAttendances = this.attendances.filter(a => {
-                    const d = new Date(a.date + 'T00:00:00');
-                    return d >= startDate && d <= endDate && a.hours;
-                });
-                // Quick recalc
-                const payroll = {};
-                periodAttendances.forEach(att => {
-                    if (!payroll[att.employeeId]) {
-                        const emp = this.employees.find(e => e.id === att.employeeId);
-                        payroll[att.employeeId] = { employeeName: att.employeeName, rate: emp ? emp.rate : 0, empDeduction: emp ? (emp.deduction||0) : 0, totalHours: 0, lunchDeductions: 0, lateMinutes: 0, latePenalty: 0, grossPay: 0, deductions: 0, netPay: 0, regularHours: 0, overtimeHours: 0 };
-                    }
-                    const p = payroll[att.employeeId];
-                    let dh = Math.round(att.hours * 100) / 100;
-                    if (this.workConfig.enableLunchBreak && dh >= this.workConfig.lunchThreshold) { dh = Math.round((dh - this.workConfig.lunchDuration)*100)/100; p.lunchDeductions += this.workConfig.lunchDuration; }
-                    if (this.workConfig.enableLateDeduction && att.checkIn) { const attDay3=new Date(att.date+'T12:00:00').getDay(); if(attDay3!==0 && attDay3!==6) { const [sH,sM]=this.workConfig.startTime.split(':').map(Number); const [cH,cM]=att.checkIn.split(':').map(Number); const retraso3=(cH*60+cM)-(sH*60+sM); const tol3=this.workConfig.lateTolerance||0; if(retraso3>tol3) p.lateMinutes+=Math.min(retraso3,this.workConfig.lateDeductionMax||30); } }
-                    if (this.workConfig.enableOvertime && dh > this.workConfig.overtimeThreshold) { p.regularHours+=this.workConfig.overtimeThreshold; p.overtimeHours+=(dh-this.workConfig.overtimeThreshold); } else { p.regularHours+=dh; }
-                    p.totalHours = Math.round((p.totalHours + dh)*100)/100;
-                });
-                Object.values(payroll).forEach(p => {
-                    p.grossPay = p.regularHours * p.rate + p.overtimeHours * p.rate * 1.5;
-                    if (p.lateMinutes > 0) p.latePenalty = (p.lateMinutes/60)*p.rate;
-                    if (p.empDeduction > 0) p.deductions = p.grossPay * p.empDeduction / 100;
-                    p.netPay = p.grossPay - p.latePenalty - p.deductions;
-                });
-                const rows = Object.values(payroll).sort((a,b)=>a.employeeName.localeCompare(b.employeeName));
+                // FIX 2026-09-04 (re-aplicado — se había revertido por accidente): igual
+                // que viewSavedPayroll(), este CSV se recalculaba solo desde asistencias
+                // del Reloj Checador. Ahora usa directamente period.payroll (lo realmente
+                // guardado), que incluye Producción, Captura Manual, bono y reembolso.
+                const rows = ((period.payroll || []).slice()).sort((a,b)=>(a.employeeName||'').localeCompare(b.employeeName||''));
+                if (rows.length === 0) {
+                    alert('Este período no tiene datos de nómina guardados.');
+                    return;
+                }
                 const headers = ['Empleado','Horas','Pago Bruto','Tardanza (min)','Desc. Tardanza','Deduccion %','Desc. Deduccion','Pago Neto'];
                 const csvRows = rows.map(p => [p.employeeName, p.totalHours.toFixed(2), p.grossPay.toFixed(2), p.lateMinutes, p.latePenalty.toFixed(2), p.empDeduction, p.deductions.toFixed(2), p.netPay.toFixed(2)]);
                 const totalRow = ['TOTAL', rows.reduce((s,p)=>s+p.totalHours,0).toFixed(2), rows.reduce((s,p)=>s+p.grossPay,0).toFixed(2), rows.reduce((s,p)=>s+p.lateMinutes,0), rows.reduce((s,p)=>s+p.latePenalty,0).toFixed(2), '', rows.reduce((s,p)=>s+p.deductions,0).toFixed(2), rows.reduce((s,p)=>s+p.netPay,0).toFixed(2)];
