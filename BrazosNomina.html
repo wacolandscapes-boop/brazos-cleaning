@@ -843,6 +843,18 @@
                         <h2 style="margin:0;">👥 Empleados Registrados &nbsp;<span style="font-size:0.9rem; font-weight:normal; color:#7f8c8d;">(<span id="empCount">0</span> registrados)</span></h2>
                         <span id="employeesContent_icon" class="collapse-icon collapsed" style="font-size:1.5rem; color:#2c3e50;">▼</span>
                     </div>
+                    <!-- Nombre de la empresa (FIX 2026-09-03: getCompanyName()/el encabezado leían
+                         ap_companyConfig pero ninguna app lo escribía jamás — siempre se veía el
+                         placeholder literal "{{company_name}}". Aquí se agrega dónde capturarlo. -->
+                    <div style="display:flex; align-items:center; gap:6px; background:#e8f6f3; border:1px solid #a3e4d7; border-radius:8px; padding:6px 12px; flex-shrink:0;">
+                        <span style="font-size:0.8rem; color:#117a65; font-weight:600; white-space:nowrap;">🏢 Empresa:</span>
+                        <input type="text" id="companyNameInput" placeholder="Brazos Cleaning Services"
+                            style="width:170px; font-weight:bold; font-size:0.9rem; border:1px solid #ddd; border-radius:6px; padding:4px 6px;">
+                        <button onclick="app.saveCompanyName()"
+                            style="background:#16a085; color:white; border:none; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:0.8rem; font-weight:600; white-space:nowrap;">
+                            💾 Guardar
+                        </button>
+                    </div>
                     <!-- PIN Admin compacto -->
                     <div style="display:flex; align-items:center; gap:6px; background:#fff5e6; border:1px solid #f0d0a0; border-radius:8px; padding:6px 12px; flex-shrink:0;">
                         <span style="font-size:0.8rem; color:#b7770d; font-weight:600; white-space:nowrap;">🔑 PIN Admin:</span>
@@ -1663,6 +1675,13 @@
                 }
                 const adminPinField = document.getElementById('adminPin');
                 if (adminPinField) adminPinField.value = this.adminPin;
+                try {
+                    const companyNameField = document.getElementById('companyNameInput');
+                    if (companyNameField) {
+                        const cfg = JSON.parse(localStorage.getItem('ap_companyConfig') || '{}');
+                        if (cfg.name) companyNameField.value = cfg.name;
+                    }
+                } catch(e) {}
                 this.loadWorkConfig();
                 this.loadCheckConfig();
                 setTimeout(() => this.showDeviceInfo(), 100);
@@ -2579,6 +2598,20 @@
                 if (tab === 'history') { this.refreshHistory(); this.renderSavedPayrollList(); }
             },
             
+            // FIX 2026-09-03: guarda ap_companyConfig (compartido con el resto de las apps
+            // de Brazos por convención de nombre de key), que antes ninguna app escribía.
+            saveCompanyName() {
+                const name = document.getElementById('companyNameInput').value.trim();
+                if (!name) { alert('Escribe el nombre de la empresa'); return; }
+                try {
+                    const cfg = JSON.parse(localStorage.getItem('ap_companyConfig') || '{}');
+                    cfg.name = name;
+                    localStorage.setItem('ap_companyConfig', JSON.stringify(cfg));
+                    this.applyCompanyBranding();
+                    alert('✅ Nombre de la empresa actualizado');
+                } catch (e) { alert('❌ Error al guardar: ' + e.message); }
+            },
+
             // ADMIN
             saveAdminPin() {
                 const pin = document.getElementById('adminPin').value.trim();
@@ -6924,13 +6957,44 @@
                     );
                     const schedData = await fileRes.json();
                     let added = 0;
+
+                    // FIX 2026-09-03: el ID de empleado de BrazosScheduler y el de
+                    // BrazosNomina son DOS espacios de ID DISTINTOS — cada app generó
+                    // los suyos por separado. `importEmployeesFromNomina()` del Scheduler
+                    // empareja por NOMBRE pero nunca adopta el ID de Nómina (y encima lleva
+                    // tiempo roto: busca 'brazos_nomina_sync.json' en vez de
+                    // 'appronto_nomina_sync.json'). Resultado: las asistencias que bajan
+                    // aquí traían el ID de Scheduler tal cual, que no hace match con NINGÚN
+                    // empleado real de Nómina — por eso "Todos" sí mostraba datos (usa el
+                    // nombre guardado en el registro) pero filtrar por un empleado
+                    // específico, o generar Time Cards (que sí necesitan encontrar al
+                    // empleado por ID), no mostraba nada. Ahora se resuelve el ID real de
+                    // Nómina buscando por nombre; si no hay empleado con ese nombre
+                    // todavía, se conserva el ID de Scheduler como respaldo.
+                    const resolveEmpId = (rawId, rawName) => {
+                        const match = this.employees.find(e => e.name && rawName &&
+                            e.name.trim().toLowerCase() === String(rawName).trim().toLowerCase());
+                        return match ? match.id : String(rawId);
+                    };
+
+                    // Reparar asistencias YA bajadas antes con el ID equivocado de Scheduler
+                    let repaired = 0;
+                    this.attendances.forEach(a => {
+                        if (!a.fromScheduler) return;
+                        const yaEsEmpleadoReal = this.employees.some(e => String(e.id) === String(a.employeeId));
+                        if (yaEsEmpleadoReal) return;
+                        const fixedId = resolveEmpId(a.employeeId, a.employeeName);
+                        if (fixedId !== String(a.employeeId)) { a.employeeId = fixedId; repaired++; }
+                    });
+
                     (schedData.entries || []).forEach(en => {
+                        const resolvedId = resolveEmpId(en.employeeId, en.employeeName);
                         const existe = this.attendances.some(a =>
-                            String(a.employeeId) === String(en.employeeId) && a.date === en.date);
+                            String(a.employeeId) === String(resolvedId) && a.date === en.date);
                         if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
                         this.attendances.push({
-                            id: 'sched_' + en.employeeId + '_' + en.date,
-                            employeeId: String(en.employeeId),
+                            id: 'sched_' + resolvedId + '_' + en.date,
+                            employeeId: String(resolvedId),
                             employeeName: en.employeeName,
                             date: en.date,
                             checkIn: en.checkIn || null,
@@ -6941,10 +7005,10 @@
                         });
                         added++;
                     });
-                    if (added > 0) {
+                    if (added > 0 || repaired > 0) {
                         this.save();
                         this.refreshAttendances();
-                        console.log(`📥 Horas del Scheduler: +${added} nuevas`);
+                        console.log(`📥 Horas del Scheduler: +${added} nuevas, ${repaired} reparadas`);
                     }
                     // "Nómina x %" — guardar tal cual para precargar Captura Manual.
                     this.horasManualScheduler = Array.isArray(schedData.manualPayroll) ? schedData.manualPayroll : [];
