@@ -6775,72 +6775,35 @@
                 container.innerHTML = html;
             },
 
+            // FIX 2026-09-04: antes esta vista IGNORABA la nómina realmente guardada
+            // (period.payroll) y recalculaba desde cero solo con asistencias del Reloj
+            // Checador — por eso una nómina armada con Captura Manual/Producción/
+            // Scheduler salía vacía ("no se encontraron asistencias") o incompleta (sin
+            // bono, reembolso, ni impuestos). Ahora se muestra EXACTAMENTE lo que se
+            // guardó, tal cual salió al calcular la nómina la primera vez.
             viewSavedPayroll(id) {
                 const period = this.savedPayrollPeriods.find(p => p.id === id);
                 if (!period) return;
-                const startDate = new Date(period.start + 'T00:00:00');
-                const endDate = new Date(period.end + 'T23:59:59');
-                
-                // Recalculate from attendances
-                const periodAttendances = this.attendances.filter(a => {
-                    const d = new Date(a.date + 'T00:00:00');
-                    return d >= startDate && d <= endDate && a.checkIn;
-                });
-                
-                if (periodAttendances.length === 0) {
-                    document.getElementById('histNominaDetail').innerHTML = '<p style="color:#e74c3c; padding:20px;">⚠️ No se encontraron asistencias para este período.</p>';
+
+                const payrollArr = period.payroll || [];
+                if (payrollArr.length === 0) {
+                    document.getElementById('histNominaDetail').innerHTML = '<p style="color:#e74c3c; padding:20px;">⚠️ Esta nómina no tiene datos guardados.</p>';
                     return;
                 }
-                
-                // Build payroll same as calculatePayroll
-                const payroll = {};
-                periodAttendances.forEach(att => {
-                    if (!payroll[att.employeeId]) {
-                        const emp = this.employees.find(e => e.id === att.employeeId);
-                        payroll[att.employeeId] = { employeeId: att.employeeId, employeeName: att.employeeName, rate: emp ? emp.rate : 0, empDeduction: emp ? (emp.deduction || 0) : 0, regularHours: 0, overtimeHours: 0, totalHours: 0, totalWorkedHours: 0, lunchDeductions: 0, lateMinutes: 0, latePenalty: 0, regularPay: 0, overtimePay: 0, grossPay: 0, deductions: 0, netPay: 0 };
-                    }
-                    const p = payroll[att.employeeId];
-                    let dh = Math.round(att.hours * 100) / 100;
-                    p.totalWorkedHours = Math.round((p.totalWorkedHours + dh) * 100) / 100;
-                    if (this.workConfig.enableLunchBreak && dh >= this.workConfig.lunchThreshold) {
-                        dh = Math.round((dh - this.workConfig.lunchDuration) * 100) / 100;
-                        p.lunchDeductions = Math.round((p.lunchDeductions + this.workConfig.lunchDuration) * 100) / 100;
-                    }
-                    if (this.workConfig.enableLateDeduction && att.checkIn) {
-                        const attDay2 = new Date(att.date + 'T12:00:00').getDay();
-                        const isWeekend2 = attDay2 === 0 || attDay2 === 6;
-                        if (!isWeekend2) {
-                            const [sH, sM] = this.workConfig.startTime.split(':').map(Number);
-                            const [cH, cM] = att.checkIn.split(':').map(Number);
-                            const retraso2 = (cH * 60 + cM) - (sH * 60 + sM);
-                            const tol2 = this.workConfig.lateTolerance || 0;
-                            if (retraso2 > tol2) p.lateMinutes += Math.min(retraso2, this.workConfig.lateDeductionMax || 30);
-                        }
-                    }
-                    if (this.workConfig.enableOvertime && dh > this.workConfig.overtimeThreshold) {
-                        p.regularHours = Math.round((p.regularHours + this.workConfig.overtimeThreshold) * 100) / 100;
-                        p.overtimeHours = Math.round((p.overtimeHours + (dh - this.workConfig.overtimeThreshold)) * 100) / 100;
-                    } else {
-                        p.regularHours = Math.round((p.regularHours + dh) * 100) / 100;
-                    }
-                    p.totalHours = Math.round((p.totalHours + dh) * 100) / 100;
-                });
-                Object.values(payroll).forEach(p => {
-                    p.regularPay = p.regularHours * p.rate;
-                    p.overtimePay = p.overtimeHours * p.rate * 1.5;
-                    p.grossPay = p.regularPay + p.overtimePay;
-                    if (p.lateMinutes > 0) p.latePenalty = (p.lateMinutes / 60) * p.rate;
-                    if (p.empDeduction > 0) p.deductions = p.grossPay * p.empDeduction / 100;
-                    p.netPay = p.grossPay - p.latePenalty - p.deductions;
-                });
-                
-                const payrollArr = Object.values(payroll).sort((a,b) => a.employeeName.localeCompare(b.employeeName));
-                const totalGross = payrollArr.reduce((s,p) => s+p.grossPay, 0);
-                const totalLate = payrollArr.reduce((s,p) => s+p.latePenalty, 0);
-                const totalDed = payrollArr.reduce((s,p) => s+p.deductions, 0);
-                const totalNet = payrollArr.reduce((s,p) => s+p.netPay, 0);
-                const totalHrs = payrollArr.reduce((s,p) => s+p.totalHours, 0);
-                
+
+                const totalHrs = payrollArr.reduce((s,p) => s + (p.totalHours || 0), 0);
+                const totalOt = payrollArr.reduce((s,p) => s + (p.overtimeHours || 0), 0);
+                const totalGross = payrollArr.reduce((s,p) => s + (p.grossPay || 0), 0);
+                const totalBonus = payrollArr.reduce((s,p) => s + (p.bonus || 0), 0);
+                const totalLate = payrollArr.reduce((s,p) => s + (p.latePenalty || 0), 0);
+                const totalDed = payrollArr.reduce((s,p) => s + (p.deductions || 0), 0);
+                const totalReimb = payrollArr.reduce((s,p) => s + (p.reimbursement || 0), 0);
+                const totalNet = payrollArr.reduce((s,p) => s + (p.netPay || 0), 0);
+                const hasOt = totalOt > 0;
+                const hasBonus = totalBonus > 0;
+                const hasLate = totalLate > 0;
+                const hasReimb = totalReimb > 0;
+
                 let html = `<div style="margin-top:20px; border-top:2px solid #ecf0f1; padding-top:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h3 style="margin:0; color:#2c3e50;">📅 ${period.label}</h3>
@@ -6868,69 +6831,77 @@
                     <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
                         <thead><tr style="background:#2c3e50; color:white;">
                             <th style="padding:10px;">Empleado</th>
-                            <th style="padding:10px; text-align:center;">Horas</th>
+                            <th style="padding:10px; text-align:center;">Horas Reg.</th>
+                            ${hasOt ? '<th style="padding:10px; text-align:center;">Horas Extra</th>' : ''}
+                            <th style="padding:10px; text-align:right;">Tarifa</th>
                             <th style="padding:10px; text-align:right;">Pago Bruto</th>
-                            ${this.workConfig.enableLateDeduction ? '<th style="padding:10px; text-align:right;">Tardanza</th>' : ''}
+                            ${hasBonus ? '<th style="padding:10px; text-align:right;">Bono</th>' : ''}
+                            ${hasLate ? '<th style="padding:10px; text-align:right;">Tardanza</th>' : ''}
                             <th style="padding:10px; text-align:right;">Deducción</th>
+                            ${hasReimb ? '<th style="padding:10px; text-align:right;">Reembolso</th>' : ''}
                             <th style="padding:10px; text-align:right; color:#90caf9;">Pago Neto</th>
                         </tr></thead><tbody>`;
                 payrollArr.forEach((p, i) => {
                     const bg = i % 2 === 0 ? '#f8f9fa' : 'white';
                     html += `<tr style="background:${bg};">
                         <td style="padding:9px 12px;"><strong>${p.employeeName}</strong></td>
-                        <td style="padding:9px 12px; text-align:center;">${p.totalHours.toFixed(2)} hrs</td>
-                        <td style="padding:9px 12px; text-align:right;">$${this.formatMoney(p.grossPay)}</td>
-                        ${this.workConfig.enableLateDeduction ? `<td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.lateMinutes > 0 ? '-'+p.lateMinutes+' min (-$'+this.formatMoney(p.latePenalty)+')' : '—'}</td>` : ''}
-                        <td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.empDeduction > 0 ? '-'+p.empDeduction+'% (-$'+this.formatMoney(p.deductions)+')' : '—'}</td>
-                        <td style="padding:9px 12px; text-align:right; color:#27ae60; font-weight:bold;">$${this.formatMoney(p.netPay)}</td>
+                        <td style="padding:9px 12px; text-align:center;">${(p.regularHours || 0).toFixed(2)} hrs</td>
+                        ${hasOt ? `<td style="padding:9px 12px; text-align:center; color:#e67e22;">${(p.overtimeHours || 0).toFixed(2)} hrs</td>` : ''}
+                        <td style="padding:9px 12px; text-align:right;">$${this.formatMoney(p.rate || 0)}/hr</td>
+                        <td style="padding:9px 12px; text-align:right;">$${this.formatMoney(p.grossPay || 0)}</td>
+                        ${hasBonus ? `<td style="padding:9px 12px; text-align:right; color:#8e44ad;">${p.bonus > 0 ? '+$'+this.formatMoney(p.bonus) : '—'}</td>` : ''}
+                        ${hasLate ? `<td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.lateMinutes > 0 ? '-'+p.lateMinutes+' min (-$'+this.formatMoney(p.latePenalty)+')' : '—'}</td>` : ''}
+                        <td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.deductions > 0 ? '-$'+this.formatMoney(p.deductions) : '—'}</td>
+                        ${hasReimb ? `<td style="padding:9px 12px; text-align:right; color:#16a085;">${p.reimbursement > 0 ? '+$'+this.formatMoney(p.reimbursement) : '—'}</td>` : ''}
+                        <td style="padding:9px 12px; text-align:right; color:#27ae60; font-weight:bold;">$${this.formatMoney(p.netPay || 0)}</td>
                     </tr>`;
                 });
                 html += `<tr style="background:#ecf0f1; font-weight:bold; border-top:2px solid #2c3e50;">
                     <td style="padding:10px;">TOTAL (${payrollArr.length})</td>
-                    <td style="padding:10px; text-align:center;">${totalHrs.toFixed(2)} hrs</td>
+                    <td style="padding:10px; text-align:center;">${(totalHrs-totalOt).toFixed(2)} hrs</td>
+                    ${hasOt ? `<td style="padding:10px; text-align:center;">${totalOt.toFixed(2)} hrs</td>` : ''}
+                    <td style="padding:10px; text-align:right;">-</td>
                     <td style="padding:10px; text-align:right;">$${this.formatMoney(totalGross)}</td>
-                    ${this.workConfig.enableLateDeduction ? `<td style="padding:10px; text-align:right; color:#e74c3c;">${totalLate > 0 ? '-$'+this.formatMoney(totalLate) : '—'}</td>` : ''}
+                    ${hasBonus ? `<td style="padding:10px; text-align:right; color:#8e44ad;">+$${this.formatMoney(totalBonus)}</td>` : ''}
+                    ${hasLate ? `<td style="padding:10px; text-align:right; color:#e74c3c;">${totalLate > 0 ? '-$'+this.formatMoney(totalLate) : '—'}</td>` : ''}
                     <td style="padding:10px; text-align:right; color:#e74c3c;">${totalDed > 0 ? '-$'+this.formatMoney(totalDed) : '—'}</td>
+                    ${hasReimb ? `<td style="padding:10px; text-align:right; color:#16a085;">+$${this.formatMoney(totalReimb)}</td>` : ''}
                     <td style="padding:10px; text-align:right; color:#1565c0; font-size:1.1rem;">$${this.formatMoney(totalNet)}</td>
                 </tr></tbody></table></div></div>`;
-                
+
                 document.getElementById('histNominaDetail').innerHTML = html;
                 document.getElementById('histNominaDetail').scrollIntoView({behavior:'smooth', block:'start'});
             },
 
+            // FIX 2026-09-04: igual que viewSavedPayroll(), este CSV recalculaba desde
+            // cero solo con asistencias del Reloj Checador, ignorando la n\u00F3mina
+            // realmente guardada (bono, reembolso, horas manuales/Producci\u00F3n, impuestos).
+            // Ahora exporta tal cual lo que se guard\u00F3 en period.payroll.
             exportSavedPayrollCSV(id) {
                 const period = this.savedPayrollPeriods.find(p => p.id === id);
                 if (!period) return;
-                const startDate = new Date(period.start + 'T00:00:00');
-                const endDate = new Date(period.end + 'T23:59:59');
-                const periodAttendances = this.attendances.filter(a => {
-                    const d = new Date(a.date + 'T00:00:00');
-                    return d >= startDate && d <= endDate && a.hours;
-                });
-                // Quick recalc
-                const payroll = {};
-                periodAttendances.forEach(att => {
-                    if (!payroll[att.employeeId]) {
-                        const emp = this.employees.find(e => e.id === att.employeeId);
-                        payroll[att.employeeId] = { employeeName: att.employeeName, rate: emp ? emp.rate : 0, empDeduction: emp ? (emp.deduction||0) : 0, totalHours: 0, lunchDeductions: 0, lateMinutes: 0, latePenalty: 0, grossPay: 0, deductions: 0, netPay: 0, regularHours: 0, overtimeHours: 0 };
-                    }
-                    const p = payroll[att.employeeId];
-                    let dh = Math.round(att.hours * 100) / 100;
-                    if (this.workConfig.enableLunchBreak && dh >= this.workConfig.lunchThreshold) { dh = Math.round((dh - this.workConfig.lunchDuration)*100)/100; p.lunchDeductions += this.workConfig.lunchDuration; }
-                    if (this.workConfig.enableLateDeduction && att.checkIn) { const attDay3=new Date(att.date+'T12:00:00').getDay(); if(attDay3!==0 && attDay3!==6) { const [sH,sM]=this.workConfig.startTime.split(':').map(Number); const [cH,cM]=att.checkIn.split(':').map(Number); const retraso3=(cH*60+cM)-(sH*60+sM); const tol3=this.workConfig.lateTolerance||0; if(retraso3>tol3) p.lateMinutes+=Math.min(retraso3,this.workConfig.lateDeductionMax||30); } }
-                    if (this.workConfig.enableOvertime && dh > this.workConfig.overtimeThreshold) { p.regularHours+=this.workConfig.overtimeThreshold; p.overtimeHours+=(dh-this.workConfig.overtimeThreshold); } else { p.regularHours+=dh; }
-                    p.totalHours = Math.round((p.totalHours + dh)*100)/100;
-                });
-                Object.values(payroll).forEach(p => {
-                    p.grossPay = p.regularHours * p.rate + p.overtimeHours * p.rate * 1.5;
-                    if (p.lateMinutes > 0) p.latePenalty = (p.lateMinutes/60)*p.rate;
-                    if (p.empDeduction > 0) p.deductions = p.grossPay * p.empDeduction / 100;
-                    p.netPay = p.grossPay - p.latePenalty - p.deductions;
-                });
-                const rows = Object.values(payroll).sort((a,b)=>a.employeeName.localeCompare(b.employeeName));
-                const headers = ['Empleado','Horas','Pago Bruto','Tardanza (min)','Desc. Tardanza','Deduccion %','Desc. Deduccion','Pago Neto'];
-                const csvRows = rows.map(p => [p.employeeName, p.totalHours.toFixed(2), p.grossPay.toFixed(2), p.lateMinutes, p.latePenalty.toFixed(2), p.empDeduction, p.deductions.toFixed(2), p.netPay.toFixed(2)]);
-                const totalRow = ['TOTAL', rows.reduce((s,p)=>s+p.totalHours,0).toFixed(2), rows.reduce((s,p)=>s+p.grossPay,0).toFixed(2), rows.reduce((s,p)=>s+p.lateMinutes,0), rows.reduce((s,p)=>s+p.latePenalty,0).toFixed(2), '', rows.reduce((s,p)=>s+p.deductions,0).toFixed(2), rows.reduce((s,p)=>s+p.netPay,0).toFixed(2)];
+                const rows = (period.payroll || []).slice().sort((a,b) => (a.employeeName||'').localeCompare(b.employeeName||''));
+                if (rows.length === 0) { alert('Esta n\u00F3mina no tiene datos guardados.'); return; }
+
+                const headers = ['Empleado','Horas Regulares','Horas Extra','Tarifa','Pago Bruto','Bono','Reembolso','Tardanza (min)','Desc. Tardanza','Deducciones','Impuesto Federal','Seguro Social','Medicare','Pago Neto'];
+                const csvRows = rows.map(p => [
+                    p.employeeName || '',
+                    (p.regularHours || 0).toFixed(2),
+                    (p.overtimeHours || 0).toFixed(2),
+                    (p.rate || 0).toFixed(2),
+                    (p.grossPay || 0).toFixed(2),
+                    (p.bonus || 0).toFixed(2),
+                    (p.reimbursement || 0).toFixed(2),
+                    p.lateMinutes || 0,
+                    (p.latePenalty || 0).toFixed(2),
+                    (p.deductions || 0).toFixed(2),
+                    (p.federalTax || 0).toFixed(2),
+                    (p.socialSecurityTax || 0).toFixed(2),
+                    (p.medicareTax || 0).toFixed(2),
+                    (p.netPay || 0).toFixed(2)
+                ]);
+                const sum = (key) => rows.reduce((s,p) => s + (p[key] || 0), 0);
+                const totalRow = ['TOTAL', sum('regularHours').toFixed(2), sum('overtimeHours').toFixed(2), '', sum('grossPay').toFixed(2), sum('bonus').toFixed(2), sum('reimbursement').toFixed(2), sum('lateMinutes'), sum('latePenalty').toFixed(2), sum('deductions').toFixed(2), sum('federalTax').toFixed(2), sum('socialSecurityTax').toFixed(2), sum('medicareTax').toFixed(2), sum('netPay').toFixed(2)];
                 csvRows.push(totalRow);
                 const csv = [headers,...csvRows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
                 const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
