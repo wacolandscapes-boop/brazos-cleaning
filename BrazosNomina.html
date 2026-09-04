@@ -1255,6 +1255,13 @@
                     <button id="histBtnCheques" class="btn" onclick="app.switchHistory('cheques')" style="font-size:1rem; background:#ecf0f1; color:#2c3e50;">
                         🧾 Cheques
                     </button>
+                    <!-- FIX 2026-09-04: los cheques de Gastos (proveedores/vendors) no
+                         aparecían en ningún lado del Historial — solo se veían en la
+                         pestaña Gastos. Se agrega aquí para tener el registro completo
+                         de cheques emitidos en un solo lugar, con la opción de anular. -->
+                    <button id="histBtnGastos" class="btn" onclick="app.switchHistory('gastos')" style="font-size:1rem; background:#ecf0f1; color:#2c3e50;">
+                        💸 Cheques de Gastos
+                    </button>
                     <button id="histBtnTaxes" class="btn" onclick="app.switchHistory('taxes')" style="font-size:1rem; background:#ecf0f1; color:#2c3e50;">
                         📑 Reportes Fiscales
                     </button>
@@ -1314,6 +1321,12 @@
                     </div>
                     <div id="historyStats" style="margin-bottom: 20px;"></div>
                     <div id="historyContent"></div>
+                </div>
+
+                <!-- PANEL CHEQUES DE GASTOS -->
+                <div id="histPanelGastos" style="display:none;">
+                    <p style="color:#666; margin-bottom:15px;">Todos los cheques de gastos emitidos (proveedores). Un cheque que salió mal impreso o se perdió se puede anular desde aquí — queda marcado como ANULADO pero no se borra, para que su número no se reutilice.</p>
+                    <div id="histGastosList"></div>
                 </div>
 
                 <!-- PANEL REPORTES FISCALES (941 / 1099) -->
@@ -5981,26 +5994,34 @@
                                 <th>Bruto</th>
                                 <th>Deducciones</th>
                                 <th>Neto</th>
+                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
-                
+
+                // FIX 2026-09-04: se agrega columna Estado y botón Anular/Reactivar —
+                // igual que en Cheques de Gastos, para poder marcar un cheque que
+                // salió mal impreso o se perdió sin borrarlo del historial.
                 this.checks.sort((a, b) => new Date(b.date||0) - new Date(a.date||0)).forEach(check => {
                     const rawDate = check.date || new Date().toISOString();
                     const dateParts = rawDate.split('T')[0].split('-');
                     const dateUSA = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
-                    
+                    const voided = !!check.voided;
+                    const rowStyle = voided ? 'opacity:0.55;' : '';
+                    const textStyle = voided ? 'text-decoration:line-through;' : '';
+
                     html += `
-                        <tr>
-                            <td><strong>#${check.checkNumber}</strong></td>
-                            <td>${dateUSA}</td>
-                            <td>${check.employeeName}</td>
-                            <td>${check.hours.toFixed(2)} hrs</td>
-                            <td style="color: #27ae60; font-weight: bold;">$${this.formatMoney(check.gross || 0)}</td>
-                            <td style="color: #e74c3c;">-$${(check.deductions || 0).toFixed(2)}</td>
-                            <td style="color: #2980b9; font-weight: bold; font-size: 1.1rem;">$${this.formatMoney(check.net || check.gross)}</td>
+                        <tr style="${rowStyle}">
+                            <td style="${textStyle}"><strong>#${check.checkNumber}</strong></td>
+                            <td style="${textStyle}">${dateUSA}</td>
+                            <td style="${textStyle}">${check.employeeName}</td>
+                            <td style="${textStyle}">${check.hours.toFixed(2)} hrs</td>
+                            <td style="color: #27ae60; font-weight: bold;${textStyle}">$${this.formatMoney(check.gross || 0)}</td>
+                            <td style="color: #e74c3c;${textStyle}">-$${(check.deductions || 0).toFixed(2)}</td>
+                            <td style="color: #2980b9; font-weight: bold; font-size: 1.1rem;${textStyle}">$${this.formatMoney(check.net || check.gross)}</td>
+                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>'}</td>
                             <td style="display:flex; gap:6px;">
                                 <button class="btn btn-secondary btn-sm" onclick="app.viewCheck(${check.id})">
                                     👁️ Ver
@@ -6008,19 +6029,47 @@
                                 <button class="btn btn-primary btn-sm" onclick="app.printCheck(${check.id})">
                                     🖨️ Imprimir
                                 </button>
+                                <button class="btn btn-sm" onclick="app.cancelCheck(${check.id})" style="background:${voided ? '#95a5a6' : '#e74c3c'};color:white;">
+                                    ${voided ? '↩️ Reactivar' : '🚫 Anular'}
+                                </button>
                             </td>
                         </tr>
                     `;
                 });
-                
+
                 html += '</tbody></table>';
                 container.innerHTML = html;
+            },
+
+            // FIX 2026-09-04: anular/reactivar un cheque de nómina ya emitido (ej.
+            // salió mal impreso, se perdió, se rompió al firmarlo). No se borra —
+            // solo se marca voided:true para que su # de cheque quede reservado y
+            // no se reutilice, y quede visible en el historial que ese cheque no es
+            // válido.
+            cancelCheck(id) {
+                const check = this.checks.find(c => c.id === id);
+                if (!check) return;
+                if (check.voided) {
+                    if (!confirm(`¿Reactivar el cheque #${check.checkNumber} de ${check.employeeName}?`)) return;
+                    check.voided = false;
+                    delete check.voidedAt;
+                } else {
+                    if (!confirm(`¿Anular el cheque #${check.checkNumber} de ${check.employeeName} por $${this.formatMoney(check.net || check.gross)}?\n\nQuedará marcado como ANULADO — no se borra del historial, y su número de cheque no se debe reutilizar.`)) return;
+                    check.voided = true;
+                    check.voidedAt = new Date().toISOString();
+                }
+                this.save();
+                this.refreshChecks();
             },
             
             printCheck(checkId) {
                 const check = this.checks.find(c => c.id === checkId);
+                if (!check) return;
+                // FIX 2026-09-04: aviso antes de imprimir un cheque ya marcado como
+                // ANULADO, para no reimprimirlo por accidente pensando que es válido.
+                if (check.voided && !confirm(`⚠️ El cheque #${check.checkNumber} está marcado como ANULADO.\n\n¿Imprimirlo de todas formas?`)) return;
                 const cfg = this.checkConfig;
-                
+
                 const dateParts = check.date.split('T')[0].split('-');
                 const dateUSA = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
                 
@@ -6080,6 +6129,12 @@
                                 left: ${cfg.address_left}in;
                                 font-size: 10pt;
                             }
+                            .city {
+                                position: absolute;
+                                top: ${cfg.city_top || cfg.address_top + 0.15}in;
+                                left: ${cfg.city_left || cfg.address_left}in;
+                                font-size: 10pt;
+                            }
                             .memo {
                                 position: absolute;
                                 top: ${cfg.memo_top || 2.9}in;
@@ -6101,6 +6156,7 @@
                             <div class="date">${dateUSA}</div>
                             <div class="payee">${check.employeeName}</div>
                             ${check.employeeAddress ? `<div class="address">${check.employeeAddress}</div>` : ''}
+                            ${check.employeeCity ? `<div class="city">${check.employeeCity}</div>` : ''}
                             <div class="amount-number">${this.formatMoney(check.net || check.gross)}</div>
                             <div class="amount-words">${this.numberToWords(this.formatMoney(check.net || check.gross))}</div>
                             ${check.period ? '<div class="memo">' + check.period + '</div>' : ''}
@@ -6141,6 +6197,13 @@
                 const addressHtml = check.employeeAddress
                     ? '<div style="position:absolute; top:' + px(cfg.address_top) + 'px; left:' + px(cfg.address_left) + 'px; font-size:10pt;">' + check.employeeAddress + '</div>'
                     : '';
+                // FIX 2026-09-04: faltaba mostrar Ciudad/Estado/Zip en este preview
+                // (viewCheck) y en la impresión individual (printCheck) — ya se
+                // guardaba en check.employeeCity, pero solo se dibujaba en
+                // previewChecks()/printMultipleChecks(), no aquí.
+                const cityHtml = check.employeeCity
+                    ? '<div style="position:absolute; top:' + px(cfg.city_top || cfg.address_top + 0.15) + 'px; left:' + px(cfg.city_left || cfg.address_left) + 'px; font-size:10pt;">' + check.employeeCity + '</div>'
+                    : '';
 
                 const noImgHint = !bgImage
                     ? '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:0.85rem;pointer-events:none;">Sube la imagen del cheque en Configuracion para ver el fondo</div>'
@@ -6170,6 +6233,7 @@
                                 '<div style="position:absolute;top:' + px(cfg.date_top) + 'px;right:' + px(cfg.date_right) + 'px;font-size:11pt;">' + dateUSA + '</div>' +
                                 '<div style="position:absolute;top:' + px(cfg.payee_top) + 'px;left:' + px(cfg.payee_left) + 'px;font-size:12pt;font-weight:bold;">' + check.employeeName + '</div>' +
                                 addressHtml +
+                                cityHtml +
                                 '<div style="position:absolute;top:' + px(cfg.amount_top) + 'px;right:' + px(cfg.amount_right) + 'px;font-size:14pt;font-weight:bold;">' + netAmount + '</div>' +
                                 '<div style="position:absolute;top:' + px(cfg.words_top) + 'px;left:' + px(cfg.words_left) + 'px;font-size:9pt;">' + this.numberToWords(netAmount) + '</div>' +
                                 (check.period ? '<div style="position:absolute; top:' + px(cfg.memo_top || 2.9) + 'px; left:' + px(cfg.memo_left || 0.5) + 'px; font-size:8pt;">' + check.period + '</div>' : '') +
@@ -6359,9 +6423,11 @@
             switchHistory(type) {
                 const isNomina = type === 'nomina';
                 const isCheques = type === 'cheques';
+                const isGastos = type === 'gastos';
                 const isTaxes = type === 'taxes';
                 document.getElementById('histPanelNomina').style.display = isNomina ? 'block' : 'none';
                 document.getElementById('histPanelCheques').style.display = isCheques ? 'block' : 'none';
+                document.getElementById('histPanelGastos').style.display = isGastos ? 'block' : 'none';
                 document.getElementById('histPanelTaxes').style.display = isTaxes ? 'block' : 'none';
                 const setBtn = (id, active) => {
                     const el = document.getElementById(id);
@@ -6370,9 +6436,11 @@
                 };
                 setBtn('histBtnNomina', isNomina);
                 setBtn('histBtnCheques', isCheques);
+                setBtn('histBtnGastos', isGastos);
                 setBtn('histBtnTaxes', isTaxes);
                 if (isCheques) this.refreshHistory();
                 else if (isNomina) this.renderSavedPayrollList();
+                else if (isGastos) this.renderExpensesHistory();
                 else if (isTaxes) { this.populateTaxYearSelectors(); this.renderForm941Summary(); this.render1099Summary(); this.renderW2Summary(); }
             },
 
@@ -7771,6 +7839,35 @@
             // GASTOS CON CHEQUE
             // ══════════════════════════════════════════
 
+            // FIX 2026-09-04: los cheques de gastos se imprimían en una hoja carta
+            // completa (8.5x11in) pero solo se llenaba la sección de arriba (el
+            // cheque); las dos secciones de abajo (donde el papel físico trae los
+            // talones perforados) quedaban totalmente en blanco. Este helper arma
+            // un talón simple con la MISMA información que lleva el cheque
+            // (proveedor, fecha, # de cheque, monto, memo/categoría) — compartido
+            // entre la vista previa (printExpenseCheck) y la impresión real
+            // (_printExpenseCheckNow) para que nunca se puedan desincronizar.
+            buildExpenseStubHTML(exp, dateUSA, label) {
+                return `
+                    <div style="padding:6px 16px 2px; display:flex; justify-content:space-between; font-size:9pt; border-bottom:1px solid #ccc;">
+                        <strong>${this.getCompanyName()}</strong>
+                        <span style="color:#555;">Check #${exp.checkNum}</span>
+                    </div>
+                    <div style="text-align:center; font-size:7.5pt; color:#999; letter-spacing:1.5px; padding:2px; text-transform:uppercase;">${label}</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; padding:10px 16px 2px; font-size:9pt;">
+                        <div><strong>${exp.vendor || exp.desc || ''}</strong></div>
+                        <div style="text-align:right;">Date: ${dateUSA}</div>
+                    </div>
+                    <div style="padding:4px 16px; font-size:9pt; color:#333;">
+                        ${exp.desc ? `<div><strong>Memo:</strong> ${exp.desc}</div>` : ''}
+                        ${exp.category ? `<div><strong>Category:</strong> ${exp.category}</div>` : ''}
+                    </div>
+                    <div style="padding:10px 16px; text-align:right; font-size:11pt; font-weight:bold; border-top:1px solid #ccc; margin-top:6px;">
+                        Amount: $${this.formatMoney(exp.amount)}
+                    </div>
+                `;
+            },
+
             openExpenseModal(id) {
                 document.getElementById('expId').value = '';
                 document.getElementById('expVendor').value = '';
@@ -7814,6 +7911,10 @@
             printExpenseCheck(id) {
                 const exp = this.expenses.find(e => e.id === id);
                 if (!exp) return;
+                // FIX 2026-09-04: aviso antes de (re)imprimir un cheque de gasto ya
+                // marcado como ANULADO, para no usarlo por accidente pensando que es
+                // válido.
+                if (exp.voided && !confirm(`⚠️ El cheque #${exp.checkNum || ''} de "${exp.vendor || exp.desc}" está marcado como ANULADO.\n\n¿Imprimirlo de todas formas?`)) return;
 
                 // Si no tiene número de cheque, mostrar mini modal para asignarlo
                 if (!exp.checkNum) {
@@ -7878,7 +7979,7 @@
                 const px = inch => Math.round(inch * PPI);
 
                 const sheetHtml =
-                    `<div style="position:relative;width:${W}px;height:${H}px;` +
+                    `<div style="position:relative;width:${W}px;height:${Hs}px;` +
                     (bgImage ? `background-image:url(${safeBg});background-size:100% 100%;background-repeat:no-repeat;` : 'background:#f9f9f9;') +
                     `font-family:Courier New,monospace;overflow:hidden;border:1px solid #ccc;">` +
                     // Número de cheque
@@ -7896,6 +7997,15 @@
                     // Firma
                     (sigUrl ? `<img src="${sigUrl}" style="position:absolute;top:${px(cfg.signature_top||2.6)}px;right:${px(cfg.signature_right||1.5)}px;width:${px(cfg.signature_width||1.5)}px;pointer-events:none;">` : '') +
                     `</div>`;
+
+                // FIX 2026-09-04: talones (mismo contenido que verá impreso, ver
+                // buildExpenseStubHTML) para que la vista previa coincida con la
+                // hoja real de 3 secciones que arma _printExpenseCheckNow().
+                const stubSectionHtml = (label) =>
+                    `<div style="width:${W}px;height:${Hs}px;position:relative;overflow:hidden;background:#fff;border-top:2px dashed #aaa;">` +
+                    this.buildExpenseStubHTML(exp, dateUSA, label) +
+                    `</div>`;
+                const stubsHtml = stubSectionHtml('COPIA PARA EL PROVEEDOR') + stubSectionHtml(`COPIA PARA ${this.getCompanyName().toUpperCase()}`);
 
                 // Mostrar en modal de preview
                 const existing = document.getElementById('expCheckPreviewModal');
@@ -7916,7 +8026,7 @@
                         <div style="font-size:0.85rem;color:#555;margin-bottom:10px;">
                             <strong>${exp.vendor||exp.desc}</strong> · $${this.formatMoney(exp.amount)} · ${dateUSA}
                         </div>
-                        ${sheetHtml}
+                        <div style="display:flex; flex-direction:column;">${sheetHtml}${stubsHtml}</div>
                     </div>`;
 
                 document.body.appendChild(modal);
@@ -7936,13 +8046,25 @@
                                 d.getDate().toString().padStart(2,'0') + '/' + d.getFullYear();
                 const amountWords = this.numberToWords(exp.amount.toFixed(2));
 
+                // FIX 2026-09-04: antes esta hoja de 8.5x11in solo llenaba la sección
+                // de arriba (el cheque) — las dos secciones de abajo, donde el papel
+                // físico de gastos trae los talones perforados, se imprimían en
+                // blanco. Ahora la hoja se divide en 3 secciones de 3.667in (igual
+                // que los cheques de nómina) y las dos de abajo llevan el mismo
+                // talón que se ve en la vista previa (buildExpenseStubHTML) — mismo
+                // proveedor, fecha, # de cheque, monto y memo/categoría del cheque.
+                const stub2 = this.buildExpenseStubHTML(exp, dateUSA, 'COPIA PARA EL PROVEEDOR');
+                const stub3 = this.buildExpenseStubHTML(exp, dateUSA, `COPIA PARA ${this.getCompanyName().toUpperCase()}`);
+
                 const win = window.open('', '_blank');
                 win.document.write(`<!DOCTYPE html><html><head><title>Cheque #${exp.checkNum}</title>
                 <style>
                     @page { size: letter; margin: 0; }
                     * { box-sizing: border-box; }
                     body { margin: 0; padding: 0; }
-                    .sheet { position:relative; width:8.5in; height:11in; font-family:'Courier New',monospace; overflow:hidden; }
+                    .sheet { width:8.5in; height:11in; font-family:'Courier New',monospace; overflow:hidden; display:flex; flex-direction:column; }
+                    .exp-section { width:100%; height:3.667in; position:relative; overflow:hidden; border-bottom:3px dashed #999; }
+                    .exp-section:last-child { border-bottom:none; }
                     .cf-number   { position:absolute; top:${cfg.number_top||0.3}in; right:${cfg.number_right||0.5}in; font-size:9pt; }
                     .cf-date     { position:absolute; top:${cfg.date_top||0.8}in; right:${cfg.date_right||0.5}in; font-size:9pt; }
                     .cf-payee    { position:absolute; top:${cfg.payee_top||1.2}in; left:${cfg.payee_left||1.2}in; font-size:10pt; font-weight:bold; }
@@ -7951,14 +8073,25 @@
                     .cf-memo     { position:absolute; top:${cfg.memo_top||2.9}in; left:${cfg.memo_left||0.5}in; font-size:9pt; }
                     .cf-signature{ position:absolute; top:${cfg.signature_top||2.6}in; right:${cfg.signature_right||1.5}in; width:${cfg.signature_width||1.5}in; }
                 </style></head><body>
-                <div class="sheet" ${bgImage ? `style="background-image:url(${bgImage});background-size:100% 100%;background-repeat:no-repeat;"` : ''}>
-                    <div class="cf-number">${exp.checkNum}</div>
-                    <div class="cf-date">${dateUSA}</div>
-                    <div class="cf-payee">${exp.vendor||exp.desc}</div>
-                    <div class="cf-amount">$${this.formatMoney(exp.amount)}</div>
-                    <div class="cf-words">${amountWords}</div>
-                    ${exp.desc ? `<div class="cf-memo">${exp.desc}</div>` : ''}
-                    ${sigUrl ? `<img src="${sigUrl}" class="cf-signature">` : ''}
+                <!-- FIX URGENTE 2026-09-04: la imagen de fondo del cheque (guía de
+                     calibración solo para pantalla) se estaba imprimiendo también en
+                     el papel físico de gastos. En los cheques de nómina esa imagen
+                     está marcada "screen-only" y una regla @media print la oculta al
+                     imprimir; aquí nunca se aplicó esa regla. Se quita la imagen de
+                     fondo por completo de esta hoja — solo se imprime sobre papel en
+                     blanco / el papel pre-impreso real. -->
+                <div class="sheet">
+                    <div class="exp-section">
+                        <div class="cf-number">${exp.checkNum}</div>
+                        <div class="cf-date">${dateUSA}</div>
+                        <div class="cf-payee">${exp.vendor||exp.desc}</div>
+                        <div class="cf-amount">$${this.formatMoney(exp.amount)}</div>
+                        <div class="cf-words">${amountWords}</div>
+                        ${exp.desc ? `<div class="cf-memo">${exp.desc}</div>` : ''}
+                        ${sigUrl ? `<img src="${sigUrl}" class="cf-signature">` : ''}
+                    </div>
+                    <div class="exp-section">${stub2}</div>
+                    <div class="exp-section">${stub3}</div>
                 </div>
                 <script>window.onload=()=>{window.print();}<\/script>
                 </body></html>`);
@@ -7999,7 +8132,13 @@
             },
 
             deleteExpense(id) {
-                if (!confirm('¿Eliminar este gasto?')) return;
+                // FIX 2026-09-04: se aclara en el mensaje la diferencia con "🚫
+                // Anular" — Eliminar BORRA el registro por completo (útil solo para
+                // un gasto que nunca se convirtió en cheque real, ej. un error de
+                // captura); si el cheque ya se emitió/imprimió, usa "🚫 Anular" en
+                // vez de Eliminar, para conservar su historial y que su # de cheque
+                // no se reutilice por accidente.
+                if (!confirm('¿ELIMINAR este gasto por completo?\n\nEsto borra el registro para siempre — úsalo solo si nunca se llegó a emitir un cheque real (ej. un error de captura).\n\nSi el cheque ya se imprimió y necesitas invalidarlo, usa "🚫 Anular" en su lugar — así se conserva el registro y no se reutiliza el número de cheque.')) return;
                 this.expenses = this.expenses.filter(e => e.id !== id);
                 this.save();
                 this.renderExpenses();
@@ -8018,9 +8157,15 @@
                 if (cat !== 'all') filtered = filtered.filter(e => e.category === cat);
                 filtered.sort((a, b) => b.date.localeCompare(a.date));
 
-                const total = filtered.reduce((s, e) => s + e.amount, 0);
+                // FIX 2026-09-04: un cheque de gasto ANULADO seguía sumándose al Total
+                // y al desglose por categoría de arriba, como si de verdad se hubiera
+                // pagado. Un gasto anulado NO se pagó — se excluye de los totales,
+                // pero sigue apareciendo (tachado) en la tabla de abajo para que quede
+                // el registro de que existió y fue anulado.
+                const forTotals = filtered.filter(e => !e.voided);
+                const total = forTotals.reduce((s, e) => s + e.amount, 0);
                 const bycat = {};
-                filtered.forEach(e => { bycat[e.category] = (bycat[e.category] || 0) + e.amount; });
+                forTotals.forEach(e => { bycat[e.category] = (bycat[e.category] || 0) + e.amount; });
 
                 document.getElementById('expTotals').innerHTML =
                     `<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;font-size:1.1rem;font-weight:bold;color:#27ae60;">💰 Total: $${this.formatMoney(total)}</div>` +
@@ -8036,6 +8181,10 @@
                     list.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:1rem;">No hay gastos registrados</div>';
                     return;
                 }
+                // FIX 2026-09-04: se agrega columna Estado y botón para Anular/Reactivar
+                // un cheque de gasto (ej. si salió mal impreso) — queda marcado como
+                // ANULADO (tachado) en vez de borrarse, para no perder el registro ni
+                // reutilizar su # de cheque por error.
                 list.innerHTML =
                     '<table style="width:100%;border-collapse:collapse;">' +
                     '<thead><tr style="background:#34495e;color:white;">' +
@@ -8044,24 +8193,30 @@
                     '<th style="padding:10px;text-align:center;"># Cheque</th>' +
                     '<th style="padding:10px;text-align:center;">Categoría</th>' +
                     '<th style="padding:10px;text-align:right;">Monto</th>' +
+                    '<th style="padding:10px;text-align:center;">Estado</th>' +
                     '<th style="padding:10px;text-align:center;">Acciones</th>' +
                     '</tr></thead><tbody>' +
                     filtered.map((e, idx) => {
                         const d = new Date(e.date + 'T12:00:00');
                         const ds = (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getDate().toString().padStart(2,'0') + '/' + d.getFullYear();
-                        return `<tr style="background:${idx%2===0?'#fff':'#f9f9f9'};border-bottom:1px solid #eee;">
-                            <td style="padding:10px;">${ds}</td>
-                            <td style="padding:10px;">
+                        const voided = !!e.voided;
+                        const rowStyle = voided ? 'opacity:0.55;' : '';
+                        const textStyle = voided ? 'text-decoration:line-through;' : '';
+                        return `<tr style="background:${idx%2===0?'#fff':'#f9f9f9'};border-bottom:1px solid #eee;${rowStyle}">
+                            <td style="padding:10px;${textStyle}">${ds}</td>
+                            <td style="padding:10px;${textStyle}">
                                 <strong>${e.vendor||'—'}</strong>
                                 ${e.desc?`<br><small style="color:#555;">${e.desc}</small>`:''}
                                 ${e.notes?`<br><small style="color:#888;">${e.notes}</small>`:''}
                             </td>
-                            <td style="padding:10px;text-align:center;">${e.checkNum?`<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-weight:bold;">#${e.checkNum}</span>`:'—'}</td>
-                            <td style="padding:10px;text-align:center;"><span style="background:${catColors[e.category]||'#ccc'};color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">${catLabels[e.category]||e.category}</span></td>
-                            <td style="padding:10px;text-align:right;font-weight:bold;color:#e74c3c;">$${this.formatMoney(e.amount)}</td>
+                            <td style="padding:10px;text-align:center;${textStyle}">${e.checkNum?`<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-weight:bold;">#${e.checkNum}</span>`:'—'}</td>
+                            <td style="padding:10px;text-align:center;${textStyle}"><span style="background:${catColors[e.category]||'#ccc'};color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">${catLabels[e.category]||e.category}</span></td>
+                            <td style="padding:10px;text-align:right;font-weight:bold;color:#e74c3c;${textStyle}">$${this.formatMoney(e.amount)}</td>
+                            <td style="padding:10px;text-align:center;">${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>'}</td>
                             <td style="padding:10px;text-align:center;">
                                 <button onclick="app.printExpenseCheck('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="Imprimir Cheque">🖨️</button>
                                 <button onclick="app.openExpenseModal('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="Editar">✏️</button>
+                                <button onclick="app.cancelExpenseCheck('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="${voided ? 'Reactivar cheque' : 'Anular cheque'}">${voided ? '↩️' : '🚫'}</button>
                                 <button onclick="app.deleteExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="Eliminar">🗑️</button>
                             </td>
                         </tr>`;
@@ -8069,10 +8224,81 @@
                     '</tbody></table>';
             },
 
+            // FIX 2026-09-04: anular/reactivar un cheque de gasto (ej. salió mal
+            // impreso, se perdió, o se rompió al firmarlo) — no se borra el registro
+            // (así el # de cheque queda reservado y no se reutiliza por accidente),
+            // solo se marca como ANULADO. Se puede reactivar si fue un error.
+            cancelExpenseCheck(id) {
+                const exp = this.expenses.find(e => e.id === id);
+                if (!exp) return;
+                if (exp.voided) {
+                    if (!confirm(`¿Reactivar el cheque #${exp.checkNum || ''} de "${exp.vendor || exp.desc}"?`)) return;
+                    exp.voided = false;
+                    delete exp.voidedAt;
+                } else {
+                    if (!confirm(`¿Anular el cheque #${exp.checkNum || '(sin número)'} de "${exp.vendor || exp.desc}" por $${this.formatMoney(exp.amount)}?\n\nQuedará marcado como ANULADO — no se borra del historial, y su número de cheque no se debe reutilizar.`)) return;
+                    exp.voided = true;
+                    exp.voidedAt = new Date().toISOString();
+                }
+                this.save();
+                this.renderExpenses();
+                const gastosList = document.getElementById('histGastosList');
+                if (gastosList) this.renderExpensesHistory();
+            },
+
+            // Vista de solo lectura de TODOS los cheques de gastos, para la pestaña
+            // 📊 Historial → 💸 Cheques de Gastos (antes no aparecían en ningún
+            // historial, solo en la pestaña Gastos con Cheque).
+            renderExpensesHistory() {
+                const container = document.getElementById('histGastosList');
+                if (!container) return;
+                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', other:'Otro' };
+                const catColors = { supplies:'#3498db', equipment:'#e67e22', vehicle:'#27ae60', utilities:'#9b59b6', other:'#95a5a6' };
+                const sorted = [...(this.expenses || [])].sort((a,b) => b.date.localeCompare(a.date));
+                if (sorted.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:1rem;">No hay cheques de gastos registrados</div>';
+                    return;
+                }
+                container.innerHTML =
+                    '<table style="width:100%;border-collapse:collapse;">' +
+                    '<thead><tr style="background:#34495e;color:white;">' +
+                    '<th style="padding:10px;text-align:left;">Fecha</th>' +
+                    '<th style="padding:10px;text-align:left;">Vendor / Descripción</th>' +
+                    '<th style="padding:10px;text-align:center;"># Cheque</th>' +
+                    '<th style="padding:10px;text-align:center;">Categoría</th>' +
+                    '<th style="padding:10px;text-align:right;">Monto</th>' +
+                    '<th style="padding:10px;text-align:center;">Estado</th>' +
+                    '<th style="padding:10px;text-align:center;">Acciones</th>' +
+                    '</tr></thead><tbody>' +
+                    sorted.map((e, idx) => {
+                        const d = new Date(e.date + 'T12:00:00');
+                        const ds = (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getDate().toString().padStart(2,'0') + '/' + d.getFullYear();
+                        const voided = !!e.voided;
+                        const rowStyle = voided ? 'opacity:0.55;' : '';
+                        const textStyle = voided ? 'text-decoration:line-through;' : '';
+                        return `<tr style="background:${idx%2===0?'#fff':'#f9f9f9'};border-bottom:1px solid #eee;${rowStyle}">
+                            <td style="padding:10px;${textStyle}">${ds}</td>
+                            <td style="padding:10px;${textStyle}"><strong>${e.vendor||'—'}</strong>${e.desc?`<br><small style="color:#555;">${e.desc}</small>`:''}</td>
+                            <td style="padding:10px;text-align:center;${textStyle}">${e.checkNum?`<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-weight:bold;">#${e.checkNum}</span>`:'—'}</td>
+                            <td style="padding:10px;text-align:center;${textStyle}"><span style="background:${catColors[e.category]||'#ccc'};color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">${catLabels[e.category]||e.category}</span></td>
+                            <td style="padding:10px;text-align:right;font-weight:bold;color:#e74c3c;${textStyle}">$${this.formatMoney(e.amount)}</td>
+                            <td style="padding:10px;text-align:center;">${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>'}</td>
+                            <td style="padding:10px;text-align:center;">
+                                <button onclick="app.printExpenseCheck('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="Ver / Imprimir Cheque">🖨️</button>
+                                <button onclick="app.cancelExpenseCheck('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;" title="${voided ? 'Reactivar cheque' : 'Anular cheque'}">${voided ? '↩️' : '🚫'}</button>
+                            </td>
+                        </tr>`;
+                    }).join('') +
+                    '</tbody></table>';
+            },
+
             exportExpensesCSV() {
-                let csv = 'Fecha,Descripción,# Cheque,Categoría,Monto,Notas\n';
+                // FIX 2026-09-04: se agrega la columna Estado para que un cheque
+                // ANULADO quede claramente marcado en el CSV (no se quita de la
+                // exportación — solo se identifica, para no perder el registro).
+                let csv = 'Fecha,Vendor,Descripción,# Cheque,Categoría,Monto,Estado,Notas\n';
                 [...this.expenses].sort((a,b)=>b.date.localeCompare(a.date)).forEach(e => {
-                    csv += `${e.date},"${e.desc}",${e.checkNum||''},"${e.category}",$${e.amount},"${e.notes||''}"\n`;
+                    csv += `${e.date},"${e.vendor||''}","${e.desc||''}",${e.checkNum||''},"${e.category}",$${e.amount},"${e.voided ? 'ANULADO' : 'Vigente'}","${e.notes||''}"\n`;
                 });
                 const blob = new Blob([csv], {type:'text/csv'});
                 const url = URL.createObjectURL(blob);
