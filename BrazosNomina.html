@@ -7160,7 +7160,15 @@
                         adminPin: this.adminPin,
                         workConfig: this.workConfig,
                         checkConfig: this.checkConfig,
-                        expenses: this.expenses || []
+                        expenses: this.expenses || [],
+                        // FIX URGENTE 2026-09-04: this.checks (los cheques de nómina
+                        // realmente emitidos) y this.vendors NUNCA se subían a Drive —
+                        // solo vivían en el localStorage de ESE navegador. Si se
+                        // perdía el localStorage (cambio de computadora, navegador
+                        // limpiado, etc.) todo el historial de cheques se perdía para
+                        // siempre, sin ningún respaldo en la nube. Ya se incluyen aquí.
+                        checks: this.checks || [],
+                        vendors: this.vendors || []
                     };
                     await this.driveUploadFile('appronto_nomina_sync.json', JSON.stringify(data, null, 2));
 
@@ -7314,9 +7322,44 @@
                             const idx = this.expenses.findIndex(e => e.id === remote.id);
                             if (idx < 0) {
                                 this.expenses.push(remote); // Gasto nuevo
+                            } else {
+                                // FIX URGENTE 2026-09-04: antes un gasto que ya existía
+                                // localmente NUNCA se actualizaba con lo que viniera de
+                                // Drive — así que si se anulaba un cheque de gasto en
+                                // otra computadora, esta nunca se enteraba. Como los
+                                // gastos no traen updatedAt, se usa voidedAt como señal
+                                // de cuál versión es más reciente cuando alguna trae
+                                // ese cambio.
+                                const local = this.expenses[idx];
+                                if ((remote.voidedAt || '') > (local.voidedAt || '')) {
+                                    this.expenses[idx] = remote;
+                                }
                             }
-                            // Si ya existe, conservar local (no hay updatedAt en expenses)
                         });
+                    }
+
+                    // FIX URGENTE 2026-09-04: this.checks y this.vendors nunca se
+                    // descargaban/fusionaban desde Drive (porque tampoco se subían —
+                    // ver driveSyncNow). Se agrega aquí el mismo patrón que expenses.
+                    if (data.checks) {
+                        data.checks.forEach(remote => {
+                            const idx = this.checks.findIndex(c => String(c.id) === String(remote.id));
+                            if (idx < 0) {
+                                this.checks.push(remote); // Cheque nuevo
+                            } else {
+                                const local = this.checks[idx];
+                                if ((remote.voidedAt || '') > (local.voidedAt || '')) {
+                                    this.checks[idx] = remote;
+                                }
+                            }
+                        });
+                    }
+
+                    if (data.vendors) {
+                        data.vendors.forEach(remote => {
+                            if (!this.vendors.includes(remote)) this.vendors.push(remote);
+                        });
+                        this.vendors.sort();
                     }
 
                     // Guardar en localStorage (sin tocar workConfig)
@@ -7644,10 +7687,17 @@
                     employees: this.employees,
                     attendances: this.attendances,
                     payrollRecords: this.payrollRecords,
+                    savedPayrollPeriods: this.savedPayrollPeriods,
                     adminPin: this.adminPin,
                     workConfig: this.workConfig,
                     checkConfig: this.checkConfig,
                     expenses: this.expenses || [],
+                    // FIX URGENTE 2026-09-04: este respaldo manual (el botón de
+                    // Exportar Datos) tampoco incluía this.checks, this.vendors ni
+                    // this.savedPayrollPeriods — un respaldo "completo" se quedaba sin
+                    // el historial real de cheques ni las nóminas guardadas.
+                    checks: this.checks || [],
+                    vendors: this.vendors || [],
                     exportDate: new Date().toISOString()
                 };
                 
@@ -7703,6 +7753,12 @@
                                 try { this.loadCheckConfig(); } catch(e) {}
                             }
                             if (data.expenses) this.expenses = data.expenses;
+                            if (data.savedPayrollPeriods) this.savedPayrollPeriods = data.savedPayrollPeriods;
+                            // FIX URGENTE 2026-09-04: faltaba importar de vuelta
+                            // this.checks y this.vendors — igual que expenses, ya se
+                            // exportaban pero nunca se restauraban al importar.
+                            if (data.checks) this.checks = data.checks;
+                            if (data.vendors) this.vendors = data.vendors;
 
                             this.save();
                             this.refreshEmployees();
@@ -7743,6 +7799,17 @@
                 localStorage.setItem('ap_nomina_adminPin', this.adminPin);
                 localStorage.setItem('ap_nomina_workConfig', JSON.stringify(this.workConfig));
                 localStorage.setItem('ap_nomina_checkConfig', JSON.stringify(this.checkConfig));
+                // FIX URGENTE 2026-09-04: save() — la función que se llama cada vez que
+                // se emite/anula un cheque, se guarda/anula un gasto, etc. — NUNCA
+                // escribía this.checks, this.expenses ni this.vendors a localStorage.
+                // Solo quedaban en localStorage como efecto secundario de una
+                // sincronización con Drive que alcanzara a correr después. Si se
+                // cerraba el navegador antes de esa sincronización, esos cambios se
+                // perdían por completo aunque la app no mostrara ningún error. Ahora
+                // se guardan aquí mismo, de inmediato, cada vez que se llama save().
+                localStorage.setItem('ap_nomina_checks', JSON.stringify(this.checks || []));
+                localStorage.setItem('ap_nomina_expenses', JSON.stringify(this.expenses || []));
+                localStorage.setItem('ap_nomina_vendors', JSON.stringify(this.vendors || []));
             },
             
             loadData() {
