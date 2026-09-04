@@ -1516,6 +1516,16 @@
                 <small style="color: #7f8c8d; margin-top: 5px;">Se suma directo al pago neto en cada cheque — no se le calculan impuestos (ej. kilometraje, gastos fijos)</small>
             </div>
             <div class="form-group">
+                <!-- FIX 2026-09-04: horas fijas recurrentes para empleados con
+                     jornada semanal constante (ej. 8 hrs/semana), para que no
+                     haya que capturarlas a mano cada semana en "Captura Manual
+                     de Horas". Se precargan solas hasta que se cambien o se
+                     pongan en 0 (equivalente a "cancelar el cheque"). -->
+                <label>⏱️ Horas fijas por semana (recurrentes):</label>
+                <input type="number" id="empStandingHours" step="0.01" min="0" placeholder="0" value="0">
+                <small style="color: #7f8c8d; margin-top: 5px;">Se precargan solas en "Horas Regulares" cada semana en Captura Manual de Horas, hasta que las cambies o las pongas en 0</small>
+            </div>
+            <div class="form-group">
                 <label>💳 Método de Pago:</label>
                 <select id="empPayMethod" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
                     <option value="check">💵 Cheque</option>
@@ -2660,6 +2670,7 @@
                 document.getElementById('empRate').value = '';
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
+                document.getElementById('empStandingHours').value = 0;
                 document.getElementById('empWorkerType').value = 'w2_formal';
                 document.getElementById('empBusinessName').value = '';
                 document.getElementById('empSsnEin').value = '';
@@ -2692,6 +2703,7 @@
                 app.togglePayTypeFields();
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
+                document.getElementById('empStandingHours').value = emp.standingHours || 0;
                 document.getElementById('empPayMethod').value = emp.payMethod || 'check';
                 document.getElementById('empWorkerType').value = emp.workerType || 'w2_formal';
                 document.getElementById('empBusinessName').value = emp.businessName || '';
@@ -2795,6 +2807,7 @@
                         emp.flatRate = flatRate;
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
+                        emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
                         emp.payMethod = document.getElementById('empPayMethod').value || 'check';
                         emp.workerType = workerType;
                         emp.businessName = businessName;
@@ -2822,6 +2835,7 @@
                         flatRate,
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
+                        standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
                         payMethod: document.getElementById('empPayMethod').value || 'check',
                         workerType,
                         businessName,
@@ -4001,11 +4015,17 @@
                 if (sortBy === 'alpha') payrollArr.sort((a,b) => a.employeeName.localeCompare(b.employeeName));
                 else if (sortBy === 'pay') payrollArr.sort((a,b) => b.netPay - a.netPay);
                 else if (sortBy === 'late') payrollArr.sort((a,b) => b.lateMinutes - a.lateMinutes);
-                this.currentPayrollCalc = payrollArr; // Resultado temporal del cálculo (NO sobreescribe cheques)
                 // Guardar período para usarlo en cheques
                 const _fmt = (d) => { const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'), yy=d.getFullYear(); return mm+'/'+dd+'/'+yy; };
-                this.currentPayrollPeriod = _fmt(startDate) + ' - ' + _fmt(endDate);
-                this.displayPayrollResults(payrollArr, startDate, endDate);
+                const periodLabel = _fmt(startDate) + ' - ' + _fmt(endDate);
+                // FIX 2026-09-04: combinar con lo que ya esté calculado (ej. Captura
+                // Manual) en vez de reemplazarlo, si es el mismo período.
+                this.mergePayrollCalc(payrollArr, periodLabel);
+                if (sortBy === 'alpha') this.currentPayrollCalc.sort((a,b) => a.employeeName.localeCompare(b.employeeName));
+                else if (sortBy === 'pay') this.currentPayrollCalc.sort((a,b) => b.netPay - a.netPay);
+                else if (sortBy === 'late') this.currentPayrollCalc.sort((a,b) => b.lateMinutes - a.lateMinutes);
+                this.currentPayrollPeriod = periodLabel;
+                this.displayPayrollResults(this.currentPayrollCalc, startDate, endDate);
             },
 
             /**
@@ -4053,6 +4073,26 @@
                 // Pago neto = Gross - Tardanza - Deducciones + Reembolso (no gravable)
                 p.netPay = p.grossPay - p.latePenalty - p.deductions + (p.reimbursement || 0);
                 return p;
+            },
+
+            // FIX 2026-09-04: combina el resultado de "Calcular Nómina (Reloj Checador)"
+            // y de "Captura Manual de Horas" en un solo cálculo en pantalla, para poder
+            // guardar/imprimir UNA sola nómina con empleados del Reloj, del Scheduler y
+            // manuales juntos — antes cada botón reemplazaba por completo el resultado
+            // del otro y solo quedaba el último que se corrió. Solo se combina si es
+            // EXACTAMENTE el mismo período (mismas fechas Inicio/Fin); si cambian las
+            // fechas, empieza de cero para no arrastrar por accidente datos de otra semana.
+            mergePayrollCalc(newEntries, periodLabel) {
+                if (Array.isArray(this.currentPayrollCalc) && this.currentPayrollCalc.length > 0 && this.currentPayrollPeriod === periodLabel) {
+                    newEntries.forEach(entry => {
+                        const idx = this.currentPayrollCalc.findIndex(p => String(p.employeeId) === String(entry.employeeId));
+                        if (idx >= 0) this.currentPayrollCalc[idx] = entry;
+                        else this.currentPayrollCalc.push(entry);
+                    });
+                } else {
+                    this.currentPayrollCalc = newEntries.slice();
+                }
+                return this.currentPayrollCalc;
             },
 
             /**
@@ -4108,12 +4148,18 @@
                     const pre = (startStr && endStr)
                         ? candidatos.find(en => en.weekStart === startStr && en.weekEnd === endStr)
                         : candidatos[candidatos.length - 1];
-                    const regVal = pre ? pre.regularHours : 0;
+                    // FIX 2026-09-04: si el Scheduler no mandó nada para esta semana pero
+                    // el empleado tiene "Horas fijas por semana" configuradas (jornada
+                    // constante, ej. 8 hrs/semana), se precargan solas en vez de dejar el
+                    // campo en 0 — así no hay que capturarlas a mano cada semana.
+                    const regVal = pre ? pre.regularHours : (emp.standingHours || 0);
                     const otVal = pre ? pre.overtimeHours : 0;
                     const bonusVal = pre ? pre.bonus : 0;
                     const badge = pre
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Precargado desde el Scheduler (Nómina x %), semana ${pre.weekStart} a ${pre.weekEnd}">📤 Scheduler</span>`
-                        : '';
+                        : (emp.standingHours > 0
+                            ? ` <span style="background:#e8f6f3; color:#117a65; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Horas fijas semanales configuradas en el perfil del empleado">🔁 Fijas</span>`
+                            : '');
                     return `
                     <tr>
                         <td><strong>${emp.name}</strong>${badge}</td>
@@ -4182,13 +4228,17 @@
                 }
 
                 const sortBy = document.getElementById('sortPayroll') ? document.getElementById('sortPayroll').value : 'alpha';
-                if (sortBy === 'alpha') payrollArr.sort((a,b) => a.employeeName.localeCompare(b.employeeName));
-                else if (sortBy === 'pay') payrollArr.sort((a,b) => b.netPay - a.netPay);
-
-                this.currentPayrollCalc = payrollArr;
                 const _fmt = (d) => { const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'), yy=d.getFullYear(); return mm+'/'+dd+'/'+yy; };
-                this.currentPayrollPeriod = _fmt(startDate) + ' - ' + _fmt(endDate);
-                this.displayPayrollResults(payrollArr, startDate, endDate);
+                const periodLabel = _fmt(startDate) + ' - ' + _fmt(endDate);
+                // FIX 2026-09-04: combinar con lo que ya esté calculado (ej. Reloj
+                // Checador) en vez de reemplazarlo, si es el mismo período — así se
+                // puede guardar/imprimir una sola nómina con empleados de las dos
+                // fuentes juntos.
+                this.mergePayrollCalc(payrollArr, periodLabel);
+                if (sortBy === 'alpha') this.currentPayrollCalc.sort((a,b) => a.employeeName.localeCompare(b.employeeName));
+                else if (sortBy === 'pay') this.currentPayrollCalc.sort((a,b) => b.netPay - a.netPay);
+                this.currentPayrollPeriod = periodLabel;
+                this.displayPayrollResults(this.currentPayrollCalc, startDate, endDate);
             },
             
             displayPayrollResults(payroll, startDate, endDate) {
@@ -4648,6 +4698,16 @@
                     const savedPeriod = (this.savedPayrollPeriods || []).find(pp => pp.start === startISO && pp.end === endISO);
                     if (savedPeriod) {
                         const entry = (savedPeriod.payroll || []).find(p => String(p.employeeId) === String(emp.id));
+                        if (entry && entry.totalHours > 0) nominaPct = entry;
+                    }
+                    // FIX 2026-09-04: además del historial guardado y de la precarga
+                    // pendiente del Scheduler, revisar también el cálculo actual en
+                    // pantalla (this.currentPayrollCalc) para el mismo período — así
+                    // las Time Cards también reflejan horas capturadas 100% a mano
+                    // (sin precarga del Scheduler ni de "Horas fijas") que ya se
+                    // calcularon pero todavía no se han guardado con "💾 Guardar Nómina".
+                    if (!nominaPct && Array.isArray(this.currentPayrollCalc) && this.currentPayrollPeriod === (formatDateUSA(startDate) + ' - ' + formatDateUSA(endDate))) {
+                        const entry = this.currentPayrollCalc.find(p => String(p.employeeId) === String(emp.id));
                         if (entry && entry.totalHours > 0) nominaPct = entry;
                     }
                     if (!nominaPct) {
@@ -7107,8 +7167,15 @@
                         this.refreshAttendances();
                         console.log(`📥 Horas del Scheduler: +${added} nuevas, ${repaired} reparadas`);
                     }
-                    // "Nómina x %" — guardar tal cual para precargar Captura Manual.
-                    this.horasManualScheduler = Array.isArray(schedData.manualPayroll) ? schedData.manualPayroll : [];
+                    // "Nómina x %" — FIX 2026-09-04: estos registros traían el ID de
+                    // empleado tal como lo generó el Scheduler (espacio de IDs distinto
+                    // al de Nómina), igual que pasaba con las asistencias antes del fix
+                    // de arriba — por eso no se precargaban en Captura Manual ni en el
+                    // resumen de Time Card para empleados de "Nómina x %" (ej. Maria
+                    // Ramírez Duarte). Se resuelve el ID real de Nómina por nombre, igual
+                    // que con las asistencias.
+                    this.horasManualScheduler = (Array.isArray(schedData.manualPayroll) ? schedData.manualPayroll : [])
+                        .map(en => ({ ...en, employeeId: resolveEmpId(en.employeeId, en.employeeName) }));
                     localStorage.setItem('ap_nomina_horasManualScheduler', JSON.stringify(this.horasManualScheduler));
                     // Si el panel de Captura Manual ya está abierto, refrescarlo.
                     const panelAbierto = document.getElementById('manualHoursPanel');
