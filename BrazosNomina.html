@@ -600,6 +600,13 @@
                         <button class="btn btn-secondary" onclick="app.resetCheckConfig()">
                             🔄 Restaurar valores por defecto
                         </button>
+                        <!-- FIX 2026-09-04: cheque de muestra con datos ficticios, para
+                             verificar en un cheque físico real que la posición de los
+                             campos coincide, antes de imprimir la nómina de verdad. No
+                             se guarda en el historial ni afecta la numeración real. -->
+                        <button class="btn" style="background:#e67e22; color:white;" onclick="app.printSampleCheck()">
+                            🧪 Imprimir Cheque de Muestra
+                        </button>
                     </div>
                 </div>
             </div>
@@ -983,7 +990,7 @@
                         <label>Período de Nómina:</label>
                         <select id="payrollPeriod" onchange="app.handlePayrollPeriodChange()">
                             <option value="week">Esta semana</option>
-                            <option value="lastweek">Semana pasada</option>
+                            <option value="lastweek" selected>Semana pasada</option>
                             <option value="month">Este mes</option>
                             <option value="lastmonth">Mes pasado</option>
                             <option value="last15">Últimos 15 días</option>
@@ -1525,6 +1532,52 @@
                 <input type="number" id="empStandingHours" step="0.01" min="0" placeholder="0" value="0">
                 <small style="color: #7f8c8d; margin-top: 5px;">Se precargan solas en "Horas Regulares" cada semana en Captura Manual de Horas, hasta que las cambies o las pongas en 0</small>
             </div>
+            <!-- FIX 2026-09-04: saldo inicial de Acumulado del Año (YTD), para
+                 empleados que migran de QuickBooks a mitad de año — se captura UNA
+                 SOLA VEZ con los números de su último talón de QuickBooks, y Nómina
+                 lo suma a lo que vaya calculando desde aquí en adelante, para que el
+                 YTD del talón salga correcto desde el primer cheque. Hay que
+                 poner estos campos en 0 al empezar un año nuevo. -->
+            <details style="margin-bottom:15px;">
+                <summary style="cursor:pointer; color:#1565c0; font-weight:bold; padding:8px; background:#e3f2fd; border-radius:6px;">
+                    📋 Saldo Inicial YTD (si viene de QuickBooks)
+                </summary>
+                <p style="font-size:0.82rem; color:#666; margin:10px 0;">Captura aquí, UNA SOLA VEZ, los acumulados del año que ya llevaba este empleado en QuickBooks antes de migrar a Nómina (los ves en su último talón). Ponlos en 0 al iniciar un año nuevo.</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div class="form-group">
+                        <label>Sueldo Regular YTD ($):</label>
+                        <input type="number" id="empYtdOpenRegularPay" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Tiempo Extra YTD ($):</label>
+                        <input type="number" id="empYtdOpenOvertimePay" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Bono YTD ($):</label>
+                        <input type="number" id="empYtdOpenBonus" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Reembolso/Otros Pagos YTD ($):</label>
+                        <input type="number" id="empYtdOpenReimbursement" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Deducciones YTD ($):</label>
+                        <input type="number" id="empYtdOpenDeductions" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Impuesto Federal YTD ($):</label>
+                        <input type="number" id="empYtdOpenFederalTax" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Seguro Social YTD ($):</label>
+                        <input type="number" id="empYtdOpenSocialSecurity" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Medicare YTD ($):</label>
+                        <input type="number" id="empYtdOpenMedicare" step="0.01" min="0" placeholder="0" value="0">
+                    </div>
+                </div>
+            </details>
             <div class="form-group">
                 <label>💳 Método de Pago:</label>
                 <select id="empPayMethod" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
@@ -2671,6 +2724,14 @@
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
                 document.getElementById('empStandingHours').value = 0;
+                document.getElementById('empYtdOpenRegularPay').value = 0;
+                document.getElementById('empYtdOpenOvertimePay').value = 0;
+                document.getElementById('empYtdOpenBonus').value = 0;
+                document.getElementById('empYtdOpenReimbursement').value = 0;
+                document.getElementById('empYtdOpenDeductions').value = 0;
+                document.getElementById('empYtdOpenFederalTax').value = 0;
+                document.getElementById('empYtdOpenSocialSecurity').value = 0;
+                document.getElementById('empYtdOpenMedicare').value = 0;
                 document.getElementById('empWorkerType').value = 'w2_formal';
                 document.getElementById('empBusinessName').value = '';
                 document.getElementById('empSsnEin').value = '';
@@ -2704,6 +2765,14 @@
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
                 document.getElementById('empStandingHours').value = emp.standingHours || 0;
+                document.getElementById('empYtdOpenRegularPay').value = emp.ytdOpenRegularPay || 0;
+                document.getElementById('empYtdOpenOvertimePay').value = emp.ytdOpenOvertimePay || 0;
+                document.getElementById('empYtdOpenBonus').value = emp.ytdOpenBonus || 0;
+                document.getElementById('empYtdOpenReimbursement').value = emp.ytdOpenReimbursement || 0;
+                document.getElementById('empYtdOpenDeductions').value = emp.ytdOpenDeductions || 0;
+                document.getElementById('empYtdOpenFederalTax').value = emp.ytdOpenFederalTax || 0;
+                document.getElementById('empYtdOpenSocialSecurity').value = emp.ytdOpenSocialSecurity || 0;
+                document.getElementById('empYtdOpenMedicare').value = emp.ytdOpenMedicare || 0;
                 document.getElementById('empPayMethod').value = emp.payMethod || 'check';
                 document.getElementById('empWorkerType').value = emp.workerType || 'w2_formal';
                 document.getElementById('empBusinessName').value = emp.businessName || '';
@@ -2808,6 +2877,14 @@
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
                         emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
+                        emp.ytdOpenRegularPay = parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0;
+                        emp.ytdOpenOvertimePay = parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0;
+                        emp.ytdOpenBonus = parseFloat(document.getElementById('empYtdOpenBonus').value) || 0;
+                        emp.ytdOpenReimbursement = parseFloat(document.getElementById('empYtdOpenReimbursement').value) || 0;
+                        emp.ytdOpenDeductions = parseFloat(document.getElementById('empYtdOpenDeductions').value) || 0;
+                        emp.ytdOpenFederalTax = parseFloat(document.getElementById('empYtdOpenFederalTax').value) || 0;
+                        emp.ytdOpenSocialSecurity = parseFloat(document.getElementById('empYtdOpenSocialSecurity').value) || 0;
+                        emp.ytdOpenMedicare = parseFloat(document.getElementById('empYtdOpenMedicare').value) || 0;
                         emp.payMethod = document.getElementById('empPayMethod').value || 'check';
                         emp.workerType = workerType;
                         emp.businessName = businessName;
@@ -2836,6 +2913,14 @@
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
                         standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
+                        ytdOpenRegularPay: parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0,
+                        ytdOpenOvertimePay: parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0,
+                        ytdOpenBonus: parseFloat(document.getElementById('empYtdOpenBonus').value) || 0,
+                        ytdOpenReimbursement: parseFloat(document.getElementById('empYtdOpenReimbursement').value) || 0,
+                        ytdOpenDeductions: parseFloat(document.getElementById('empYtdOpenDeductions').value) || 0,
+                        ytdOpenFederalTax: parseFloat(document.getElementById('empYtdOpenFederalTax').value) || 0,
+                        ytdOpenSocialSecurity: parseFloat(document.getElementById('empYtdOpenSocialSecurity').value) || 0,
+                        ytdOpenMedicare: parseFloat(document.getElementById('empYtdOpenMedicare').value) || 0,
                         payMethod: document.getElementById('empPayMethod').value || 'check',
                         workerType,
                         businessName,
@@ -4139,6 +4224,48 @@
                 if (!list || !this.employees || this.employees.length === 0) return;
                 const startStr = document.getElementById('manualPayrollStart')?.value || '';
                 const endStr = document.getElementById('manualPayrollEnd')?.value || '';
+                // FIX 2026-09-04: esta tabla se reconstruía por completo cada vez que se
+                // llamaba (por ejemplo cuando llega un auto-sync de Drive cada 3 minutos
+                // mientras el panel sigue abierto), perdiendo cualquier hora/bono/
+                // reembolso que ya se hubiera escrito a mano. Ahora, si el período
+                // (Fecha Inicio/Fin) no cambió desde la última vez que se dibujó esta
+                // tabla, se guardan los valores que ya estén en pantalla y se restauran
+                // después de reconstruir — así lo capturado a mano se conserva hasta que
+                // se cambie de período o se guarde la nómina. Si sí cambió el período, se
+                // parte de cero (no tendría sentido arrastrar horas de otra semana).
+                const mismoPeriodoQueAntes = this._manualHoursLastRange &&
+                    this._manualHoursLastRange.start === startStr && this._manualHoursLastRange.end === endStr;
+                const valoresPrevios = {};
+                if (mismoPeriodoQueAntes) {
+                    list.querySelectorAll('.manualRegHours').forEach(input => {
+                        const empId = input.dataset.emp;
+                        valoresPrevios[empId] = {
+                            reg: input.value,
+                            ot: list.querySelector(`.manualOtHours[data-emp="${empId}"]`)?.value,
+                            bonus: list.querySelector(`.manualBonus[data-emp="${empId}"]`)?.value,
+                            reimb: list.querySelector(`.manualReimbursement[data-emp="${empId}"]`)?.value
+                        };
+                    });
+                }
+                this._manualHoursLastRange = { start: startStr, end: endStr };
+                // FIX 2026-09-04: calcular las horas de Producción (Reloj Checador +
+                // Scheduler Shop→Shop) que ya tiene cada empleado en este mismo período,
+                // solo para MOSTRARLAS como referencia — no se editan aquí ni se mandan a
+                // calculateManualPayroll(), así no hay riesgo de duplicar el cálculo (esas
+                // horas ya se incluyen aparte con "Calcular Nómina (Reloj Checador)"). Es
+                // solo para que no parezca que un empleado con horas de Producción no
+                // trabajó esa semana.
+                const prodHorasPorEmpleado = {};
+                if (startStr && endStr) {
+                    const startD = new Date(startStr + 'T00:00:00');
+                    const endD = new Date(endStr + 'T23:59:59');
+                    this.attendances.forEach(a => {
+                        if (!a.hours) return;
+                        const d = new Date(a.date + 'T00:00:00');
+                        if (d < startD || d > endD) return;
+                        prodHorasPorEmpleado[a.employeeId] = (prodHorasPorEmpleado[a.employeeId] || 0) + a.hours;
+                    });
+                }
                 list.innerHTML = this.employees.map(emp => {
                     // Si "Nómina x %" del Scheduler ya envió una semana para este
                     // empleado que coincide con el período elegido, precargar
@@ -4152,22 +4279,28 @@
                     // el empleado tiene "Horas fijas por semana" configuradas (jornada
                     // constante, ej. 8 hrs/semana), se precargan solas en vez de dejar el
                     // campo en 0 — así no hay que capturarlas a mano cada semana.
-                    const regVal = pre ? pre.regularHours : (emp.standingHours || 0);
-                    const otVal = pre ? pre.overtimeHours : 0;
-                    const bonusVal = pre ? pre.bonus : 0;
+                    const prevVal = valoresPrevios[emp.id];
+                    const regVal = prevVal ? prevVal.reg : (pre ? pre.regularHours : (emp.standingHours || 0));
+                    const otVal = prevVal ? prevVal.ot : (pre ? pre.overtimeHours : 0);
+                    const bonusVal = prevVal ? prevVal.bonus : (pre ? pre.bonus : 0);
+                    const reimbVal = prevVal ? prevVal.reimb : (emp.reimbursement || 0);
                     const badge = pre
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Precargado desde el Scheduler (Nómina x %), semana ${pre.weekStart} a ${pre.weekEnd}">📤 Scheduler</span>`
                         : (emp.standingHours > 0
                             ? ` <span style="background:#e8f6f3; color:#117a65; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Horas fijas semanales configuradas en el perfil del empleado">🔁 Fijas</span>`
                             : '');
+                    const prodHrs = prodHorasPorEmpleado[emp.id] || 0;
+                    const prodBadge = prodHrs > 0
+                        ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
+                        : '';
                     return `
                     <tr>
-                        <td><strong>${emp.name}</strong>${badge}</td>
+                        <td><strong>${emp.name}</strong>${badge}${prodBadge}</td>
                         <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
                         <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regVal}" style="width:90px; padding:6px;"></td>
                         <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otVal}" style="width:90px; padding:6px;"></td>
                         <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${emp.reimbursement || 0}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
                     </tr>
                 `;
                 }).join('');
@@ -4964,6 +5097,50 @@
                 document.getElementById('timecardDisplay').scrollIntoView({behavior: 'smooth', block: 'start'});
             },
             
+            // FIX 2026-09-04: imprime UN cheque con datos ficticios usando la
+            // configuración actual (checkConfig) — pasa por el MISMO previewChecks()
+            // que usan los cheques reales, así las posiciones son exactamente las
+            // mismas que saldrían en la nómina real. A propósito NO se manda la
+            // imagen de fondo del cheque (bgImage): la idea es imprimir SOLO los
+            // datos sobre hoja en blanco para poder superponerla encima de un
+            // cheque físico real y verificar que los campos coinciden. No se
+            // guarda en this.checks (no afecta el historial ni la numeración).
+            printSampleCheck() {
+                const todayISO = new Date().toISOString().split('T')[0];
+                const sampleCheck = {
+                    id: 'sample',
+                    date: todayISO + 'T12:00:00',
+                    employeeId: 'sample',
+                    employeeName: 'EMPLEADO DE MUESTRA',
+                    employeeAddress: '123 Calle de Prueba',
+                    employeeCity: 'Waco, TX 76701',
+                    period: '01/01/2026 - 01/07/2026',
+                    signatureUrl: this.getSignatureDataUrl(),
+                    hours: 40,
+                    // FIX 2026-09-04: datos ficticios de desglose para que el talón
+                    // detallado (Pago con Horas/Tarifa, Impuestos, Deducciones) se vea
+                    // con contenido de ejemplo en vez de ceros.
+                    regularHours: 40,
+                    overtimeHours: 0,
+                    rate: 15,
+                    regularPay: 600,
+                    overtimePay: 0,
+                    gross: 600,
+                    deductions: 45,
+                    reimbursement: 0,
+                    bonus: 50,
+                    net: 529.10,
+                    workerType: 'w2_formal',
+                    federalTax: 30,
+                    socialSecurityTax: 37.20,
+                    medicareTax: 8.70,
+                    checkNumber: 9999,
+                    payMethod: 'check',
+                    printed: false
+                };
+                this.previewChecks([sampleCheck], this.checkConfig, ''); // sin imagen de fondo, a propósito
+            },
+
             // CHEQUES
             openCheckAssignment() {
                 const payroll = this.currentPayrollCalc;
@@ -5158,6 +5335,15 @@
                             period: this.currentPayrollPeriod || '',
                             signatureUrl: this.getSignatureDataUrl(),
                             hours: p.totalHours,
+                            // FIX 2026-09-04: guardar el desglose (horas/tarifa/pago
+                            // regular y extra por separado) para poder reconstruir el
+                            // talón detallado estilo QuickBooks y calcular el YTD de
+                            // cada categoría a partir del historial de cheques.
+                            regularHours: p.regularHours || 0,
+                            overtimeHours: p.overtimeHours || 0,
+                            rate: p.rate || 0,
+                            regularPay: p.regularPay || 0,
+                            overtimePay: p.overtimePay || 0,
                             gross: p.grossPay,
                             deductions: p.deductions || 0,
                             reimbursement: p.reimbursement || 0,
@@ -5275,6 +5461,141 @@
                 printWindow.document.close();
             },
 
+            // FIX 2026-09-04: calcula los acumulados del año (YTD) de un empleado
+            // hasta (e incluyendo) la fecha de un cheque, sumando su historial en
+            // this.checks del mismo año calendario, más su "Saldo Inicial YTD" (si
+            // migró de QuickBooks a mitad de año y lo capturó en su ficha).
+            getYtdBreakdown(employeeId, uptoISODate) {
+                const emp = this.employees.find(e => e.id === employeeId);
+                const year = (uptoISODate || '').split('-')[0];
+                const totals = { regularPay: 0, overtimePay: 0, bonus: 0, reimbursement: 0, federalTax: 0, socialSecurity: 0, medicare: 0, deductions: 0 };
+                (this.checks || []).forEach(c => {
+                    if (String(c.employeeId) !== String(employeeId)) return;
+                    const cDate = (c.date || '').split('T')[0];
+                    if (!cDate || cDate.split('-')[0] !== year || cDate > uptoISODate) return;
+                    totals.regularPay += c.regularPay || 0;
+                    totals.overtimePay += c.overtimePay || 0;
+                    totals.bonus += c.bonus || 0;
+                    totals.reimbursement += c.reimbursement || 0;
+                    totals.federalTax += c.federalTax || 0;
+                    totals.socialSecurity += c.socialSecurityTax || 0;
+                    totals.medicare += c.medicareTax || 0;
+                    totals.deductions += c.deductions || 0;
+                });
+                if (emp) {
+                    totals.regularPay += emp.ytdOpenRegularPay || 0;
+                    totals.overtimePay += emp.ytdOpenOvertimePay || 0;
+                    totals.bonus += emp.ytdOpenBonus || 0;
+                    totals.reimbursement += emp.ytdOpenReimbursement || 0;
+                    totals.federalTax += emp.ytdOpenFederalTax || 0;
+                    totals.socialSecurity += emp.ytdOpenSocialSecurity || 0;
+                    totals.medicare += emp.ytdOpenMedicare || 0;
+                    totals.deductions += emp.ytdOpenDeductions || 0;
+                }
+                return totals;
+            },
+
+            // FIX 2026-09-04: contenido interno del talón, COMPARTIDO entre la vista
+            // previa en pantalla (previewChecks) y la impresión física real
+            // (printMultipleChecks) — para que nunca se puedan desincronizar.
+            // Rediseñado para igualar el formato real de QuickBooks que usa Brazos:
+            // Pago (Sueldo Regular/Extra/Bono con Horas/Tarifa/Actual/Acum. Año),
+            // Otros Pagos (Reembolso), Impuestos y Deducciones (Actual/Acum. Año), y
+            // un Resumen final. Devuelve solo el HTML interno (con estilos en línea)
+            // para que cada llamador lo envuelva en su propio contenedor/posición.
+            buildStubContentHTML(check, label) {
+                const fmt = (n) => this.formatMoney(n || 0);
+                const dateParts = check.date.split('T')[0].split('-');
+                const dateUSA = dateParts[1] + '/' + dateParts[2] + '/' + dateParts[0];
+                const ytd = this.getYtdBreakdown(check.employeeId, check.date.split('T')[0]);
+                const rate = check.rate || 0;
+                const regHrs = check.regularHours || 0;
+                const otHrs = check.overtimeHours || 0;
+                const regPay = check.regularPay || 0;
+                const otPay = check.overtimePay || 0;
+                const bonusPay = check.bonus || 0;
+                const reimbPay = check.reimbursement || 0;
+                const fedTax = check.federalTax || 0;
+                const ssTax = check.socialSecurityTax || 0;
+                const medTax = check.medicareTax || 0;
+                const totalTaxesCurrent = fedTax + ssTax + medTax;
+                const totalTaxesYtd = ytd.federalTax + ytd.socialSecurity + ytd.medicare;
+                const totalPayCurrent = regPay + otPay + bonusPay;
+                const totalPayYtd = ytd.regularPay + ytd.overtimePay + ytd.bonus;
+                const netYtd = totalPayYtd - totalTaxesYtd - ytd.deductions + ytd.reimbursement;
+
+                const rowStyle = 'padding:2px 6px;';
+                const rightStyle = 'padding:2px 6px; text-align:right;';
+                const centerStyle = 'padding:2px 6px; text-align:center;';
+
+                let payRows = `<tr><td style="${rowStyle}">Sueldo Regular</td><td style="${centerStyle}">${regHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate)}</td><td style="${rightStyle}">$${fmt(regPay)}</td><td style="${rightStyle}">$${fmt(ytd.regularPay)}</td></tr>`;
+                if (otHrs > 0 || ytd.overtimePay > 0) {
+                    payRows += `<tr><td style="${rowStyle}">Tiempo Extra</td><td style="${centerStyle}">${otHrs.toFixed(2)}</td><td style="${centerStyle}">$${fmt(rate * 1.5)}</td><td style="${rightStyle}">$${fmt(otPay)}</td><td style="${rightStyle}">$${fmt(ytd.overtimePay)}</td></tr>`;
+                }
+                if (bonusPay > 0 || ytd.bonus > 0) {
+                    payRows += `<tr><td style="${rowStyle}">Bono</td><td style="${centerStyle}">—</td><td style="${centerStyle}">—</td><td style="${rightStyle}">$${fmt(bonusPay)}</td><td style="${rightStyle}">$${fmt(ytd.bonus)}</td></tr>`;
+                }
+
+                let taxRows = '';
+                if (fedTax > 0 || ytd.federalTax > 0) taxRows += `<tr><td style="${rowStyle}">Impuesto Federal</td><td style="${rightStyle}">$${fmt(fedTax)}</td><td style="${rightStyle}">$${fmt(ytd.federalTax)}</td></tr>`;
+                if (ssTax > 0 || ytd.socialSecurity > 0) taxRows += `<tr><td style="${rowStyle}">Seguro Social</td><td style="${rightStyle}">$${fmt(ssTax)}</td><td style="${rightStyle}">$${fmt(ytd.socialSecurity)}</td></tr>`;
+                if (medTax > 0 || ytd.medicare > 0) taxRows += `<tr><td style="${rowStyle}">Medicare</td><td style="${rightStyle}">$${fmt(medTax)}</td><td style="${rightStyle}">$${fmt(ytd.medicare)}</td></tr>`;
+                if (!taxRows) taxRows = `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
+
+                const dedRows = (check.deductions > 0 || ytd.deductions > 0)
+                    ? `<tr><td style="${rowStyle}">Deducción</td><td style="${rightStyle}">$${fmt(check.deductions)}</td><td style="${rightStyle}">$${fmt(ytd.deductions)}</td></tr>`
+                    : `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
+
+                const otherRows = (reimbPay > 0 || ytd.reimbursement > 0)
+                    ? `<tr><td style="${rowStyle}">Reembolso</td><td style="${rightStyle}">$${fmt(reimbPay)}</td><td style="${rightStyle}">$${fmt(ytd.reimbursement)}</td></tr>`
+                    : `<tr><td colspan="3" style="${rowStyle} color:#999;">—</td></tr>`;
+
+                return `
+                    <div style="padding:6px 16px 2px; display:flex; justify-content:space-between; font-size:9pt; border-bottom:1px solid #ccc;">
+                        <strong>${this.getCompanyName()}</strong>
+                        <span style="color:#555;">Cheque #${check.checkNumber}</span>
+                    </div>
+                    <div style="text-align:center; font-size:7.5pt; color:#999; letter-spacing:1.5px; padding:2px; text-transform:uppercase;">${label}</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; padding:2px 16px; font-size:8.5pt; margin-bottom:2px;">
+                        <div><strong>${check.employeeName}</strong>${check.employeeAddress ? '<br>' + check.employeeAddress : ''}${check.employeeCity ? '<br>' + check.employeeCity : ''}</div>
+                        <div style="text-align:right;">Período: ${check.period || dateUSA}<br>Fecha de Pago: ${dateUSA}</div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 14px; padding:0 16px;">
+                        <div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">PAGO</div>
+                            <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
+                                <tr style="color:#888;"><td></td><td style="text-align:center;">Hrs</td><td style="text-align:center;">Tarifa</td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                ${payRows}
+                            </table>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">OTROS PAGOS</div>
+                            <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                ${otherRows}
+                            </table>
+                        </div>
+                        <div>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:3px;">IMPUESTOS</div>
+                            <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                ${taxRows}
+                            </table>
+                            <div style="font-size:7.3pt; font-weight:bold; color:#555; margin-top:4px;">DEDUCCIONES</div>
+                            <table style="width:100%; border-collapse:collapse; font-size:7.6pt;">
+                                <tr style="color:#888;"><td></td><td style="text-align:right;">Actual</td><td style="text-align:right;">Acum.Año</td></tr>
+                                ${dedRows}
+                            </table>
+                        </div>
+                    </div>
+                    <table style="width:calc(100% - 32px); margin:5px 16px 3px; border-collapse:collapse; font-size:7.8pt; border:1px solid #ccc;">
+                        <tr style="color:#888;"><td style="padding:2px 6px;">RESUMEN</td><td style="text-align:right; padding:2px 6px;">Actual</td><td style="text-align:right; padding:2px 6px;">Acum.Año</td></tr>
+                        <tr><td style="padding:2px 6px;">Pago Total</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalPayYtd)}</td></tr>
+                        <tr><td style="padding:2px 6px;">Impuestos</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesCurrent)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(totalTaxesYtd)}</td></tr>
+                        <tr><td style="padding:2px 6px;">Deducciones</td><td style="text-align:right; padding:2px 6px;">$${fmt(check.deductions)}</td><td style="text-align:right; padding:2px 6px;">$${fmt(ytd.deductions)}</td></tr>
+                        <tr style="background:#e8f5e9; font-weight:bold; color:#1565c0;"><td style="padding:3px 6px; border-top:2px solid #27ae60;">PAGO NETO</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(check.net)}</td><td style="text-align:right; padding:3px 6px; border-top:2px solid #27ae60;">$${fmt(netYtd)}</td></tr>
+                    </table>
+                `;
+            },
+
             previewChecks(checks, cfg, bgImage) {
                 const self = this;
                 const existing = document.getElementById('checkPreviewAllModal');
@@ -5298,25 +5619,13 @@
                     const wordsAmount = self.numberToWords(netAmount);
 
                     // ── Talón helper — posicionado DENTRO del sheet ──
+                    // FIX 2026-09-04: contenido detallado (Pago/Impuestos/Deducciones/
+                    // Otros Pagos/Resumen con Actual y Acumulado del Año) ahora viene de
+                    // buildStubContentHTML(), compartido con printMultipleChecks() — ver
+                    // ahí el detalle. Aquí solo se envuelve en el div absoluto del preview.
                     const stubHtml = (label, offsetTop) => {
-                        const tp = offsetTop;
-                        return '<div style="position:absolute; top:' + tp + 'px; left:0; width:' + W + 'px; background:#fff; font-family:Arial,sans-serif; box-sizing:border-box; border-top:2px dashed #aaa;">' +
-                            '<div style="display:flex; justify-content:space-between; padding:6px 14px 4px; border-bottom:1px solid #ddd; font-size:8.5pt;">' +
-                                '<strong>Ana&#39;s Cleaning Service</strong>' +
-                                '<span style="color:#666;">Cheque #' + check.checkNumber + '</span>' +
-                            '</div>' +
-                            '<div style="text-align:center; font-size:7pt; color:#aaa; letter-spacing:2px; padding:2px;">' + label + '</div>' +
-                            '<table style="width:calc(100% - 20px); margin:4px 10px; border-collapse:collapse; font-size:8pt;">' +
-                                '<tr style="background:#f5f5f5;"><td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Empleado</td><td style="padding:3px 6px; border:1px solid #e0e0e0;"><strong>' + check.employeeName + '</strong></td>' +
-                                    '<td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Período</td><td style="padding:3px 6px; border:1px solid #e0e0e0;">' + (check.period || dateUSA) + '</td></tr>' +
-                                '<tr><td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Fecha Pago</td><td colspan="3" style="padding:3px 6px; border:1px solid #e0e0e0;">' + dateUSA + '</td></tr>' +
-                                '<tr><td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Horas</td><td style="padding:3px 6px; border:1px solid #e0e0e0;">' + check.hours.toFixed(2) + ' hrs</td>' +
-                                    '<td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Bruto</td><td style="padding:3px 6px; border:1px solid #e0e0e0;">$' + grossAmount + '</td></tr>' +
-                                '<tr style="background:#f5f5f5;"><td style="padding:3px 6px; border:1px solid #e0e0e0; color:#666;">Deducciones</td><td style="padding:3px 6px; border:1px solid #e0e0e0;">' + (check.deductions > 0 ? '-$' + dedAmount : '—') + '</td>' +
-                                    '<td colspan="2" style="padding:3px 6px; border:1px solid #e0e0e0;">' + [check.reimbursement > 0 ? 'Reembolso: +$' + self.formatMoney(check.reimbursement) : '', check.bonus > 0 ? 'Bono: +$' + self.formatMoney(check.bonus) : ''].filter(Boolean).join(' | ') + '</td></tr>' +
-                                '<tr style="background:#e8f5e9;"><td colspan="2" style="padding:4px 6px; border:2px solid #27ae60; font-size:9pt;"><strong>PAGO NETO:</strong></td>' +
-                                    '<td colspan="2" style="padding:4px 6px; border:2px solid #27ae60; font-size:9pt; color:#1565c0;"><strong>$' + netAmount + '</strong></td></tr>' +
-                            '</table>' +
+                        return '<div style="position:absolute; top:' + offsetTop + 'px; left:0; width:' + W + 'px; background:#fff; font-family:Arial,sans-serif; box-sizing:border-box; border-top:2px dashed #aaa; overflow:hidden;">' +
+                            self.buildStubContentHTML(check, label) +
                         '</div>';
                     };
 
@@ -5415,24 +5724,14 @@
                         '</div>';
 
                     // Talón helper — misma estructura para secciones 2 y 3
+                    // FIX 2026-09-04: contenido detallado ahora viene de
+                    // buildStubContentHTML(), compartido con previewChecks() — así la
+                    // impresión física real siempre coincide con lo que se ve en la
+                    // vista previa. De paso se corrige que aquí decía "Ana's Cleaning
+                    // Service" fijo en vez del nombre real de la empresa.
                     const stub = (label) =>
                         '<div class="check-section check-stub">' +
-                            '<div class="stub-header">' +
-                                '<span class="stub-company">Ana&#39;s Cleaning Service</span>' +
-                                '<span class="stub-checknum">Cheque #' + check.checkNumber + '</span>' +
-                            '</div>' +
-                            '<div class="stub-label">' + label + '</div>' +
-                            '<table class="stub-table">' +
-                                '<tr><td>Empleado:</td><td><strong>' + check.employeeName + '</strong></td>' +
-                                    '<td>Período:</td><td>' + (check.period || dateUSA) + '</td></tr>' +
-                                '<tr><td>Fecha Pago:</td><td colspan="3">' + dateUSA + '</td></tr>' +
-                                '<tr><td>Horas trabajadas:</td><td>' + check.hours.toFixed(2) + ' hrs</td>' +
-                                    '<td>Tarifa:</td><td>$' + self.formatMoney(check.gross / (check.hours || 1)) + '/hr</td></tr>' +
-                                '<tr><td>Pago Bruto:</td><td>$' + grossAmount + '</td>' +
-                                    '<td>Deducciones:</td><td>' + (check.deductions > 0 ? '-$' + dedAmount : '—') + '</td></tr>' +
-                                '<tr class="stub-total"><td colspan="2">PAGO NETO:</td>' +
-                                    '<td colspan="2"><strong>$' + netAmount + '</strong></td></tr>' +
-                            '</table>' +
+                            self.buildStubContentHTML(check, label) +
                         '</div>';
 
                     return '<div class="check-page">' + sec1 + stub('TALÓN PARA EL EMPLEADO') + stub(`TALÓN PARA ${this.getCompanyName().toUpperCase()}`) + '</div>';
