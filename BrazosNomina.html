@@ -4295,7 +4295,11 @@
                         prodHorasPorEmpleado[a.employeeId] = (prodHorasPorEmpleado[a.employeeId] || 0) + a.hours;
                     });
                 }
-                list.innerHTML = this.employees.map(emp => {
+                // FIX 2026-09-04: esta lista recorría this.employees en su orden de
+                // captura (no alfabético) — inconsistente con el resto de pantallas de
+                // Nómina (Empleados, Time Cards, resultado de nómina, etc.), lo cual
+                // podía confundir al capturar horas a mano. Se ordena igual que las demás.
+                list.innerHTML = [...this.employees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(emp => {
                     // Si "Nómina x %" del Scheduler ya envió una semana para este
                     // empleado que coincide con el período elegido, precargar
                     // Reg/OT/Bonus — Ranu sólo revisa y da "Calcular". Si aún no
@@ -5228,6 +5232,18 @@
             openCheckAssignment() {
                 const payroll = this.currentPayrollCalc;
                 if (!payroll || payroll.length === 0) { alert('Primero calcula la nómina'); return; }
+
+                // FIX 2026-09-04: se ordena SIEMPRE alfabéticamente aquí (sin importar
+                // qué opción de "Ordenar por" se haya usado en la tabla de resultados —
+                // por pago o por tardanza, por ejemplo), para que asignar los # de
+                // cheque sea predecible y coincida con el orden en que normalmente se
+                // escriben/organizan los cheques físicos. Se ordena el arreglo MISMO
+                // (this.currentPayrollCalc), no una copia — así el índice "i" que se usa
+                // para los campos #Chq de este modal es EXACTAMENTE el mismo índice que
+                // confirmAndPrintChecks() usa después para leerlos; si se ordenara solo
+                // una copia para mostrar, el cheque #1 podría terminar asignado al
+                // empleado equivocado.
+                payroll.sort((a,b) => (a.employeeName||'').localeCompare(b.employeeName||''));
 
                 // Separar por método de pago
                 const checkEmps = [];
