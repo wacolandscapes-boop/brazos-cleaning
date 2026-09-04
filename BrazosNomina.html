@@ -6971,16 +6971,40 @@
                     // empleado por ID), no mostraba nada. Ahora se resuelve el ID real de
                     // Nómina buscando por nombre; si no hay empleado con ese nombre
                     // todavía, se conserva el ID de Scheduler como respaldo.
+                    // FIX 2026-09-03 (v2): la comparación exacta de nombres no servía en la
+                    // práctica — datos reales traen "Apellido, Nombre" en vez de "Nombre
+                    // Apellido", acentos inconsistentes ("Juárez" vs "Juarez"), y apellidos
+                    // incompletos ("Nohemi Camacho" vs "Nohemi Camacho-Rodríguez"). Ahora se
+                    // normaliza (sin acentos, separando por cualquier no-letra: espacio, coma,
+                    // guión) y se hace match si TODAS las palabras del nombre más corto están
+                    // contenidas en el más largo — así "Juarez, Margarita" sí encuentra a
+                    // "Margarita Juárez", y "Nohemi Camacho" sí encuentra a
+                    // "Nohemi Camacho-Rodríguez".
+                    const normTokens = (s) => (s || '').toString()
+                        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                        .toLowerCase()
+                        .split(/[^a-z]+/)
+                        .filter(Boolean);
+                    const namesMatch = (a, b) => {
+                        const ta = normTokens(a), tb = normTokens(b);
+                        if (ta.length < 2 || tb.length < 2) return false;
+                        const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+                        return shorter.every(t => longer.includes(t));
+                    };
                     const resolveEmpId = (rawId, rawName) => {
-                        const match = this.employees.find(e => e.name && rawName &&
-                            e.name.trim().toLowerCase() === String(rawName).trim().toLowerCase());
+                        const match = this.employees.find(e => e.name && rawName && namesMatch(e.name, rawName));
                         return match ? match.id : String(rawId);
                     };
 
-                    // Reparar asistencias YA bajadas antes con el ID equivocado de Scheduler
+                    // Reparar asistencias YA bajadas antes con el ID equivocado de Scheduler.
+                    // Se identifican por fromScheduler/source==='calendario' (marcadas por
+                    // versiones nuevas) O por el prefijo 'sched_' en su id (marcadas por
+                    // versiones viejas que no ponían esas banderas).
                     let repaired = 0;
                     this.attendances.forEach(a => {
-                        if (!a.fromScheduler) return;
+                        const esDeScheduler = a.fromScheduler || a.source === 'calendario' ||
+                            (a.id && String(a.id).startsWith('sched_'));
+                        if (!esDeScheduler) return;
                         const yaEsEmpleadoReal = this.employees.some(e => String(e.id) === String(a.employeeId));
                         if (yaEsEmpleadoReal) return;
                         const fixedId = resolveEmpId(a.employeeId, a.employeeName);
