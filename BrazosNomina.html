@@ -1542,7 +1542,18 @@
                 <summary style="cursor:pointer; color:#1565c0; font-weight:bold; padding:8px; background:#e3f2fd; border-radius:6px;">
                     📋 Saldo Inicial YTD (si viene de QuickBooks)
                 </summary>
-                <p style="font-size:0.82rem; color:#666; margin:10px 0;">Captura aquí, UNA SOLA VEZ, los acumulados del año que ya llevaba este empleado en QuickBooks antes de migrar a Nómina (los ves en su último talón). Ponlos en 0 al iniciar un año nuevo.</p>
+                <p style="font-size:0.82rem; color:#666; margin:10px 0;">Captura aquí, UNA SOLA VEZ, los acumulados del año que ya llevaba este empleado en QuickBooks antes de migrar a Nómina (los ves en su último talón).</p>
+                <!-- FIX 2026-09-04: antes había que recordar poner estos campos en $0
+                     manualmente cada enero, o el saldo inicial de 2026 se seguiría
+                     sumando para siempre en los talones de 2027, 2028, etc. Ahora se
+                     guarda el AÑO exacto al que corresponde este saldo, y getYtdBreakdown()
+                     solo lo aplica a talones de ese mismo año — no hace falta borrarlo
+                     ni acordarse de nada al cambiar de año. -->
+                <div class="form-group" style="max-width:220px; margin-bottom:10px;">
+                    <label>Año al que corresponde este saldo:</label>
+                    <input type="number" id="empYtdOpenYear" step="1" min="2020" max="2099" placeholder="2026" value="2026">
+                    <small style="color:#7f8c8d;">El saldo solo se aplicará a los cheques de ESTE año — en años siguientes se ignora solo, sin que tengas que borrarlo.</small>
+                </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div class="form-group">
                         <label>Sueldo Regular YTD ($):</label>
@@ -2724,6 +2735,7 @@
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
                 document.getElementById('empStandingHours').value = 0;
+                document.getElementById('empYtdOpenYear').value = new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = 0;
                 document.getElementById('empYtdOpenOvertimePay').value = 0;
                 document.getElementById('empYtdOpenBonus').value = 0;
@@ -2765,6 +2777,7 @@
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
                 document.getElementById('empStandingHours').value = emp.standingHours || 0;
+                document.getElementById('empYtdOpenYear').value = emp.ytdOpenYear || new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = emp.ytdOpenRegularPay || 0;
                 document.getElementById('empYtdOpenOvertimePay').value = emp.ytdOpenOvertimePay || 0;
                 document.getElementById('empYtdOpenBonus').value = emp.ytdOpenBonus || 0;
@@ -2877,6 +2890,7 @@
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
                         emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
+                        emp.ytdOpenYear = parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear();
                         emp.ytdOpenRegularPay = parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0;
                         emp.ytdOpenOvertimePay = parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0;
                         emp.ytdOpenBonus = parseFloat(document.getElementById('empYtdOpenBonus').value) || 0;
@@ -2913,6 +2927,7 @@
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
                         standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
+                        ytdOpenYear: parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear(),
                         ytdOpenRegularPay: parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0,
                         ytdOpenOvertimePay: parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0,
                         ytdOpenBonus: parseFloat(document.getElementById('empYtdOpenBonus').value) || 0,
@@ -4298,8 +4313,12 @@
                     // en calculateManualPayroll() — esas horas ya se pagan aparte con
                     // "Calcular Nómina (Reloj Checador)". Bono/Reembolso siguen editables.
                     const prodLock = prodHrs > 0;
-                    const regValFinal = prodLock ? prodHrs.toFixed(2) : regVal;
-                    const otValFinal = prodLock ? (otVal || 0) : otVal;
+                    // FIX 2026-09-04: Ranu pidió que las horas de Producción se repartan
+                    // igual que hace el motor de nómina normal — hasta 40 hrs van a
+                    // Regulares y lo que pase de 40 va a Tiempo Extra — en vez de meter
+                    // el total completo (ej. 42.64) todo en Regulares.
+                    const regValFinal = prodLock ? Math.min(prodHrs, 40).toFixed(2) : regVal;
+                    const otValFinal = prodLock ? Math.max(prodHrs - 40, 0).toFixed(2) : otVal;
                     const prodBadge = prodLock
                         ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
                         : '';
@@ -5530,7 +5549,11 @@
                     totals.medicare += c.medicareTax || 0;
                     totals.deductions += c.deductions || 0;
                 });
-                if (emp) {
+                // FIX 2026-09-04: el saldo inicial YTD ahora solo se suma si
+                // corresponde EXACTAMENTE al año que se está calculando — así ya no
+                // hay que acordarse de ponerlo en $0 cada enero; un saldo capturado
+                // para 2026 deja de aplicarse solo en los talones de 2027 en adelante.
+                if (emp && String(emp.ytdOpenYear || '') === String(year)) {
                     totals.regularPay += emp.ytdOpenRegularPay || 0;
                     totals.overtimePay += emp.ytdOpenOvertimePay || 0;
                     totals.bonus += emp.ytdOpenBonus || 0;
