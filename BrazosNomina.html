@@ -4397,14 +4397,20 @@
                     const empId = input.dataset.emp;
                     const emp = this.employees.find(e => String(e.id) === String(empId));
                     if (!emp) return;
-                    // FIX 2026-09-04: si el campo está bloqueado (data-prodlock="1"),
-                    // esas horas ya vienen de Producción y se pagan aparte con
-                    // "Calcular Nómina (Reloj Checador)" — no se vuelven a contar aquí,
-                    // aunque el número siga visible en el campo. Bono/Reembolso de ese
-                    // mismo empleado sí se toman en cuenta normalmente más abajo.
-                    const regHours = (input.dataset.prodlock === '1') ? 0 : (parseFloat(input.value) || 0);
+                    // FIX 2026-09-04 (corregido): antes, si el campo estaba bloqueado
+                    // (data-prodlock="1", horas reales de Producción), se mandaban en 0
+                    // a propósito para no duplicar el pago si TAMBIÉN se corría
+                    // "Calcular Nómina (Reloj Checador)" — pero como mergePayrollCalc()
+                    // REEMPLAZA (no suma) la fila de un empleado que ya esté en la
+                    // nómina combinada, nunca había riesgo real de pagar doble; el único
+                    // efecto real de poner 0 era que, si Ranu solo usaba "Calcular con
+                    // estas Horas" (sin correr Reloj Checador aparte), esos empleados
+                    // desaparecían por completo de la nómina final sin pagárseles. Ahora
+                    // se usa el número real (ya bloqueado/no editable en pantalla) igual
+                    // que cualquier otra hora capturada.
+                    const regHours = parseFloat(input.value) || 0;
                     const otInput = document.querySelector(`.manualOtHours[data-emp="${empId}"]`);
-                    const otHours = otInput ? ((otInput.dataset.prodlock === '1') ? 0 : (parseFloat(otInput.value) || 0)) : 0;
+                    const otHours = otInput ? (parseFloat(otInput.value) || 0) : 0;
                     const bonusInput = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
                     const bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
                     const reimbInput = document.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
