@@ -6286,21 +6286,27 @@
                 
                 // Populate year filter
                 const yearSelect = document.getElementById('history_year');
-                const years = [...new Set(this.payrollRecords.map(p => new Date(p.date).getFullYear()))];
+                // FIX 2026-09-04: este panel ("📊 Historial → 🧾 Cheques") siempre
+                // leía de this.payrollRecords, un arreglo que NUNCA se llena con la
+                // emisión real de cheques (ese flujo guarda en this.checks) — por eso
+                // siempre salía vacío, desde antes de que empezara a trabajar en este
+                // archivo hoy. Ahora lee de this.checks, que sí tiene los cheques
+                // reales emitidos.
+                const years = [...new Set(this.checks.map(p => new Date(p.date).getFullYear()))];
                 yearSelect.innerHTML = '<option value="all">Todos</option>';
                 years.sort((a, b) => b - a).forEach(year => {
                     yearSelect.innerHTML += `<option value="${year}">${year}</option>`;
                 });
-                
+
                 this.filterHistory();
             },
-            
+
             filterHistory() {
                 const empFilter = document.getElementById('history_employee').value;
                 const yearFilter = document.getElementById('history_year').value;
                 const monthFilter = document.getElementById('history_month').value;
-                
-                let filtered = this.payrollRecords;
+
+                let filtered = this.checks;
                 
                 if (empFilter !== 'all') {
                     filtered = filtered.filter(p => p.employeeId === empFilter);
@@ -6373,28 +6379,35 @@
                                 <th>Bruto</th>
                                 <th>Deducciones</th>
                                 <th>Neto</th>
+                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
-                
+
                 records.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(check => {
                     const dateParts = check.date.split('T')[0].split('-');
                     const dateUSA = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
-                    
+                    const voided = !!check.voided;
+                    const textStyle = voided ? 'text-decoration:line-through;' : '';
+
                     html += `
-                        <tr>
-                            <td><strong>#${check.checkNumber}</strong></td>
-                            <td>${dateUSA}</td>
-                            <td>${check.employeeName}</td>
-                            <td>${(check.hours || 0).toFixed(2)} hrs</td>
-                            <td style="color: #27ae60;">$${this.formatMoney(check.gross || 0)}</td>
-                            <td style="color: #e74c3c;">${(check.deductions || 0) > 0 ? '-$' + this.formatMoney(check.deductions) : '—'}</td>
-                            <td style="color: #2980b9; font-weight: bold;">$${this.formatMoney(check.net || check.gross || 0)}</td>
-                            <td>
+                        <tr style="${voided ? 'opacity:0.55;' : ''}">
+                            <td style="${textStyle}"><strong>#${check.checkNumber}</strong></td>
+                            <td style="${textStyle}">${dateUSA}</td>
+                            <td style="${textStyle}">${check.employeeName}</td>
+                            <td style="${textStyle}">${(check.hours || 0).toFixed(2)} hrs</td>
+                            <td style="color: #27ae60;${textStyle}">$${this.formatMoney(check.gross || 0)}</td>
+                            <td style="color: #e74c3c;${textStyle}">${(check.deductions || 0) > 0 ? '-$' + this.formatMoney(check.deductions) : '—'}</td>
+                            <td style="color: #2980b9; font-weight: bold;${textStyle}">$${this.formatMoney(check.net || check.gross || 0)}</td>
+                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>'}</td>
+                            <td style="display:flex; gap:6px;">
                                 <button class="btn btn-primary btn-sm" onclick="app.viewCheck('${check.id}')">
-                                    👁️ Ver Cheque
+                                    👁️ Ver
+                                </button>
+                                <button class="btn btn-sm" onclick="app.cancelCheck('${check.id}'); app.filterHistory();" style="background:${voided ? '#95a5a6' : '#e74c3c'};color:white;">
+                                    ${voided ? '↩️ Reactivar' : '🚫 Anular'}
                                 </button>
                             </td>
                         </tr>
@@ -6958,7 +6971,10 @@
                 const yearFilter = document.getElementById('history_year').value;
                 const monthFilter = document.getElementById('history_month').value;
                 
-                let filtered = this.payrollRecords;
+                // FIX 2026-09-04: igual que filterHistory()/refreshHistory(), este
+                // export leía de this.payrollRecords (siempre vacío) — ahora usa
+                // this.checks, los cheques reales.
+                let filtered = this.checks;
                 if (empFilter !== 'all') filtered = filtered.filter(p => p.employeeId === empFilter);
                 if (yearFilter !== 'all') filtered = filtered.filter(p => new Date(p.date).getFullYear() === parseInt(yearFilter));
                 if (monthFilter !== 'all') filtered = filtered.filter(p => new Date(p.date).getMonth() + 1 === parseInt(monthFilter));
