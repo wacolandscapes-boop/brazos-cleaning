@@ -8077,6 +8077,10 @@
                 const PPI = W / 8.5;
                 const px = inch => Math.round(inch * PPI);
 
+                // Ranu pidió mantener la imagen de fondo AQUÍ, en la vista previa en
+                // pantalla (le sirve de guía visual) — la impresión real en papel
+                // (_printExpenseCheckNow) sigue sin usarla, que es lo que ya confirmó
+                // que funciona bien.
                 const sheetHtml =
                     `<div style="position:relative;width:${W}px;height:${Hs}px;` +
                     (bgImage ? `background-image:url(${safeBg});background-size:100% 100%;background-repeat:no-repeat;` : 'background:#f9f9f9;') +
