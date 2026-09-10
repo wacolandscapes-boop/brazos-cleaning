@@ -1663,6 +1663,10 @@
     <script>
         const app = {
             employees: [],
+            // Lápida de empleados borrados (FIX 2026-09-10): guarda los IDs de empleados
+            // eliminados para que el merge con Drive (subida y bajada) nunca los reviva,
+            // y para que Scheduler sepa a quién quitar al importar.
+            deletedEmployeeIds: [],
             attendances: [],
             horasManualScheduler: [], // Semanas de "Nómina x %" (Reg/OT/Bonus) enviadas desde el Scheduler
             payrollRecords: [],
@@ -2396,6 +2400,23 @@
             },
 
             setCheckBgImage(src) {
+                // FIX 2026-09-10: esta imagen es SOLO una guía visual en pantalla para
+                // acomodar los campos del cheque — nunca se manda a imprimir. Antes se
+                // guardaba tal cual la subiera Ranu (una foto/escaneo sin comprimir podía
+                // pesar varios MB), lo cual llenaba el límite de localStorage (~5 MB,
+                // compartido entre todas las apps de este dominio) y tumbaba en silencio
+                // el guardado de cheques/gastos/proveedores (ver fix de QuotaExceededError
+                // en save()). Ahora se redimensiona/comprime antes de guardarla — sigue
+                // viéndose igual de bien para acomodar campos, pero pesa mucho menos.
+                this._compressImageDataUrl(src, 1200, 0.82).then(compressed => {
+                    this._applyCheckBgImage(compressed);
+                }).catch(() => {
+                    // Si algo falla al comprimir, mejor usar la original que quedarse sin imagen.
+                    this._applyCheckBgImage(src);
+                });
+            },
+
+            _applyCheckBgImage(src) {
                 const img = document.getElementById('checkBgImage');
                 const placeholder = document.getElementById('checkEditorPlaceholder');
                 img.src = src;
@@ -2404,6 +2425,31 @@
                 this.showCheckFieldTags();
                 this.syncEditorFromInputs();
                 this.initCheckDragDrop();
+            },
+
+            // Redimensiona una imagen dataURL a un ancho máximo y la re-codifica como
+            // JPEG con compresión — usado solo para la imagen de referencia del cheque.
+            _compressImageDataUrl(dataUrl, maxWidth, quality) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const scale = Math.min(1, maxWidth / img.width);
+                            const w = Math.round(img.width * scale);
+                            const h = Math.round(img.height * scale);
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = '#ffffff'; // fondo blanco por si la original tiene transparencia
+                            ctx.fillRect(0, 0, w, h);
+                            ctx.drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', quality));
+                        } catch (e) { reject(e); }
+                    };
+                    img.onerror = reject;
+                    img.src = dataUrl;
+                });
             },
 
             getSignatureDataUrl() {
@@ -2966,6 +3012,12 @@
             
             deleteEmployee(id) {
                 if (!confirm('¿Eliminar este empleado?')) return;
+                // FIX 2026-09-10: se agrega una "lápida" con su ID para que el merge con
+                // Drive (subida y bajada) no lo revuelva a traer, y para que Scheduler
+                // sepa que debe quitarlo también al importar.
+                this.deletedEmployeeIds = this.deletedEmployeeIds || [];
+                if (!this.deletedEmployeeIds.includes(id)) this.deletedEmployeeIds.push(id);
+                localStorage.setItem('ap_nomina_deletedEmployeeIds', JSON.stringify(this.deletedEmployeeIds));
                 this.employees = this.employees.filter(e => e.id !== id);
                 this.save();
                 this.refreshEmployees();
@@ -2978,6 +3030,10 @@
                 }
                 if (!confirm(`⚠️ Vas a borrar TODOS los ${this.employees.length} empleados registrados. Esto NO se puede deshacer.\n\n¿Estás seguro?`)) return;
                 if (!confirm('Última confirmación: esto eliminará permanentemente todos los empleados (no afecta cheques ya guardados en el historial). ¿Continuar?')) return;
+                // FIX 2026-09-10: lápida para todos, mismo motivo que deleteEmployee().
+                this.deletedEmployeeIds = this.deletedEmployeeIds || [];
+                this.employees.forEach(e => { if (!this.deletedEmployeeIds.includes(e.id)) this.deletedEmployeeIds.push(e.id); });
+                localStorage.setItem('ap_nomina_deletedEmployeeIds', JSON.stringify(this.deletedEmployeeIds));
                 this.employees = [];
                 this.save();
                 this.refreshEmployees();
@@ -4546,7 +4602,7 @@
                             <td><strong style="color: #27ae60;">$${this.formatMoney(p.grossPay)}</strong></td>
                             ${hasBonuses ? `<td style="color: #8e44ad;">${p.bonus > 0 ? `+$${this.formatMoney(p.bonus)}` : '—'}</td>` : ''}
                             ${this.workConfig.enableLateDeduction ? `<td style="color: #e74c3c;">${p.lateMinutes > 0 ? `-${p.lateMinutes} min (-$${this.formatMoney(p.latePenalty)})` : '—'}</td>` : ''}
-                            <td style="color: #e74c3c;">${p.empDeduction > 0 ? `-${p.empDeduction}% (-$${this.formatMoney(p.deductions)})` : '—'}</td>
+                            <td style="color: #e74c3c;">${p.deductions > 0 ? (p.empDeduction > 0 ? `-${p.empDeduction}% (-$${this.formatMoney(p.deductions)})` : `-$${this.formatMoney(p.deductions)}`) : '—'}</td>
                             ${hasReimbursements ? `<td style="color: #16a085;">${p.reimbursement > 0 ? `+$${this.formatMoney(p.reimbursement)}` : '—'}</td>` : ''}
                             <td><strong style="color: #2980b9; font-size: 1.1rem;">$${this.formatMoney(p.netPay)}</strong></td>
                             <td style="text-align:center; color:#888; font-size:0.8rem;">—</td>
@@ -5432,7 +5488,9 @@
                             employeeAddress: emp ? this.getEmpAddress(emp) : '',
                             employeeCity: emp ? this.getEmpCityLine(emp) : '',
                             period: this.currentPayrollPeriod || '',
-                            signatureUrl: this.getSignatureDataUrl(),
+                            // FIX 2026-09-10: ya no se guarda la imagen de la firma dentro de
+                            // cada cheque (ver loadData) — se toma en vivo con getSignatureDataUrl()
+                            // al imprimir/ver, para no duplicar la imagen en cada registro.
                             hours: p.totalHours,
                             // FIX 2026-09-04: guardar el desglose (horas/tarifa/pago
                             // regular y extra por separado) para poder reconstruir el
@@ -5750,7 +5808,9 @@
                             '<div style="position:absolute; top:' + px(cfg.words_top) + 'px; left:' + px(cfg.words_left) + 'px; font-size:8.5pt;">' + wordsAmount + '</div>' +
                             '<div style="position:absolute; top:' + px(cfg.payee_name2_top || cfg.words_top + 0.15) + 'px; left:' + px(cfg.payee_name2_left || cfg.words_left) + 'px; font-size:8.5pt; font-weight:bold;">' + check.employeeName + '</div>' +
                             (check.period ? '<div style="position:absolute; top:' + px(cfg.memo_top || 2.9) + 'px; left:' + px(cfg.memo_left || 0.5) + 'px; font-size:8.5pt;">' + check.period + '</div>' : '') +
-                            (check.signatureUrl ? '<img src="' + check.signatureUrl + '" style="position:absolute; top:' + px(cfg.signature_top || 2.6) + 'px; right:' + px(cfg.signature_right || 1.5) + 'px; width:' + px(cfg.signature_width || 1.5) + 'px; pointer-events:none;">' : '') +
+                            // FIX 2026-09-10: fallback a la firma vigente (getSignatureDataUrl) si
+                            // el cheque no trae su propia signatureUrl (ya no se guarda por cheque).
+                            ((check.signatureUrl || this.getSignatureDataUrl()) ? '<img src="' + (check.signatureUrl || this.getSignatureDataUrl()) + '" style="position:absolute; top:' + px(cfg.signature_top || 2.6) + 'px; right:' + px(cfg.signature_right || 1.5) + 'px; width:' + px(cfg.signature_width || 1.5) + 'px; pointer-events:none;">' : '') +
 
                             // Talones dentro de la hoja, en secciones 2 y 3
                             stubHtml('TALÓN PARA EL EMPLEADO',  Hs) +
@@ -5823,7 +5883,8 @@
                             '<div class="cf-words">'  + wordsAmount + '</div>' +
                             '<div class="cf-payee-name2">' + check.employeeName + '</div>' +
                             (check.period ? '<div class="cf-memo">' + check.period + '</div>' : '') +
-                            (check.signatureUrl ? '<img src="' + check.signatureUrl + '" class="cf-signature" style="position:absolute; z-index:1; top:' + cfg.signature_top + 'in; right:' + cfg.signature_right + 'in; width:' + (cfg.signature_width || 1.5) + 'in; pointer-events:none;">' : '') +
+                            // FIX 2026-09-10: fallback a la firma vigente si el cheque no trae la suya.
+                            ((check.signatureUrl || this.getSignatureDataUrl()) ? '<img src="' + (check.signatureUrl || this.getSignatureDataUrl()) + '" class="cf-signature" style="position:absolute; z-index:1; top:' + cfg.signature_top + 'in; right:' + cfg.signature_right + 'in; width:' + (cfg.signature_width || 1.5) + 'in; pointer-events:none;">' : '') +
                             // FIX 2026-09-04: la raya bajo la firma es para el cheque REAL
                             // (donde el papel no la trae impresa); el cheque de MUESTRA es
                             // solo para superponer sobre un cheque físico real y verificar
@@ -6940,7 +7001,7 @@
                         <td style="padding:9px 12px; text-align:center;">${p.totalHours.toFixed(2)} hrs</td>
                         <td style="padding:9px 12px; text-align:right;">$${this.formatMoney(p.grossPay)}</td>
                         ${this.workConfig.enableLateDeduction ? `<td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.lateMinutes > 0 ? '-'+p.lateMinutes+' min (-$'+this.formatMoney(p.latePenalty)+')' : '—'}</td>` : ''}
-                        <td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.empDeduction > 0 ? '-'+p.empDeduction+'% (-$'+this.formatMoney(p.deductions)+')' : '—'}</td>
+                        <td style="padding:9px 12px; text-align:right; color:#e74c3c;">${p.deductions > 0 ? (p.empDeduction > 0 ? '-'+p.empDeduction+'% (-$'+this.formatMoney(p.deductions)+')' : '-$'+this.formatMoney(p.deductions)) : '—'}</td>
                         <td style="padding:9px 12px; text-align:right; color:#27ae60; font-weight:bold;">$${this.formatMoney(p.netPay)}</td>
                     </tr>`;
                 });
@@ -7147,7 +7208,14 @@
                             );
                             const driveData = await fileRes.json();
                             if (driveData.employees) {
+                                // FIX 2026-09-10: antes este merge revivía a CUALQUIER empleado
+                                // que estuviera en Drive pero no localmente — incluyendo uno que
+                                // se acababa de borrar a propósito (Drive aún tenía su copia
+                                // vieja). Ahora se respeta la lápida (deletedEmployeeIds): un
+                                // empleado borrado nunca se vuelve a agregar por este merge.
+                                const deadIds = new Set(this.deletedEmployeeIds || []);
                                 driveData.employees.forEach(remote => {
+                                    if (deadIds.has(remote.id)) return;
                                     const idx = mergedEmployees.findIndex(e => e.id === remote.id);
                                     if (idx < 0) {
                                         // Empleado en Drive que no tengo localmente → agregar
@@ -7184,7 +7252,10 @@
                         // limpiado, etc.) todo el historial de cheques se perdía para
                         // siempre, sin ningún respaldo en la nube. Ya se incluyen aquí.
                         checks: this.checks || [],
-                        vendors: this.vendors || []
+                        vendors: this.vendors || [],
+                        // FIX 2026-09-10: viaja para que Scheduler (y cualquier otra PC de
+                        // Nómina) sepa qué empleados fueron eliminados a propósito.
+                        deletedEmployeeIds: this.deletedEmployeeIds || []
                     };
                     await this.driveUploadFile('appronto_nomina_sync.json', JSON.stringify(data, null, 2));
 
@@ -7277,8 +7348,16 @@
                     // workConfig NUNCA se toca — la config local siempre prevalece
 
                     // Merge empleados
+                    // FIX 2026-09-10: respeta la lápida — si otra PC (u otro momento de esta
+                    // misma PC) borró a este empleado, esta descarga ya no lo revive.
+                    if (data.deletedEmployeeIds && data.deletedEmployeeIds.length) {
+                        this.deletedEmployeeIds = [...new Set([...(this.deletedEmployeeIds || []), ...data.deletedEmployeeIds])];
+                        localStorage.setItem('ap_nomina_deletedEmployeeIds', JSON.stringify(this.deletedEmployeeIds));
+                    }
                     if (data.employees) {
+                        const deadIds = new Set(this.deletedEmployeeIds || []);
                         data.employees.forEach(remote => {
+                            if (deadIds.has(remote.id)) return;
                             const idx = this.employees.findIndex(e => e.id === remote.id);
                             if (idx < 0) {
                                 this.employees.push(remote); // Empleado nuevo
@@ -7288,6 +7367,8 @@
                                 if (remoteTime > localTime) this.employees[idx] = remote; // Remoto más reciente
                             }
                         });
+                        // Por si este empleado seguía en mi lista local (ej. otra PC lo borró):
+                        this.employees = this.employees.filter(e => !deadIds.has(e.id));
                     }
 
                     // Merge asistencias
@@ -7823,9 +7904,20 @@
                 // cerraba el navegador antes de esa sincronización, esos cambios se
                 // perdían por completo aunque la app no mostrara ningún error. Ahora
                 // se guardan aquí mismo, de inmediato, cada vez que se llama save().
-                localStorage.setItem('ap_nomina_checks', JSON.stringify(this.checks || []));
-                localStorage.setItem('ap_nomina_expenses', JSON.stringify(this.expenses || []));
-                localStorage.setItem('ap_nomina_vendors', JSON.stringify(this.vendors || []));
+                // FIX 2026-09-10: si localStorage se llena (QuotaExceededError), estas
+                // líneas tronaban sin capturarse — y como save() se llama DENTRO del
+                // flujo de imprimir cheques (confirmAndPrintChecks), la excepción mataba
+                // la función a la mitad y el botón de imprimir dejaba de responder, sin
+                // ningún aviso. Ahora, si el guardado local falla, solo se avisa en
+                // consola y se sigue — los datos igual se suben a Drive normalmente
+                // (que no tiene ese límite tan chico), así que nada se pierde.
+                try {
+                    localStorage.setItem('ap_nomina_checks', JSON.stringify(this.checks || []));
+                    localStorage.setItem('ap_nomina_expenses', JSON.stringify(this.expenses || []));
+                    localStorage.setItem('ap_nomina_vendors', JSON.stringify(this.vendors || []));
+                } catch (e) {
+                    console.warn('⚠️ No se pudo guardar cheques/gastos/proveedores en localStorage (espacio lleno). Se sincronizarán a Drive normalmente:', e.message);
+                }
             },
             
             loadData() {
@@ -7880,10 +7972,25 @@
                 
                 // Cargar datos normalmente
                 this.employees = JSON.parse(localStorage.getItem('ap_nomina_employees') || '[]');
+                this.deletedEmployeeIds = JSON.parse(localStorage.getItem('ap_nomina_deletedEmployeeIds') || '[]');
                 this.attendances = JSON.parse(localStorage.getItem('ap_nomina_attendances') || '[]');
                 this.horasManualScheduler = JSON.parse(localStorage.getItem('ap_nomina_horasManualScheduler') || '[]');
                 this.payrollRecords = JSON.parse(localStorage.getItem('ap_nomina_payroll') || '[]');
                 this.checks   = JSON.parse(localStorage.getItem('ap_nomina_checks')   || '[]');
+                // FIX URGENTE 2026-09-10: cada cheque guardaba una copia completa de la
+                // imagen de la firma (signatureUrl) dentro de SÍ MISMO, en vez de leerla
+                // una sola vez desde 'ap_nomina_checkSignature'. Con meses de cheques
+                // acumulados esto llenó el localStorage (QuotaExceededError), y como
+                // save() tronaba a media función, el botón de imprimir dejaba de
+                // responder. Limpieza automática de una sola vez: se quita esa copia
+                // redundante de los cheques que ya existen (no se pierde ningún dato del
+                // cheque — número, montos, fechas, todo queda igual; la firma se sigue
+                // mostrando en pantalla/impresión, solo que ahora se toma en vivo).
+                if (this.checks.some(c => c.signatureUrl)) {
+                    this.checks.forEach(c => { delete c.signatureUrl; });
+                    try { localStorage.setItem('ap_nomina_checks', JSON.stringify(this.checks)); }
+                    catch (e) { console.warn('⚠️ No se pudo re-guardar ap_nomina_checks tras la limpieza de firmas:', e.message); }
+                }
                 this.expenses = JSON.parse(localStorage.getItem('ap_nomina_expenses') || '[]');
                 this.vendors  = JSON.parse(localStorage.getItem('ap_nomina_vendors')  || '[]');
                 this.savedPayrollPeriods = JSON.parse(localStorage.getItem('ap_nomina_payroll_periods') || '[]');
