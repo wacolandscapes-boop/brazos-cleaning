@@ -5446,8 +5446,17 @@
             },
 
             confirmAndPrintChecks(onlyChecks = false, onlyDigital = false, showPreview = true) {
+                // FIX 2026-09-11: sin este candado, si la función tronaba a medias (p.ej.
+                // por el QuotaExceededError de espacio lleno) el botón parecía "no responder"
+                // y cada reintento volvía a crear y subir a Drive el mismo lote de cheques
+                // — así se generaron 17 copias duplicadas de 5 cheques reales la semana
+                // pasada. Ahora, mientras un lote ya se está procesando, cualquier clic
+                // adicional se ignora en vez de crear otro lote.
+                if (this._processingChecks) return;
+                this._processingChecks = true;
+
                 const payroll = this.currentPayrollCalc;
-                if (!payroll || payroll.length === 0) return;
+                if (!payroll || payroll.length === 0) { this._processingChecks = false; return; }
 
                 const cfg = this.checkConfig;
                 const bgImage = localStorage.getItem('ap_nomina_checkBgImage') || '';
@@ -5466,7 +5475,7 @@
                             if (printChk && printChk.checked && (!numInput || !numInput.value)) allValid = false;
                         }
                     });
-                    if (!allValid) { alert('Por favor asigna número de cheque a los empleados marcados (o usa Autollenar).'); return; }
+                    if (!allValid) { alert('Por favor asigna número de cheque a los empleados marcados (o usa Autollenar).'); this._processingChecks = false; return; }
                 }
 
                 const toPrintChecks = [];
@@ -5564,6 +5573,7 @@
                     alert('Registros guardados. No se seleccionó ninguno para imprimir.');
                     this.switchTab('checks');
                 }
+                this._processingChecks = false;
             },
 
             previewDigitalStubs(checks) {
