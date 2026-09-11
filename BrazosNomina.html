@@ -3877,12 +3877,12 @@
                         ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 7px; border-radius:10px; font-size:0.75rem; font-weight:500;">✓ Completo</span>`
                         : `<span style="background:#fff8e1; color:#f57f17; padding:2px 7px; border-radius:10px; font-size:0.75rem; font-weight:500;">⏳ Pendiente</span>`;
 
-                    // Sep2: si esta asistencia la rellenó el Scheduler (Shop→Shop de
-                    // BrazosCalendar), no vino del Reloj Checador — mostrarlo. (Las
-                    // semanas de "Nómina x %" NO llegan aquí: van a Captura Manual,
-                    // ver renderManualHoursList()).
+                    // Sep2/Sep11: si esta asistencia viene de Shop→Shop de BrazosCalendar
+                    // (leída directamente por Nómina, ya no vía Scheduler), no vino del
+                    // Reloj Checador — mostrarlo. (Las semanas de "Nómina x %" NO llegan
+                    // aquí: van a Captura Manual, ver renderManualHoursList()).
                     const origenBadge = att.source === 'calendario'
-                        ? ` <span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Vino del Scheduler: Shop→Shop de BrazosCalendar, no del Reloj Checador">📅 Calendario</span>`
+                        ? ` <span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Salida/Regreso del Shop de BrazosCalendar, no del Reloj Checador">📅 Calendario</span>`
                         : '';
 
                     html += `
@@ -7605,9 +7605,11 @@
                         }
                     }
                     // Después del Reloj (que ya tiene prioridad si reportó), completar
-                    // huecos con las horas que calcula el Scheduler (Calendario/Shop o
-                    // Nómina x %) — ver driveDownloadHorasScheduler(). Corre SIEMPRE,
-                    // exista o no el archivo del Reloj.
+                    // huecos con las horas Shop→Shop de BrazosCalendar (directo, ver
+                    // driveDownloadHorasCalendarioDirecto()) y con "Nómina x %" (ver
+                    // driveDownloadHorasScheduler()). Corren SIEMPRE, exista o no el
+                    // archivo del Reloj.
+                    await this.driveDownloadHorasCalendarioDirecto();
                     await this.driveDownloadHorasScheduler();
                     document.getElementById('driveSyncLabel').textContent = `Sync ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
                 } catch(err) {
@@ -7616,12 +7618,14 @@
             },
 
             // Sep2: lee appronto_horas_produccion.json que sube BrazosScheduler.
-            // Trae DOS listas independientes:
-            //  - entries: horas por DÍA (Shop→Shop de BrazosCalendar). Rellenan
-            //    SÓLO los huecos que ni el Reloj Checador ni una captura manual
-            //    ya cubrieron para ese empleado+fecha — nunca pisan una
-            //    asistencia existente. Por eso esto corre DESPUÉS de bajar el
-            //    Reloj, no antes.
+            // Sep11: YA NO importa aquí las horas diarias Shop→Shop (`entries`) —
+            // esas ahora las lee Nómina DIRECTO de BrazosCalendar en
+            // driveDownloadHorasCalendarioDirecto() (ver abajo), sin pasar por
+            // Scheduler. Se hizo así a propósito: si las dos vías (Scheduler
+            // calculando y subiendo, y Nómina leyendo directo) estuvieran activas
+            // a la vez, ambas calculan el MISMO dato del MISMO archivo fuente y
+            // podrían no cuadrar por un desfase de sync — con una sola vía ese
+            // riesgo desaparece. Esta función ahora SÓLO trae:
             //  - manualPayroll: semanas de "Nómina x %" ya convertidas a
             //    Regular+Overtime+Bonus (esto NO es por día — ese módulo nunca
             //    calculó horas diarias). Se guardan aparte para precargar el
@@ -7647,7 +7651,6 @@
                         { headers: { Authorization: `Bearer ${this.driveToken}` } }
                     );
                     const schedData = await fileRes.json();
-                    let added = 0;
 
                     // FIX 2026-09-03: el ID de empleado de BrazosScheduler y el de
                     // BrazosNomina son DOS espacios de ID DISTINTOS — cada app generó
@@ -7702,28 +7705,13 @@
                         if (fixedId !== String(a.employeeId)) { a.employeeId = fixedId; repaired++; }
                     });
 
-                    (schedData.entries || []).forEach(en => {
-                        const resolvedId = resolveEmpId(en.employeeId, en.employeeName);
-                        const existe = this.attendances.some(a =>
-                            String(a.employeeId) === String(resolvedId) && a.date === en.date);
-                        if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
-                        this.attendances.push({
-                            id: 'sched_' + resolvedId + '_' + en.date,
-                            employeeId: String(resolvedId),
-                            employeeName: en.employeeName,
-                            date: en.date,
-                            checkIn: en.checkIn || null,
-                            checkOut: en.checkOut || null,
-                            hours: en.hours || 0,
-                            source: en.source || 'scheduler',
-                            fromScheduler: true
-                        });
-                        added++;
-                    });
-                    if (added > 0 || repaired > 0) {
+                    // Sep11: ya NO se importan aquí entradas nuevas de schedData.entries —
+                    // ver comentario al inicio de la función. Sólo queda la reparación de
+                    // registros viejos (arriba) por si alguno se quedó con el ID equivocado.
+                    if (repaired > 0) {
                         this.save();
                         this.refreshAttendances();
-                        console.log(`📥 Horas del Scheduler: +${added} nuevas, ${repaired} reparadas`);
+                        console.log(`📥 Horas del Scheduler: ${repaired} reparadas`);
                     }
                     // "Nómina x %" — FIX 2026-09-04: estos registros traían el ID de
                     // empleado tal como lo generó el Scheduler (espacio de IDs distinto
@@ -7740,6 +7728,101 @@
                     if (panelAbierto && panelAbierto.style.display !== 'none') this.renderManualHoursList();
                 } catch(err) {
                     console.error('driveDownloadHorasScheduler error:', err.message);
+                }
+            },
+
+            // Sep11: lee brazos_horarios_FECHA.json DIRECTO de BrazosCalendar (ya no
+            // vía Scheduler — ver comentario en driveDownloadHorasScheduler). Cada
+            // empleada tiene su PROPIO Salida/Regreso del Shop en ese archivo (ya no
+            // se comparte por grupo, arreglo del mismo día en BrazosCalendar/Scheduler).
+            // Recorre los días del período actual (workConfig.periodStart/periodEnd),
+            // calcula minutos trabajados con la MISMA regla que usa Scheduler (break de
+            // 30 min si la jornada fue de 7+ horas), y sólo LLENA HUECOS — nunca pisa
+            // un registro que ya exista (del Reloj Checador, de captura manual, o de
+            // una corrida anterior de esta misma función). Corre DESPUÉS de
+            // driveDownloadClock (Reloj), igual que antes hacía driveDownloadHorasScheduler.
+            async driveDownloadHorasCalendarioDirecto() {
+                if (!this.driveConnected) return;
+                const startStr = this.workConfig?.periodStart;
+                const endStr = this.workConfig?.periodEnd;
+                if (!startStr || !endStr) return; // sin período configurado todavía
+
+                const normTokens = (s) => (s || '').toString()
+                    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                    .toLowerCase()
+                    .split(/[^a-z]+/)
+                    .filter(Boolean);
+                const namesMatch = (a, b) => {
+                    const ta = normTokens(a), tb = normTokens(b);
+                    if (ta.length < 2 || tb.length < 2) return false;
+                    const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+                    return shorter.every(t => longer.includes(t));
+                };
+                const resolveEmpId = (rawId, rawName) => {
+                    const match = this.employees.find(e => e.name && rawName && namesMatch(e.name, rawName));
+                    return match ? match.id : String(rawId);
+                };
+
+                try {
+                    const dates = [];
+                    let d = new Date(startStr + 'T12:00:00');
+                    const end = new Date(endStr + 'T12:00:00');
+                    while (d <= end) { dates.push(d.toLocaleDateString('en-CA')); d.setDate(d.getDate() + 1); }
+
+                    let added = 0;
+                    for (const dt of dates) {
+                        const fname = `brazos_horarios_${dt}.json`;
+                        // Búsqueda GLOBAL (sin filtrar por carpeta): BrazosCalendar guarda
+                        // este archivo en su propia carpeta de Drive (BrazosCleaningApp),
+                        // distinta de la nuestra (AppProntoApp) — misma cuenta de Google.
+                        const res = await fetch(
+                            `https://www.googleapis.com/drive/v3/files?q=name='${fname}'+and+trashed=false&fields=files(id)`,
+                            { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                        );
+                        const data = await res.json();
+                        if (!data.files || !data.files.length) continue; // ese día no tiene horarios subidos aún
+
+                        const fileRes = await fetch(
+                            `https://www.googleapis.com/drive/v3/files/${data.files[0].id}?alt=media`,
+                            { headers: { Authorization: `Bearer ${this.driveToken}` } }
+                        );
+                        const dayData = await fileRes.json();
+
+                        Object.values(dayData || {}).forEach(empData => {
+                            if (!empData || !empData.shopOut || !empData.shopBack) return; // sin registro completo ese día
+
+                            const resolvedId = resolveEmpId(empData.empId, empData.empName);
+                            const existe = this.attendances.some(a =>
+                                String(a.employeeId) === String(resolvedId) && a.date === dt);
+                            if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
+
+                            const [soh, som] = empData.shopOut.split(':').map(Number);
+                            const [sbh, sbm] = empData.shopBack.split(':').map(Number);
+                            let minutes = (sbh * 60 + sbm) - (soh * 60 + som);
+                            if (minutes < 0) minutes = 0;
+                            if (minutes >= 420) minutes -= 30; // break de 30 min si la jornada fue de 7+ horas
+
+                            this.attendances.push({
+                                id: 'cal_' + resolvedId + '_' + dt,
+                                employeeId: String(resolvedId),
+                                employeeName: empData.empName || '',
+                                date: dt,
+                                checkIn: empData.shopOut,
+                                checkOut: empData.shopBack,
+                                hours: Math.round((minutes / 60) * 100) / 100,
+                                source: 'calendario',
+                                fromScheduler: false
+                            });
+                            added++;
+                        });
+                    }
+                    if (added > 0) {
+                        this.save();
+                        this.refreshAttendances();
+                        console.log(`📅 Horas de Calendario (directo): +${added} nuevas`);
+                    }
+                } catch(err) {
+                    console.error('driveDownloadHorasCalendarioDirecto error:', err.message);
                 }
             },
 
