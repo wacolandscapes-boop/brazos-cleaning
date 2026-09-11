@@ -1363,8 +1363,8 @@ function showTab(t){
   document.getElementById('niInfo').classList.toggle('active',t==='info');
 }
 
-function changeEmpFromInfo(){showTab('agenda');goSetup();}
-function changeEmpFromSett(){closeSett();goSetup();}
+function changeEmpFromInfo(){S.empId=null;S.empName='';S.group='';showTab('agenda');goSetup();}
+function changeEmpFromSett(){S.empId=null;S.empName='';S.group='';closeSett();goSetup();}
 
 function goSetup(){
   ['scrAgenda','scrInfo'].forEach(id=>document.getElementById(id).classList.remove('active'));
