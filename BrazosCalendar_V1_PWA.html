@@ -1370,7 +1370,14 @@ function goSetup(){
   ['scrAgenda','scrInfo'].forEach(id=>document.getElementById(id).classList.remove('active'));
   document.getElementById('scrSetup').classList.add('active');
   document.getElementById('bnav').style.display='none';
-  if(allEmpsList.length) showEmpSection();
+  // Asegurar que se muestre la lista de empleados (no la pantalla de "ya seleccionado")
+  // sin depender de que allEmpsList ya tenga datos cargados.
+  document.getElementById('empSelected').style.display='none';
+  const search=document.getElementById('empSearch');
+  if(search) search.value='';
+  if(!allEmpsList.length && S.emps && S.emps.length) buildEmpsList();
+  else renderEmpList('');
+  document.getElementById('empSection').style.display='block';
 }
 
 /* ── SETTINGS ── */
