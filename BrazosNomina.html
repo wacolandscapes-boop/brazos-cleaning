@@ -1177,6 +1177,7 @@
                         <option value="equipment">Equipo</option>
                         <option value="vehicle">Vehículo</option>
                         <option value="utilities">Servicios</option>
+                        <option value="owner_draw">Retiro del Dueño</option>
                         <option value="other">Otro</option>
                     </select>
                 </div>
@@ -1231,6 +1232,12 @@
                             <option value="equipment">🔧 Equipo</option>
                             <option value="vehicle">🚗 Vehículo</option>
                             <option value="utilities">💡 Servicios</option>
+                            <!-- 2026-09-14: Brazos es LLC de un solo dueño (Victor) — un pago a él
+                                 NO es nómina/W-2 (no puede ser empleado de su propio negocio),
+                                 es un retiro de ganancias (Owner's Draw), sin retenciones.
+                                 Se categoriza aparte para no mezclarlo con gastos operativos
+                                 reales ni con nómina. -->
+                            <option value="owner_draw">🏠 Retiro del Dueño</option>
                             <option value="other">📦 Otro</option>
                         </select>
                     </div>
@@ -1450,6 +1457,22 @@
                     <option value="w2_simplificado">📋 Empleado W-2 — Simplificado (% deducción)</option>
                     <option value="contractor_1099">🧾 Contratista 1099 (sin retenciones)</option>
                 </select>
+            </div>
+
+            <!-- 2026-09-14: Brazos es LLC de un solo dueño (Victor) — el dueño NO puede
+                 ser empleado de su propio negocio (no W-2, no cheque de nómina).
+                 Esta casilla permite tenerlo capturado como empleado (para poder
+                 asignarlo a grupos en Scheduler) sin riesgo de que se le calcule o
+                 emita un cheque de nómina por error. Para pagarle, usar "Retiro del
+                 Dueño" en la pestaña Gastos. -->
+            <div class="form-group" style="background:#fff3e0;border:1.5px solid #e67e22;border-radius:8px;padding:12px;">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#e67e22;cursor:pointer;">
+                    <input type="checkbox" id="empIsOwner" style="width:18px;height:18px;">
+                    🏠 Es el dueño del negocio (excluir de Nómina)
+                </label>
+                <div style="font-size:0.8rem;color:#856404;margin-top:4px;">
+                    Con esto marcado, nunca se le calculará ni emitirá un cheque de nómina, aunque se le registren horas por error. Para pagarle, usa "Retiro del Dueño" en la pestaña Gastos.
+                </div>
             </div>
 
             <!-- Campos solo para Contratista 1099 -->
@@ -2814,10 +2837,11 @@
                 document.getElementById('empExtraDeductions').value = 0;
                 document.getElementById('empExtraWithholding').value = 0;
                 document.getElementById('empTaxExempt').checked = false;
+                document.getElementById('empIsOwner').checked = false;
                 app.toggleWorkerTypeFields();
                 document.getElementById('employeeModal').classList.add('active');
             },
-            
+
             editEmployee(id) {
                 const emp = this.employees.find(e => e.id === id);
                 if (!emp) return;
@@ -2858,10 +2882,11 @@
                 document.getElementById('empExtraDeductions').value = w4.extraDeductions || 0;
                 document.getElementById('empExtraWithholding').value = w4.extraWithholding || 0;
                 document.getElementById('empTaxExempt').checked = !!w4.exempt;
+                document.getElementById('empIsOwner').checked = !!emp.isOwner;
                 app.toggleWorkerTypeFields();
                 document.getElementById('employeeModal').classList.add('active');
             },
-            
+
             toggleWorkerTypeFields() {
                 const type = document.getElementById('empWorkerType')?.value || 'w2_formal';
                 const contractorFields = document.getElementById('empContractorFields');
@@ -2933,6 +2958,7 @@
                     extraWithholding: parseFloat(document.getElementById('empExtraWithholding').value) || 0,
                     exempt: document.getElementById('empTaxExempt').checked
                 };
+                const isOwner = document.getElementById('empIsOwner').checked;
 
                 if (empId) {
                     // EDITAR empleado existente
@@ -2964,7 +2990,8 @@
                         emp.businessName = businessName;
                         emp.ssnEin = ssnEin;
                         emp.w4 = w4;
-                        
+                        emp.isOwner = isOwner;
+
                         // Actualizar nombre en asistencias
                         this.attendances.forEach(att => {
                             if (att.employeeId === empId) {
@@ -3000,7 +3027,8 @@
                         workerType,
                         businessName,
                         ssnEin,
-                        w4
+                        w4,
+                        isOwner
                     });
                     alert('✅ Empleado agregado correctamente.\n\n📌 Se importará automáticamente al Scheduler la próxima vez que sincronice con Drive (ya no requiere botón manual).');
                 }
@@ -3078,7 +3106,7 @@
                 [...this.employees].sort((a,b) => a.name.localeCompare(b.name)).forEach(emp => {
                     html += `
                         <tr>
-                            <td><strong>${emp.name}</strong></td>
+                            <td><strong>${emp.name}</strong>${emp.isOwner ? ' <span class="badge" style="background:#e67e22;color:white;" title="Excluido de Nómina — usa Retiro del Dueño en Gastos">🏠 Dueño</span>' : ''}</td>
                             <td><span class="badge badge-info">${emp.pin}</span></td>
                             <td>$${this.formatMoney(emp.rate)}/hr</td>
                             <td>${emp.deduction > 0 ? `<span class="badge badge-warning">${emp.deduction}%</span>` : '<span style="color:#aaa;">—</span>'}</td>
@@ -4053,6 +4081,10 @@
                 
                 // Filtrar asistencias por rango de fechas
                 const periodAttendances = this.attendances.filter(a => {
+                    // 2026-09-14: el dueño (isOwner) nunca entra a Nómina, aunque
+                    // por error se le hayan registrado horas.
+                    const emp = this.employees.find(e => e.id === a.employeeId);
+                    if (emp && emp.isOwner) return false;
                     const date = new Date(a.date + 'T00:00:00');
                     return date >= startDate && date <= endDate && a.checkIn;
                 });
@@ -4355,7 +4387,7 @@
                 // captura (no alfabético) — inconsistente con el resto de pantallas de
                 // Nómina (Empleados, Time Cards, resultado de nómina, etc.), lo cual
                 // podía confundir al capturar horas a mano. Se ordena igual que las demás.
-                list.innerHTML = [...this.employees].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(emp => {
+                list.innerHTML = [...this.employees].filter(emp => !emp.isOwner).sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(emp => {
                     // Si "Nómina x %" del Scheduler ya envió una semana para este
                     // empleado que coincide con el período elegido, precargar
                     // Reg/OT/Bonus — Ranu sólo revisa y da "Calcular". Si aún no
@@ -4471,6 +4503,7 @@
                     const empId = input.dataset.emp;
                     const emp = this.employees.find(e => String(e.id) === String(empId));
                     if (!emp) return;
+                    if (emp.isOwner) return; // 2026-09-14: nunca calcular nómina para el dueño
                     // FIX 2026-09-04 (re-aplicado — se había revertido por accidente):
                     // el campo bloqueado (data-prodlock="1") de horas de Producción
                     // SÍ debe pagarse aquí con el número real que se ve en pantalla.
@@ -5358,6 +5391,9 @@
                             <label style="font-weight:bold;color:#1565c0;">Número inicial:</label>
                             <input type="number" id="autoFillStart" value="${nextNum}" style="width:100px;padding:6px;border:1px solid #90caf9;border-radius:6px;font-size:1rem;text-align:center;">
                             <button onclick="app.autoFillCheckNumbers()" style="background:#1565c0;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:bold;">⚡ Autollenar</button>
+                            <span style="flex:1;"></span>
+                            <button onclick="app.toggleChecksForIndices(true, ${JSON.stringify(checkEmps.map(x=>x.i))})" style="background:#fff;color:#1565c0;border:1.5px solid #1565c0;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">☑️ Marcar todos</button>
+                            <button onclick="app.toggleChecksForIndices(false, ${JSON.stringify(checkEmps.map(x=>x.i))})" style="background:#fff;color:#1565c0;border:1.5px solid #1565c0;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">☐ Desmarcar todos</button>
                         </div>
                         <div style="overflow-x:auto;">
                             <table style="width:100%;border-collapse:collapse;">
@@ -5370,7 +5406,11 @@
                                 <tbody>${checkRows}</tbody>
                             </table>
                         </div>
-                        <div style="text-align:right;margin-top:8px;">
+                        <div style="text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#555;cursor:pointer;">
+                                <input type="checkbox" id="printChecksReversed" style="width:16px;height:16px;cursor:pointer;">
+                                🔃 Imprimir en orden inverso
+                            </label>
                             <button onclick="app.printChecksOnly()" style="background:#27ae60;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold;">🖨️ Imprimir Cheques</button>
                         </div>
                     </div>` : '';
@@ -5378,6 +5418,10 @@
                 const digitalSection = digitalEmps.length > 0 ? `
                     <div style="margin-bottom:20px;">
                         <div style="background:#6a1b9a;color:white;padding:10px 14px;border-radius:8px 8px 0 0;font-weight:bold;">📱 Pago Digital (${digitalEmps.length} empleado${digitalEmps.length>1?'s':''})</div>
+                        <div style="background:#f3e5f5;padding:8px 14px;display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+                            <button onclick="app.toggleChecksForIndices(true, ${JSON.stringify(digitalEmps.map(x=>x.i))})" style="background:#fff;color:#6a1b9a;border:1.5px solid #6a1b9a;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">☑️ Marcar todos</button>
+                            <button onclick="app.toggleChecksForIndices(false, ${JSON.stringify(digitalEmps.map(x=>x.i))})" style="background:#fff;color:#6a1b9a;border:1.5px solid #6a1b9a;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">☐ Desmarcar todos</button>
+                        </div>
                         <div style="overflow-x:auto;margin-top:4px;">
                             <table style="width:100%;border-collapse:collapse;">
                                 <thead><tr style="background:#34495e;color:white;">
@@ -5438,11 +5482,11 @@
             printChecksOnly() { this.confirmAndPrintChecks(true, false); },
             printDigitalStubsOnly() { this.confirmAndPrintChecks(false, true); },
 
-            toggleAllChecks(checked, count) {
-                for (let i = 0; i < count; i++) {
+            toggleChecksForIndices(checked, indices) {
+                indices.forEach(i => {
                     const cb = document.getElementById('chkprint_' + i);
                     if (cb) cb.checked = checked;
-                }
+                });
             },
 
             confirmAndPrintChecks(onlyChecks = false, onlyDigital = false, showPreview = true) {
@@ -5554,10 +5598,18 @@
                     }
                 });
 
+                // 2026-09-14: leer el checkbox de "orden inverso" ANTES de quitar el
+                // modal del DOM (vive dentro de checkAssignModal) — así el cheque físico
+                // sale ya en el orden correcto y no hay que reacomodar la pila a mano.
+                const reverseChecked = document.getElementById('printChecksReversed');
+                const finalPrintChecks = (reverseChecked && reverseChecked.checked)
+                    ? [...toPrintChecks].reverse()
+                    : toPrintChecks;
+
                 this.save();
                 document.getElementById('checkAssignModal').remove();
 
-                if (showPreview && !onlyDigital && toPrintChecks.length > 0) this.previewChecks(toPrintChecks, cfg, bgImage);
+                if (showPreview && !onlyDigital && toPrintChecks.length > 0) this.previewChecks(finalPrintChecks, cfg, bgImage);
 
                 // Marcar el período actual como impreso o pendiente
                 if (this.currentPayrollPeriodId) {
@@ -7572,6 +7624,8 @@
                         const clockData = await fileRes.json();
                         let added = 0; let updated = 0;
                         (clockData.attendances || []).forEach(att => {
+                            const attEmp = this.employees.find(e => e.id === att.employeeId);
+                            if (attEmp && attEmp.isOwner) return; // 2026-09-14: el dueño nunca entra a Nómina
                             const idx = this.attendances.findIndex(a => a.employeeId === att.employeeId && a.date === att.date);
                             if (idx >= 0) {
                                 const local = this.attendances[idx];
@@ -7792,6 +7846,8 @@
                             if (!empData || !empData.shopOut || !empData.shopBack) return; // sin registro completo ese día
 
                             const resolvedId = resolveEmpId(empData.empId, empData.empName);
+                            const resolvedEmp = this.employees.find(e => e.id === resolvedId);
+                            if (resolvedEmp && resolvedEmp.isOwner) return; // 2026-09-14: el dueño nunca entra a Nómina
                             const existe = this.attendances.some(a =>
                                 String(a.employeeId) === String(resolvedId) && a.date === dt);
                             if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
@@ -8451,8 +8507,8 @@
                 const start = document.getElementById('expFilterStart')?.value || '';
                 const end   = document.getElementById('expFilterEnd')?.value || '';
                 const cat   = document.getElementById('expFilterCat')?.value || 'all';
-                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', other:'Otro' };
-                const catColors = { supplies:'#3498db', equipment:'#e67e22', vehicle:'#27ae60', utilities:'#9b59b6', other:'#95a5a6' };
+                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', owner_draw:'Retiro del Dueño', other:'Otro' };
+                const catColors = { supplies:'#3498db', equipment:'#e67e22', vehicle:'#27ae60', utilities:'#9b59b6', owner_draw:'#c0392b', other:'#95a5a6' };
 
                 let filtered = [...this.expenses];
                 if (start) filtered = filtered.filter(e => e.date >= start);
@@ -8466,12 +8522,17 @@
                 // pero sigue apareciendo (tachado) en la tabla de abajo para que quede
                 // el registro de que existió y fue anulado.
                 const forTotals = filtered.filter(e => !e.voided);
-                const total = forTotals.reduce((s, e) => s + e.amount, 0);
+                // 2026-09-14: "Retiro del Dueño" NO es un gasto operativo deducible —
+                // es un retiro de ganancias del dueño de la LLC, así que se excluye del
+                // "Total" general (que sí representa gastos reales del negocio) para no
+                // inflar esa cifra si algún reporte/contador la usa tal cual. Sigue
+                // apareciendo con su propio total en el desglose por categoría de abajo.
+                const total = forTotals.filter(e => e.category !== 'owner_draw').reduce((s, e) => s + e.amount, 0);
                 const bycat = {};
                 forTotals.forEach(e => { bycat[e.category] = (bycat[e.category] || 0) + e.amount; });
 
                 document.getElementById('expTotals').innerHTML =
-                    `<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;font-size:1.1rem;font-weight:bold;color:#27ae60;">💰 Total: $${this.formatMoney(total)}</div>` +
+                    `<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;font-size:1.1rem;font-weight:bold;color:#27ae60;">💰 Total gastos: $${this.formatMoney(total)}</div>` +
                     Object.entries(bycat).map(([k,v]) =>
                         `<div style="background:white;border-left:4px solid ${catColors[k]||'#ccc'};border-radius:6px;padding:8px 14px;font-size:0.85rem;">
                             <div style="color:${catColors[k]||'#999'};font-weight:600;">${catLabels[k]||k}</div>
@@ -8555,8 +8616,8 @@
             renderExpensesHistory() {
                 const container = document.getElementById('histGastosList');
                 if (!container) return;
-                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', other:'Otro' };
-                const catColors = { supplies:'#3498db', equipment:'#e67e22', vehicle:'#27ae60', utilities:'#9b59b6', other:'#95a5a6' };
+                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', owner_draw:'Retiro del Dueño', other:'Otro' };
+                const catColors = { supplies:'#3498db', equipment:'#e67e22', vehicle:'#27ae60', utilities:'#9b59b6', owner_draw:'#c0392b', other:'#95a5a6' };
                 const sorted = [...(this.expenses || [])].sort((a,b) => b.date.localeCompare(a.date));
                 if (sorted.length === 0) {
                     container.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:1rem;">No hay cheques de gastos registrados</div>';
@@ -8599,9 +8660,10 @@
                 // FIX 2026-09-04: se agrega la columna Estado para que un cheque
                 // ANULADO quede claramente marcado en el CSV (no se quita de la
                 // exportación — solo se identifica, para no perder el registro).
+                const catLabels = { supplies:'Suministros', equipment:'Equipo', vehicle:'Vehículo', utilities:'Servicios', owner_draw:'Retiro del Dueño', other:'Otro' };
                 let csv = 'Fecha,Vendor,Descripción,# Cheque,Categoría,Monto,Estado,Notas\n';
                 [...this.expenses].sort((a,b)=>b.date.localeCompare(a.date)).forEach(e => {
-                    csv += `${e.date},"${e.vendor||''}","${e.desc||''}",${e.checkNum||''},"${e.category}",$${e.amount},"${e.voided ? 'ANULADO' : 'Vigente'}","${e.notes||''}"\n`;
+                    csv += `${e.date},"${e.vendor||''}","${e.desc||''}",${e.checkNum||''},"${catLabels[e.category]||e.category}",$${e.amount},"${e.voided ? 'ANULADO' : 'Vigente'}","${e.notes||''}"\n`;
                 });
                 const blob = new Blob([csv], {type:'text/csv'});
                 const url = URL.createObjectURL(blob);
