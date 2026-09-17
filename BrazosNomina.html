@@ -1537,6 +1537,7 @@
                 <select id="empPayType" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem;" onchange="app.togglePayTypeFields()">
                     <option value="hourly">⏱️ Por Hora</option>
                     <option value="flat">📋 Por Trabajo/Proyecto</option>
+                    <option value="fixed">💰 Sueldo Fijo Semanal</option>
                 </select>
             </div>
             <div class="form-group" id="empRateGroup">
@@ -1547,6 +1548,11 @@
                 <label>Monto fijo por trabajo ($):</label>
                 <input type="number" id="empFlatRate" step="0.01" placeholder="150.00">
                 <small style="color:#7f8c8d; margin-top:5px;">Se multiplica por el número de trabajos/días registrados</small>
+            </div>
+            <div class="form-group" id="empFixedRateGroup" style="display:none;">
+                <label>Monto fijo semanal ($):</label>
+                <input type="number" id="empFixedRate" step="0.01" placeholder="600.00">
+                <small style="color:#7f8c8d; margin-top:5px;">Sueldo fijo cada semana, sin importar horas/asistencia. Se precarga solo en "Captura Manual de Horas" — no depende del Reloj Checador ni del Calendario.</small>
             </div>
             <div class="form-group" id="empDeductionGroup">
                 <label>Deducción individual (%):</label>
@@ -2815,6 +2821,7 @@
                 document.getElementById('empZip').value = '';
                 document.getElementById('empPin').value = '';
                 document.getElementById('empRate').value = '';
+                document.getElementById('empFixedRate').value = 0;
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
                 document.getElementById('empStandingHours').value = 0;
@@ -2857,6 +2864,7 @@
                 document.getElementById('empRate').value = emp.rate;
                 document.getElementById('empPayType').value = emp.payType || 'hourly';
                 document.getElementById('empFlatRate').value = emp.flatRate || '';
+                document.getElementById('empFixedRate').value = emp.fixedWeeklyAmount || '';
                 app.togglePayTypeFields();
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
@@ -2901,8 +2909,10 @@
                 const type = document.getElementById('empPayType')?.value || 'hourly';
                 const rateGroup = document.getElementById('empRateGroup');
                 const flatGroup = document.getElementById('empFlatRateGroup');
+                const fixedGroup = document.getElementById('empFixedRateGroup');
                 if (rateGroup) rateGroup.style.display = type === 'hourly' ? 'block' : 'none';
                 if (flatGroup) flatGroup.style.display = type === 'flat'   ? 'block' : 'none';
+                if (fixedGroup) fixedGroup.style.display = type === 'fixed' ? 'block' : 'none';
             },
 
             closeEmployeeModal() {
@@ -2946,6 +2956,7 @@
                 
                 const payType   = document.getElementById('empPayType').value;
                 const flatRate  = parseFloat(document.getElementById('empFlatRate').value) || 0;
+                const fixedWeeklyAmount = parseFloat(document.getElementById('empFixedRate').value) || 0;
                 const workerType = document.getElementById('empWorkerType').value || 'w2_formal';
                 const businessName = document.getElementById('empBusinessName').value.trim();
                 const ssnEin = document.getElementById('empSsnEin').value.trim();
@@ -2973,6 +2984,7 @@
                         emp.rate = rate;
                         emp.payType  = payType;
                         emp.flatRate = flatRate;
+                        emp.fixedWeeklyAmount = fixedWeeklyAmount;
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
                         emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
@@ -3011,6 +3023,7 @@
                         rate,
                         payType,
                         flatRate,
+                        fixedWeeklyAmount,
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
                         standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
@@ -4130,6 +4143,7 @@
                             employeeName: att.employeeName,
                             rate: emp ? emp.rate : 0,
                             flatRate: emp ? (emp.flatRate || 0) : 0,
+                            fixedWeeklyAmount: emp ? (emp.fixedWeeklyAmount || 0) : 0,
                             payType: emp ? (emp.payType || 'hourly') : 'hourly',
                             empDeduction: emp ? (emp.deduction || 0) : 0,
                             reimbursement: emp ? (emp.reimbursement || 0) : 0,
@@ -4161,6 +4175,10 @@
                         if (att.checkOut) p.flatWorks++; // solo contar jornadas cerradas
                         return;
                     }
+
+                    // ── SUELDO FIJO SEMANAL: no depende de horas/asistencia, se ignora
+                    // cualquier registro del Reloj Checador o Calendario para el pago ──
+                    if (p.payType === 'fixed') return;
 
                     // Proteger contra hours null/undefined (ej: sin checkOut aún)
                     let dailyHours = att.hours ? Math.round(att.hours * 100) / 100 : 0;
@@ -4236,7 +4254,11 @@
              * manual (calculateManualPayroll). Mismo motor de impuestos en ambos casos.
              */
             finalizePayrollEntry(p, startDate) {
-                if (p.payType === 'flat') {
+                if (p.payType === 'fixed') {
+                    // Sueldo fijo semanal: no depende de horas ni asistencia.
+                    p.grossPay   = (p.fixedWeeklyAmount || 0) + (p.bonus || 0);
+                    p.regularPay = (p.fixedWeeklyAmount || 0);
+                } else if (p.payType === 'flat') {
                     // Pago por proyecto: monto fijo × número de trabajos
                     p.grossPay  = p.flatRate * p.flatWorks + (p.bonus || 0);
                     p.regularPay = p.flatRate * p.flatWorks;
@@ -4308,6 +4330,7 @@
                     employeeName: emp.name,
                     rate: emp.rate || 0,
                     flatRate: emp.flatRate || 0,
+                    fixedWeeklyAmount: emp.fixedWeeklyAmount || 0,
                     payType: emp.payType || 'hourly',
                     empDeduction: emp.deduction || 0,
                     reimbursement: emp.reimbursement || 0,
@@ -4429,6 +4452,26 @@
                         ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
                         : '';
                     const lockAttrs = prodLock ? ` disabled data-prodlock="1" title="Horas ya registradas en Producción — se calculan aparte con 'Calcular Nómina (Reloj Checador)'" style="width:90px; padding:6px; background:#f2f3f4; color:#1e8449; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
+
+                    // ── SUELDO FIJO SEMANAL: no se capturan horas — se muestra el monto
+                    // fijo como referencia y se manda oculto (en 0) para que la fila siga
+                    // participando en calculateManualPayroll(); Bono/Reembolso sí se dejan
+                    // editables por si aplica un extra puntual. ──
+                    if (emp.payType === 'fixed') {
+                        return `
+                        <tr>
+                            <td><strong>${emp.name}</strong> <span style="background:#fff3cd; color:#856404; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Sueldo fijo semanal — no depende de horas ni asistencia">💰 Fijo</span></td>
+                            <td>$${this.formatMoney(emp.fixedWeeklyAmount || 0)}/semana</td>
+                            <td colspan="2" style="color:#856404; font-size:0.85rem;">Sueldo fijo — sin horas
+                                <input type="hidden" class="manualRegHours" data-emp="${emp.id}" value="0">
+                                <input type="hidden" class="manualOtHours" data-emp="${emp.id}" value="0">
+                            </td>
+                            <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
+                            <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
+                        </tr>
+                    `;
+                    }
+
                     return `
                     <tr>
                         <td><strong>${emp.name}</strong>${badge}${prodBadge}</td>
@@ -4518,7 +4561,7 @@
                     const bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
                     const reimbInput = document.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
                     const reimbAmt = reimbInput ? (parseFloat(reimbInput.value) || 0) : (emp.reimbursement || 0);
-                    if (regHours === 0 && otHours === 0 && bonusAmt === 0 && reimbAmt === 0 && emp.payType !== 'flat') return; // omitir empleados sin nada capturado
+                    if (regHours === 0 && otHours === 0 && bonusAmt === 0 && reimbAmt === 0 && emp.payType !== 'flat' && emp.payType !== 'fixed') return; // omitir empleados sin nada capturado
 
                     const p = this.buildEmptyPayrollEntry(emp);
                     p.regularHours = regHours;
@@ -4527,6 +4570,7 @@
                     p.totalWorkedHours = p.totalHours;
                     p.bonus = bonusAmt;
                     p.reimbursement = reimbAmt;
+                    p.fixedWeeklyAmount = emp.fixedWeeklyAmount || 0;
                     this.finalizePayrollEntry(p, startDate);
                     payrollArr.push(p);
                 });
