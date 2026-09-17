@@ -4453,6 +4453,21 @@
                         : '';
                     const lockAttrs = prodLock ? ` disabled data-prodlock="1" title="Horas ya registradas en Producción — se calculan aparte con 'Calcular Nómina (Reloj Checador)'" style="width:90px; padding:6px; background:#f2f3f4; color:#1e8449; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
 
+                    // FIX 2026-09-17: cuando el empleado tiene DÍAS reales registrados
+                    // (prodLock) Y ADEMÁS llegó una semana de "Nómina x %" para el mismo
+                    // período (pre), antes el % se descartaba por completo (solo se
+                    // pagaban los días reales). Ahora ese % se convierte a un monto en $
+                    // (con la tarifa del empleado) y se SUMA aparte al Bono — ya no compite
+                    // por el mismo campo de horas, así los días reales y el % de los días
+                    // sin registrar sí se pagan juntos en el mismo cheque.
+                    const pctExtra = (prodLock && pre)
+                        ? Math.round((((pre.regularHours || 0) * (emp.rate || 0)) + ((pre.overtimeHours || 0) * (emp.rate || 0) * 1.5) + (pre.bonus || 0)) * 100) / 100
+                        : 0;
+                    const pctExtraBadge = pctExtra > 0
+                        ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Nómina x % del Scheduler para los días sin registrar de este período (semana ${pre.weekStart} a ${pre.weekEnd}) — se suma al Bono, aparte de las horas reales de Producción de arriba">➕ Nómina x%: $${this.formatMoney(pctExtra)}</span>`
+                        : '';
+                    const pctExtraHidden = pctExtra > 0 ? `<input type="hidden" class="manualPctExtra" data-emp="${emp.id}" value="${pctExtra}">` : '';
+
                     // ── SUELDO FIJO SEMANAL: no se capturan horas — se muestra el monto
                     // fijo como referencia y se manda oculto (en 0) para que la fila siga
                     // participando en calculateManualPayroll(); Bono/Reembolso sí se dejan
@@ -4474,9 +4489,9 @@
 
                     return `
                     <tr>
-                        <td><strong>${emp.name}</strong>${badge}${prodBadge}</td>
+                        <td><strong>${emp.name}</strong>${badge}${prodBadge}${pctExtraBadge}</td>
                         <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
-                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regValFinal}"${lockAttrs}></td>
+                        <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regValFinal}"${lockAttrs}>${pctExtraHidden}</td>
                         <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otValFinal}"${lockAttrs}></td>
                         <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
                         <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
@@ -4558,7 +4573,15 @@
                     const otInput = document.querySelector(`.manualOtHours[data-emp="${empId}"]`);
                     const otHours = otInput ? (parseFloat(otInput.value) || 0) : 0;
                     const bonusInput = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
-                    const bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
+                    let bonusAmt = bonusInput ? (parseFloat(bonusInput.value) || 0) : 0;
+                    // FIX 2026-09-17: si el empleado tiene días reales de Producción (arriba,
+                    // bloqueados) Y ADEMÁS llegó una semana de "Nómina x %" para el mismo
+                    // período (ver renderManualHoursList), ese % ya viene convertido a $ en
+                    // este campo oculto — se suma aparte al Bono en vez de perderse, para que
+                    // los días reales y el % de los días sin registrar se paguen juntos.
+                    const pctExtraInput = document.querySelector(`.manualPctExtra[data-emp="${empId}"]`);
+                    const pctExtraAmt = pctExtraInput ? (parseFloat(pctExtraInput.value) || 0) : 0;
+                    bonusAmt += pctExtraAmt;
                     const reimbInput = document.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
                     const reimbAmt = reimbInput ? (parseFloat(reimbInput.value) || 0) : (emp.reimbursement || 0);
                     if (regHours === 0 && otHours === 0 && bonusAmt === 0 && reimbAmt === 0 && emp.payType !== 'flat' && emp.payType !== 'fixed') return; // omitir empleados sin nada capturado
