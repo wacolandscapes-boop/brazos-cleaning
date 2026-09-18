@@ -5633,6 +5633,31 @@
                 const payroll = this.currentPayrollCalc;
                 if (!payroll || payroll.length === 0) { this._processingChecks = false; return; }
 
+                // FIX 2026-09-18: si se llegó aquí directo desde "✅ Confirmar Nómina →
+                // Asignar Cheques" sin antes dar clic en "💾 Guardar Nómina" (ese botón
+                // deja this.currentPayrollPeriodId en null a propósito), los cheques
+                // individuales se guardaban bien pero el resumen del período NUNCA se
+                // creaba — la nómina no aparecía en "Nóminas Guardadas" aunque los
+                // cheques ya estuvieran impresos. Ahora, si no hay período guardado
+                // todavía para este cálculo, se crea aquí mismo en automático (silencioso,
+                // sin su alert normal) a partir de this.currentPayrollPeriod, el mismo
+                // período que ya se usa para los cheques.
+                if (!this.currentPayrollPeriodId && this.currentPayrollPeriod) {
+                    const [startLbl, endLbl] = this.currentPayrollPeriod.split(' - ').map(s => (s || '').trim());
+                    const toISO = (mdy) => {
+                        const parts = (mdy || '').split('/');
+                        if (parts.length !== 3) return null;
+                        const [mm, dd, yyyy] = parts;
+                        return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+                    };
+                    const startISO = toISO(startLbl), endISO = toISO(endLbl);
+                    if (startISO && endISO) {
+                        this._autoSavingPeriod = true;
+                        this.savePayrollPeriod(startISO, endISO);
+                        this._autoSavingPeriod = false;
+                    }
+                }
+
                 const cfg = this.checkConfig;
                 const bgImage = localStorage.getItem('ap_nomina_checkBgImage') || '';
                 const payDateInput = document.getElementById('checkPayDate');
@@ -6375,10 +6400,19 @@
                     if (warn) warn.textContent = 'Ingresa un número de cheque válido.';
                     return;
                 }
+                const oldNum = check.checkNumber;
                 const dup = this.checks.find(c => c.id !== id && !c.voided && parseInt(c.checkNumber) === newNum);
                 if (dup) {
-                    if (warn) warn.textContent = `⚠️ El #${newNum} ya está asignado a ${dup.employeeName} (cheque vigente) — corrígelo ahí primero o usa otro número.`;
-                    return;
+                    // FIX 2026-09-18: antes esto bloqueaba por completo y pedía corregir
+                    // primero al otro empleado — pero eso hacía imposible intercambiar
+                    // 2 números directamente (para liberar el # que se quiere usar,
+                    // había que quitárselo primero a su dueño actual, y ese a su vez
+                    // necesitaba el # que se le iba a quitar al primero: un candado
+                    // circular). Ahora se ofrece intercambiar los dos números de una vez.
+                    if (!confirm(`El #${newNum} ya está asignado a ${dup.employeeName}.\n\n¿Intercambiar los números? ${dup.employeeName} pasaría a usar el #${oldNum} (el que tenía ${check.employeeName}).`)) {
+                        return;
+                    }
+                    dup.checkNumber = oldNum;
                 }
                 check.checkNumber = newNum;
                 this.save();
@@ -7076,20 +7110,33 @@
                 // Check if already saved
                 const exists = this.savedPayrollPeriods.find(p => p.start === startStr && p.end === endStr);
                 if (exists) {
-                    alert('Esta nómina ya está guardada.');
+                    // FIX 2026-09-18: antes, si el período ya existía, la función salía
+                    // sin fijar this.currentPayrollPeriodId — dejando la referencia en
+                    // null/desactualizada para quien llamó a esta función esperando
+                    // obtenerla (ver el auto-guardado en confirmAndPrintChecks() abajo).
+                    this.currentPayrollPeriodId = exists.id;
+                    if (!this._autoSavingPeriod) alert('Esta nómina ya está guardada.');
                     return;
                 }
                 const startDate = new Date(startStr + 'T00:00:00');
                 const endDate = new Date(endStr + 'T23:59:59');
                 const fmt = (d) => `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
                 const label = `${fmt(startDate)} — ${fmt(endDate)}`;
+                // FIX 2026-09-18: si ya existen cheques guardados (this.checks) para este
+                // mismo período y ya se marcaron como impresos — caso típico de haber
+                // impreso los cheques ANTES de guardar el período (ej. si se recarga la
+                // app entre imprimir y guardar, y hay que recalcular/guardar de nuevo) —
+                // el período nuevo nace correctamente marcado "✅ Cheques Impresos" en
+                // vez de "⏳ Pendientes", que sería incorrecto y confuso ya que esos
+                // cheques físicos ya salieron.
+                const alreadyPrinted = (this.checks || []).some(c => c.period === label && c.printed);
                 const newPeriod = { updatedAt: new Date().toISOString(),
                     id: 'np_' + Date.now(),
                     start: startStr,
                     end: endStr,
                     label,
                     savedAt: new Date().toISOString(),
-                    checksStatus: 'pending', // 'pending' | 'printed' | 'digital'
+                    checksStatus: alreadyPrinted ? 'printed' : 'pending', // 'pending' | 'printed' | 'digital'
                     payroll: JSON.parse(JSON.stringify(this.currentPayrollCalc || []))
                 };
                 this.savedPayrollPeriods.push(newPeriod);
@@ -7103,7 +7150,7 @@
                 // avisaba si se había guardado. this.save() es el método real que ya
                 // usa el resto de la app para persistir.
                 this.save();
-                alert('✅ Nómina guardada en historial');
+                if (!this._autoSavingPeriod) alert('✅ Nómina guardada en historial');
             },
 
             deletePayrollPeriod(id) {
