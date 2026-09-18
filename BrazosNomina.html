@@ -5417,7 +5417,17 @@
                     else digitalEmps.push({ p, i, emp, method });
                 });
 
-                const usedNums = this.checks.map(c => c.checkNumber).filter(n => !isNaN(n));
+                // FIX 2026-09-18: antes esto solo veía this.checks (cheques de Nómina),
+                // así que si el último cheque emitido había sido uno de Gastos (con
+                // número más alto), Nómina sugería un "siguiente número" desactualizado
+                // y chocaba con el que ya se usó en Gastos. Ahora la sugerencia toma en
+                // cuenta AMBAS fuentes — la misma combinación que ya usaba
+                // printExpenseCheck() del lado de Gastos — para que la secuencia sea
+                // una sola, sin importar de qué módulo salió el último cheque.
+                const usedNums = [
+                    ...this.checks.map(c => parseInt(c.checkNumber)).filter(n => !isNaN(n)),
+                    ...(this.expenses || []).filter(e => e.checkNum).map(e => parseInt(e.checkNum)).filter(n => !isNaN(n))
+                ];
                 const nextNum = usedNums.length > 0 ? Math.max(...usedNums) + 1 : 1001;
 
                 const existing = document.getElementById('checkAssignModal');
@@ -8471,7 +8481,18 @@
                 document.getElementById('expDesc').value = '';
                 document.getElementById('expAmount').value = '';
                 document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
-                document.getElementById('expCheckNum').value = '';
+                // FIX 2026-09-18: antes este campo siempre nacía en blanco para un gasto
+                // nuevo, sin ninguna referencia — Ranu tenía que acordarse a mano de cuál
+                // fue el último # de cheque usado, sin importar si salió de Nómina o de
+                // otro gasto. Ahora se precarga con el siguiente número disponible
+                // combinando ambas fuentes (this.checks de Nómina + this.expenses con
+                // checkNum ya asignado) — mismo cálculo que ya usa printExpenseCheck().
+                // Sigue siendo editable/opcional: si este gasto no lleva cheque, se borra.
+                const usedNumsExp = [
+                    ...this.checks.map(c => parseInt(c.checkNumber)).filter(n => !isNaN(n)),
+                    ...(this.expenses || []).filter(e => e.checkNum).map(e => parseInt(e.checkNum)).filter(n => !isNaN(n))
+                ];
+                document.getElementById('expCheckNum').value = usedNumsExp.length > 0 ? (Math.max(...usedNumsExp) + 1) : '';
                 document.getElementById('expCategory').value = 'supplies';
                 document.getElementById('expNotes').value = '';
                 document.getElementById('expenseModalTitle').textContent = '➕ Nuevo Gasto';
