@@ -5481,11 +5481,13 @@
                         </div>
                         <div style="text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;">
                             <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#555;cursor:pointer;">
-                                <input type="checkbox" id="printChecksReversed" style="width:16px;height:16px;cursor:pointer;">
+                                <input type="checkbox" id="printChecksReversed" onchange="app.renderFinalCheckOrderPreview()" style="width:16px;height:16px;cursor:pointer;">
                                 🔃 Imprimir en orden inverso
                             </label>
+                            <button type="button" onclick="app.renderFinalCheckOrderPreview()" style="background:#fff;color:#1565c0;border:1.5px solid #1565c0;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">🔍 Ver orden final</button>
                             <button onclick="app.printChecksOnly()" style="background:#27ae60;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold;">🖨️ Imprimir Cheques</button>
                         </div>
+                        <div id="finalCheckOrderPreview" style="margin-top:10px;"></div>
                     </div>` : '';
 
                 const digitalSection = digitalEmps.length > 0 ? `
@@ -5540,16 +5542,72 @@
             autoFillCheckNumbers() {
                 const start = parseInt(document.getElementById('autoFillStart').value);
                 if (isNaN(start) || start < 1) { alert('Ingresa un número inicial válido'); return; }
-                let seq = start;
+                // FIX 2026-09-18: la intención de "🔃 Imprimir en orden inverso" es que
+                // Ranu cargue su chequera pre-numerada del banco TAL CUAL viene del
+                // paquete, sin voltear la pila — el botón invierte el orden en que los
+                // cheques se ENVÍAN a imprimir para lograrlo. Pero Autollenar siempre
+                // repartía los números de arriba hacia abajo en esta tabla (alfabético),
+                // sin importar la casilla — así que al invertir el envío, el # que quedó
+                // pegado a cada empleado ya no correspondía a la hoja física que le tocaba
+                // (ej. María salió con el # de Nohemi). Ahora, si la casilla está activa,
+                // Autollenar reparte los números EN REVERSA sobre esta misma tabla (el
+                // último renglón recibe el número inicial, el primero el más alto) — así,
+                // al invertirse el orden de envío, los cheques salen de la impresora con
+                // los números en secuencia ascendente exacta, igual que vienen en el
+                // paquete, sin tener que reacomodar nada a mano.
+                const reverseChecked = document.getElementById('printChecksReversed');
+                const isReversed = !!(reverseChecked && reverseChecked.checked);
+
+                const rows = [];
                 (this.currentPayrollCalc || []).forEach((p, i) => {
                     const emp = this.employees.find(e => e.id === p.employeeId);
                     const method = emp ? (emp.payMethod || 'check') : 'check';
-                    if (method === 'check') {
-                        const input = document.getElementById('chknum_' + i);
-                        const checked = document.getElementById('chkprint_' + i);
-                        if (input && (!checked || checked.checked)) input.value = seq++;
-                    }
+                    if (method !== 'check') return;
+                    const input = document.getElementById('chknum_' + i);
+                    const checked = document.getElementById('chkprint_' + i);
+                    if (input && (!checked || checked.checked)) rows.push(input);
                 });
+
+                rows.forEach((input, idx) => {
+                    input.value = isReversed ? (start + rows.length - 1 - idx) : (start + idx);
+                });
+
+                this.renderFinalCheckOrderPreview();
+            },
+
+            // FIX 2026-09-18: Ranu tiene chequera PRE-NUMERADA por el banco (orden físico
+            // fijo en el papel) y activó "🔃 Imprimir en orden inverso" esperando que el #
+            // de cada empleado se reacomodara para coincidir con esa hoja física — pero
+            // esa casilla SOLO cambia el orden en que las hojas se mandan a la impresora,
+            // nunca qué # va con qué empleado (eso siempre se asigna arriba, en orden
+            // alfabético). Como no había forma de ver el resultado final antes de
+            // imprimir, terminó saliendo la pareja nombre-número equivocada. Esta función
+            // muestra la lista EXACTA, en el orden real en que saldrán los cheques de la
+            // impresora, para revisarla contra la chequera física antes de imprimir.
+            renderFinalCheckOrderPreview() {
+                const box = document.getElementById('finalCheckOrderPreview');
+                if (!box) return;
+                const rows = [];
+                document.querySelectorAll('#checkAssignModal [id^="chknum_"]').forEach(input => {
+                    const i = input.id.replace('chknum_', '');
+                    const checkedBox = document.getElementById('chkprint_' + i);
+                    if (checkedBox && !checkedBox.checked) return;
+                    if (!input.value) return;
+                    const row = input.closest('tr');
+                    const name = row ? (row.querySelector('td strong')?.textContent || '') : '';
+                    rows.push({ num: parseInt(input.value), name: name || '(?)' });
+                });
+                const reverseChecked = document.getElementById('printChecksReversed');
+                const finalRows = (reverseChecked && reverseChecked.checked) ? [...rows].reverse() : rows;
+                if (finalRows.length === 0) {
+                    box.innerHTML = '<p style="color:#999;font-size:0.85rem;margin:0;">Asigna números primero para ver el orden final.</p>';
+                    return;
+                }
+                box.innerHTML = '<div style="background:#fff3cd;border:1px solid #ffe58f;border-radius:8px;padding:10px 14px;text-align:left;">' +
+                    '<div style="font-weight:bold;color:#856404;margin-bottom:6px;font-size:0.85rem;">📋 Orden real en que saldrán de la impresora — revisa contra tu chequera física:</div>' +
+                    '<ol style="margin:0;padding-left:20px;font-size:0.85rem;color:#555;">' +
+                    finalRows.map(r => `<li><strong>#${r.num}</strong> — ${r.name}</li>`).join('') +
+                    '</ol></div>';
             },
 
             printChecksOnly() { this.confirmAndPrintChecks(true, false); },
@@ -6238,6 +6296,9 @@
                                 <button class="btn btn-secondary btn-sm" onclick="app.viewCheck(${check.id})">
                                     👁️ Ver
                                 </button>
+                                <button class="btn btn-secondary btn-sm" onclick="app.editCheckNumber(${check.id})" title="Corregir el # de cheque de este registro">
+                                    ✏️ #
+                                </button>
                                 <button class="btn btn-primary btn-sm" onclick="app.printCheck(${check.id})">
                                     🖨️ Imprimir
                                 </button>
@@ -6273,7 +6334,58 @@
                 this.save();
                 this.refreshChecks();
             },
-            
+
+            // FIX 2026-09-18: Ranu imprimió con "🔃 Imprimir en orden inverso" activo y
+            // los # de cheque quedaron sin corresponder con el orden real de los
+            // empleados/cheques físicos — no existía ninguna forma de corregir el # de
+            // un cheque ya guardado sin borrarlo y volver a capturar todo el registro.
+            // Este modal permite editar SOLO el checkNumber de un cheque existente
+            // (nunca borra ni recalcula el resto del cheque), con candado contra
+            // duplicar el # de otro cheque vigente (no anulado).
+            editCheckNumber(id) {
+                const check = this.checks.find(c => c.id === id);
+                if (!check) return;
+                document.getElementById('editCheckNumModal')?.remove();
+                const modal = document.createElement('div');
+                modal.id = 'editCheckNumModal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                modal.innerHTML = `
+                    <div style="background:#fff;border-radius:12px;padding:22px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+                        <h3 style="margin:0 0 4px 0;color:#1565c0;">✏️ Corregir # de Cheque</h3>
+                        <p style="color:#666;margin:0 0 14px 0;font-size:0.9rem;">${check.employeeName} — actualmente #${check.checkNumber}</p>
+                        <input type="number" id="editCheckNumInput" value="${check.checkNumber}" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1.1rem;text-align:center;margin-bottom:10px;box-sizing:border-box;">
+                        <div id="editCheckNumWarn" style="color:#e74c3c;font-size:0.82rem;margin-bottom:10px;min-height:1.2em;"></div>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;">
+                            <button onclick="document.getElementById('editCheckNumModal').remove()" style="background:#95a5a6;color:white;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:bold;">Cancelar</button>
+                            <button onclick="app._saveEditedCheckNumber(${id})" style="background:#27ae60;color:white;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:bold;">💾 Guardar</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+                document.getElementById('editCheckNumInput').focus();
+            },
+
+            _saveEditedCheckNumber(id) {
+                const check = this.checks.find(c => c.id === id);
+                if (!check) return;
+                const input = document.getElementById('editCheckNumInput');
+                const newNum = parseInt(input ? input.value : NaN);
+                const warn = document.getElementById('editCheckNumWarn');
+                if (isNaN(newNum) || newNum < 1) {
+                    if (warn) warn.textContent = 'Ingresa un número de cheque válido.';
+                    return;
+                }
+                const dup = this.checks.find(c => c.id !== id && !c.voided && parseInt(c.checkNumber) === newNum);
+                if (dup) {
+                    if (warn) warn.textContent = `⚠️ El #${newNum} ya está asignado a ${dup.employeeName} (cheque vigente) — corrígelo ahí primero o usa otro número.`;
+                    return;
+                }
+                check.checkNumber = newNum;
+                this.save();
+                document.getElementById('editCheckNumModal').remove();
+                this.refreshChecks();
+            },
+
             printCheck(checkId) {
                 const check = this.checks.find(c => c.id === checkId);
                 if (!check) return;
