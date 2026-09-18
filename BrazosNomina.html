@@ -7862,17 +7862,27 @@
             // vía Scheduler — ver comentario en driveDownloadHorasScheduler). Cada
             // empleada tiene su PROPIO Salida/Regreso del Shop en ese archivo (ya no
             // se comparte por grupo, arreglo del mismo día en BrazosCalendar/Scheduler).
-            // Recorre los días del período actual (workConfig.periodStart/periodEnd),
-            // calcula minutos trabajados con la MISMA regla que usa Scheduler (break de
+            // Calcula minutos trabajados con la MISMA regla que usa Scheduler (break de
             // 30 min si la jornada fue de 7+ horas), y sólo LLENA HUECOS — nunca pisa
             // un registro que ya exista (del Reloj Checador, de captura manual, o de
             // una corrida anterior de esta misma función). Corre DESPUÉS de
             // driveDownloadClock (Reloj), igual que antes hacía driveDownloadHorasScheduler.
+            // FIX 2026-09-18: usaba `workConfig.periodStart/periodEnd` para el rango de
+            // fechas a revisar — esas 2 propiedades NUNCA se asignan en ningún lado del
+            // código (ni en la config de Nómina ni en ningún flujo), así que esta función
+            // SIEMPRE cortaba aquí mismo y jamás había descargado ni un solo día de
+            // Shop→Shop de Calendar desde que se creó (11-sep) — para ningún empleado.
+            // Por eso el badge "🕐 Producción" nunca aparecía aunque la empleada sí
+            // hubiera registrado Salida/Regreso en su celular. Ahora usa una ventana fija
+            // de los últimos 15 días (cubre "esta semana" + "semana pasada" completas,
+            // el ciclo normal de nómina de Brazos) en vez de depender de esa config
+            // inexistente — Ranu confirmó esta ventana.
             async driveDownloadHorasCalendarioDirecto() {
                 if (!this.driveConnected) return;
-                const startStr = this.workConfig?.periodStart;
-                const endStr = this.workConfig?.periodEnd;
-                if (!startStr || !endStr) return; // sin período configurado todavía
+                const hoy = new Date();
+                const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 14);
+                const startStr = inicio.toLocaleDateString('en-CA');
+                const endStr = hoy.toLocaleDateString('en-CA');
 
                 const normTokens = (s) => (s || '').toString()
                     .normalize('NFD').replace(/[̀-ͯ]/g, '')
