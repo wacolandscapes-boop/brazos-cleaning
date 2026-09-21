@@ -1414,6 +1414,19 @@ async function refreshData(){
           S.cellNotes=data.cellNotes||{};
           if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
           if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
+          // FIX 2026-09-21: selectEmp() fija S.group UNA SOLA VEZ, en el setup inicial
+          // (cuando el empleado elige su nombre) — a partir de ahí, aunque refreshData()
+          // sí baja la composición de grupos actualizada, nunca volvía a revisar en cuál
+          // grupo está AHORA este empleado. Si el Scheduler lo mueve de grupo después
+          // (ej. Grupo B → Grupo A), el teléfono se quedaba viendo los servicios de su
+          // grupo VIEJO para siempre, hasta que alguien tocara "Cambiar empleado" y se
+          // volviera a elegir — parecía que los servicios movidos "no llegaban". Ahora,
+          // cada vez que se refrescan datos, si S.empId ya no pertenece al grupo guardado
+          // pero SÍ aparece en otro, S.group se actualiza solo.
+          if(S.empId){
+            const _nuevoGrupo=Object.keys(S.grupos).find(g=>(S.grupos[g]||[]).map(String).includes(String(S.empId)));
+            if(_nuevoGrupo && _nuevoGrupo!==S.group){ S.group=_nuevoGrupo; }
+          }
         }
       }
       // Recargar horarios del grupo
