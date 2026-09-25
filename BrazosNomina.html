@@ -2008,6 +2008,10 @@
                 return (this.checks || [])
                     .filter(c => {
                         if (String(c.employeeId) !== String(employeeId)) return false;
+                        // FIX 2026-09-25: mismo hueco que getYtdBreakdown/getW2Data/getForm941Data —
+                        // un cheque anulado no es un pago real y no debe contar hacia el
+                        // tope anual de Seguro Social/Medicare.
+                        if (c.voided) return false;
                         const d = new Date(c.date);
                         return d.getFullYear() === year && d < beforeDate;
                     })
@@ -5697,6 +5701,22 @@
                     const printChk = document.getElementById('chkprint_' + i);
                     const shouldPrint = printChk ? printChk.checked : true;
 
+                    // FIX 2026-09-25: "🖨️ Reimprimir" (desde Nóminas Guardadas) vuelve a
+                    // cargar a TODOS los empleados del período en esta misma función —
+                    // antes, aunque solo se dejara marcado para imprimir a uno solo
+                    // (ej. reemplazar un cheque anulado), a TODOS los demás se les creaba
+                    // un cheque NUEVO Y DUPLICADO (con su sueldo real sumado otra vez al
+                    // Acumulado del Año / W-2 / 941), y como no tenían número asignado
+                    // quedaban además como "#NaN". Ahora, si el empleado NO está marcado
+                    // para imprimir Y ya tiene un cheque vigente (no anulado) para este
+                    // mismo período, se salta por completo — no se crea ningún registro.
+                    const yaTieneChequeVigenteEstePeriodo = (this.checks || []).some(c =>
+                        String(c.employeeId) === String(p.employeeId) &&
+                        c.period === (this.currentPayrollPeriod || '') &&
+                        !c.voided
+                    );
+                    if (!shouldPrint && yaTieneChequeVigenteEstePeriodo) return;
+
                     if (method === 'check') {
                         const numInput = document.getElementById('chknum_' + i);
                         const check = {
@@ -5856,6 +5876,10 @@
                 const totals = { regularPay: 0, overtimePay: 0, bonus: 0, reimbursement: 0, federalTax: 0, socialSecurity: 0, medicare: 0, deductions: 0 };
                 (this.checks || []).forEach(c => {
                     if (String(c.employeeId) !== String(employeeId)) return;
+                    // FIX 2026-09-25: un cheque anulado (voided) no es un pago real —
+                    // se estaba sumando igual al Acumulado del Año, inflando el YTD
+                    // de cualquier empleado que tuviera un cheque cancelado.
+                    if (c.voided) return;
                     const cDate = (c.date || '').split('T')[0];
                     if (!cDate || cDate.split('-')[0] !== year || cDate > uptoISODate) return;
                     totals.regularPay += c.regularPay || 0;
@@ -6850,6 +6874,7 @@
                 const qMonths = { 1: [0, 1, 2], 2: [3, 4, 5], 3: [6, 7, 8], 4: [9, 10, 11] }[quarter] || [0, 1, 2];
                 const checks = (this.checks || []).filter(c => {
                     if (c.workerType === 'contractor_1099') return false; // 1099 no va en el 941
+                    if (c.voided) return false; // FIX 2026-09-25: cheque anulado no es un pago real
                     const d = new Date(c.date);
                     return d.getFullYear() === year && qMonths.includes(d.getMonth());
                 });
@@ -7019,6 +7044,7 @@
             getW2Data(year) {
                 const checks = (this.checks || []).filter(c => {
                     if (c.workerType === 'contractor_1099') return false; // 1099 no lleva W-2, lleva 1099-NEC
+                    if (c.voided) return false; // FIX 2026-09-25: cheque anulado no es un pago real
                     const d = new Date(c.date);
                     return d.getFullYear() === year;
                 });
