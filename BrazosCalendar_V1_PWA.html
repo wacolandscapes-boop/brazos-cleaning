@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.4';
+const APP_VERSION = '2.2.6';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -302,6 +302,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     <div class="logo">Brazos<em>Calendar</em></div>
   </div>
   <div style="padding:20px 16px">
+    <button class="btn-outline" onclick="showTab('agenda')" style="margin-bottom:14px;">← Volver a la agenda</button>
     <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:800;margin-bottom:16px">👤 Mi Perfil</h2>
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:13px;padding:18px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Nombre</div>
@@ -336,6 +337,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <div class="sett-emp-name" id="settEmpName">—</div>
       <div class="sett-emp-grp" id="settEmpGrp">—</div>
     </div>
+    <button class="btn-outline" onclick="closeSett();updateInfoScreen();showTab('info')" style="border-color:var(--brand);color:var(--brand);">📅 Mi semana y compañeras</button>
     <button class="btn-outline" onclick="changeEmpFromSett()">👤 Cambiar empleado</button>
     <button class="btn-outline" onclick="refreshData();closeSett()">🔄 Actualizar datos</button>
     <button class="btn-outline" onclick="disconnectDrive()" style="border-color:#e74c3c;color:#e74c3c;">🔌 Cambiar cuenta de Drive</button>
@@ -1064,6 +1066,8 @@ function renderAgenda(){
   }
 
   el.innerHTML="";
+  // 2026-10-05: con quién trabaja ESTE día (según la Rotación de esa fecha)
+  try{ const _cb=bandaCompaneros(S.selectedDate); if(_cb) el.appendChild(_cb); }catch(e){}
 
   // Banda delgada: Salida del Shop (arriba)
   {
@@ -1335,6 +1339,28 @@ function gruposDelDia(f){
 }
 function grupoDelDia(f){ return gruposDelDia(f)[0]||S.group||''; }
 
+// Compañeras de grupo en una fecha (sin incluir a la empleada actual)
+function companerosDelDia(f){
+  const ids=[];
+  gruposDelDia(f).forEach(g=>_rosterGrupoFecha(g,f).forEach(id=>{ if(id!==String(S.empId)&&!ids.includes(id)) ids.push(id); }));
+  return ids.map(id=>{
+    const e=(S.emps||[]).find(x=>String(x.id)===String(id));
+    return e?(e.name||((e.firstName||'')+' '+(e.lastName||''))).trim():null;
+  }).filter(Boolean);
+}
+function bandaCompaneros(f){
+  if(!S.empId) return null;
+  const grps=gruposDelDia(f);
+  const comp=companerosDelDia(f);
+  const b=document.createElement('div');
+  b.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 12px;margin-bottom:8px;background:var(--bbg);border:1px solid var(--brand);border-radius:10px;';
+  b.innerHTML='<span style="font-size:16px">👥</span><div style="font-size:13px;line-height:1.4">'
+    +'<span style="font-weight:700;color:var(--brand)">'+(grps.join(' + ')||'—')+'</span>'
+    +'<span style="color:var(--muted)"> · Trabajas con: </span>'
+    +'<span style="font-weight:700">'+(comp.length?comp.join(', '):'Sola este día')+'</span></div>';
+  return b;
+}
+
 function getSvcs(date){
   const grps=gruposDelDia(date);
   const members=[];
@@ -1376,13 +1402,7 @@ function updateInfoScreen(){
   document.getElementById('settEmpName').textContent=S.empName||'—';
   document.getElementById('settEmpGrp').textContent=S.group?'👥 '+S.group:'—';
   // Team members
-  const members=(S.grupos[S.group]||[]).map(String);
-  const teammates=members
-    .filter(mid=>String(mid)!==String(S.empId))
-    .map(mid=>{
-      const emp=S.emps.find(e=>String(e.id)===String(mid));
-      return emp?(emp.name||(emp.firstName+' '+(emp.lastName||'')).trim()).trim():null;
-    }).filter(Boolean);
+  const teammates=companerosDelDia(today());
   document.getElementById('infoTeam').textContent=teammates.length?teammates.join(', '):'Solo en tu grupo';
   try{ renderMiSemana(); }catch(e){}
 }
