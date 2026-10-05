@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.2.3';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -311,6 +311,17 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:12px 0 6px">Compañeros de grupo</div>
       <div id="infoTeam" style="font-size:13px;color:var(--muted);line-height:1.8">—</div>
     </div>
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:13px;padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <button class="hdr-btn" onclick="miSemanaNav(-1)">◀</button>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase">📅 Mi semana · grupo por día</div>
+          <div id="miSemanaLbl" style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700">—</div>
+        </div>
+        <button class="hdr-btn" onclick="miSemanaNav(1)">▶</button>
+      </div>
+      <div id="miSemanaList"></div>
+    </div>
     <button class="btn-outline" onclick="changeEmpFromInfo()">🔄 Cambiar empleado</button>
   </div>
 </div>
@@ -388,7 +399,7 @@ const MON=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Di
 // App state
 const S={
   driveToken:null, folderId:null, reportsFileId:null,
-  grupos:{}, servs:[], clis:[], emps:[], reports:{},
+  grupos:{}, gruposHistorial:{}, servs:[], clis:[], emps:[], reports:{},
   empId:null, empName:'', group:'',
   selectedDate:'', weekStart:'', view:'day'
 };
@@ -545,6 +556,7 @@ async function loadSyncFile(){
     const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
     if(!data||(data.exportType!=='anaCS_sync'&&data.exportType!=='brazosCS_sync')){setDS('err','⚠ Archivo inválido');return;}
     S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[];
+    S.gruposHistorial=data.gruposHistorial||{};
     S.cellNotes=data.cellNotes||{};
     if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
     if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
@@ -716,6 +728,11 @@ async function saveReportsToDrive(){
 }
 
 async function saveSyncToDrive(){
+  // 2026-10-05: BLOQUEADO. Esta función sobrescribía brazosCS_sync.json con un
+  // archivo incompleto (borraba facturas/pagos/pendientes). El teléfono NUNCA
+  // debe escribir ese archivo — solo el Scheduler.
+  console.warn('saveSyncToDrive bloqueado: el Calendar no escribe brazosCS_sync.json');
+  return false;
   if(!S.driveToken || !S.folderId) { toast('⚠️ Conecta Drive primero'); return false; }
   try {
     // Buscar el archivo en Drive
@@ -1354,6 +1371,44 @@ function updateInfoScreen(){
       return emp?(emp.name||(emp.firstName+' '+(emp.lastName||'')).trim()).trim():null;
     }).filter(Boolean);
   document.getElementById('infoTeam').textContent=teammates.length?teammates.join(', '):'Solo en tu grupo';
+  try{ renderMiSemana(); }catch(e){}
+}
+
+/* ── MI SEMANA (2026-10-05): en qué grupo le toca a esta empleada cada día ──
+   Solo lectura. Usa el historial de Rotación del Scheduler (gruposHistorial):
+   registro de ese día → si no hay, la última agrupación anterior → hoy/sin
+   historial, los grupos actuales. Misma regla que _rosterParaFecha del Scheduler. */
+let _miSemanaLunes='';
+function _rosterGrupoFecha(g, f){
+  if(f===today()) return (S.grupos[g]||[]).map(String);
+  const h=S.gruposHistorial||{};
+  if(h[f] && h[f][g]) return (h[f][g]||[]).map(String);
+  const previas=Object.keys(h).filter(x=>x<f && h[x] && h[x][g]).sort();
+  return previas.length ? (h[previas[previas.length-1]][g]||[]).map(String) : (S.grupos[g]||[]).map(String);
+}
+function miSemanaNav(dir){
+  _miSemanaLunes=addDays(_miSemanaLunes||mondayOf(today()), dir*7);
+  renderMiSemana();
+}
+function renderMiSemana(){
+  const list=document.getElementById('miSemanaList'), lbl=document.getElementById('miSemanaLbl');
+  if(!list||!lbl) return;
+  if(!_miSemanaLunes) _miSemanaLunes=mondayOf(today());
+  const fmt=f=>{const p=f.split('-');return p[1]+'/'+p[2];};
+  lbl.textContent=fmt(_miSemanaLunes)+' – '+fmt(addDays(_miSemanaLunes,6));
+  if(!S.empId){ list.innerHTML='<div style="color:var(--muted);font-size:13px">Elige tu nombre primero.</div>'; return; }
+  const nombres=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  const hoy=today();
+  let h='';
+  for(let i=0;i<7;i++){
+    const f=addDays(_miSemanaLunes,i);
+    const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,f).includes(String(S.empId)));
+    const esHoy=f===hoy;
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;margin-bottom:4px;'+(esHoy?'background:var(--bbg);border:1px solid var(--brand);':'background:var(--s2);')+'">'
+      +'<span style="font-size:14px">'+nombres[i]+' <span style="color:var(--muted);font-size:12px">'+fmt(f)+'</span>'+(esHoy?' <span style="color:var(--brand);font-size:11px;font-weight:700">HOY</span>':'')+'</span>'
+      +'<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;'+(gs.length?'':'color:var(--muted)')+'">'+(gs.length?'👥 '+gs.join(' + '):'—')+'</span></div>';
+  }
+  list.innerHTML=h;
 }
 
 function showTab(t){
@@ -1411,6 +1466,7 @@ async function refreshData(){
         const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
         if(data&&(data.exportType==='anaCS_sync'||data.exportType==='brazosCS_sync')){
           S.servs=data.servs||[]; S.clis=data.clis||[]; S.grupos=data.grupos||{}; S.emps=data.emps||[];
+          S.gruposHistorial=data.gruposHistorial||{};
           S.cellNotes=data.cellNotes||{};
           if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
           if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
@@ -1471,6 +1527,7 @@ function loadLocal(){
     const g=JSON.parse(localStorage.getItem('v35_grupos')||'null');
     if(!g||!Object.keys(g).length){toast('⚠ Abre el Scheduler primero');return;}
     S.grupos=g;
+    try{ S.gruposHistorial=JSON.parse(localStorage.getItem('v35_gruposHistorial')||'{}')||{}; }catch(e){ S.gruposHistorial={}; }
     S.servs=JSON.parse(localStorage.getItem('v35_servs')||'[]');
     S.clis=JSON.parse(localStorage.getItem('v35_clis')||'[]');
     S.emps=JSON.parse(localStorage.getItem('v35_emps')||'[]');
@@ -1491,7 +1548,14 @@ function loadLocal(){
 }
 
 /* ── MODO SUPERVISOR ── */
+// 2026-10-05: MODO SUPERVISOR ELIMINADO (decisión de Ranu). Sus botones "Cambiar
+// Grupo" / "Cambiar Fecha" guardaban en Drive un brazosCS_sync.json INCOMPLETO
+// (solo emps/clis/servs/grupos) y borraban facturas, pagos, pendientes, etc.
+// El calendario del teléfono queda de SOLO LECTURA para servicios; los cambios
+// se hacen únicamente en el Scheduler. Las funciones se dejan como no-op.
+const SUPERVISOR_DESACTIVADO = true;
 function checkSupervisorActivo(){
+  if(SUPERVISOR_DESACTIVADO){ try{ localStorage.removeItem('brazos_supervisor_activo'); }catch(e){} return false; }
   const data=JSON.parse(localStorage.getItem('brazos_supervisor_activo')||'null');
   if(!data) return false;
   if(data.fecha !== today()){ localStorage.removeItem('brazos_supervisor_activo'); return false; }
@@ -1501,6 +1565,7 @@ function checkSupervisorActivo(){
 function checkBtnSupervisor(){
   const btn=document.getElementById('btnSupervisor');
   if(!btn) return;
+  if(SUPERVISOR_DESACTIVADO){ btn.style.display='none'; return; }
   const pin = S.supervisorPin || localStorage.getItem('brazos_supervisorPin');
   if(pin){
     btn.style.display='flex';
@@ -1518,6 +1583,7 @@ function checkBtnSupervisor(){
 }
 
 function openSupervisorModal(){
+  if(SUPERVISOR_DESACTIVADO) return;
   if(checkSupervisorActivo()){
     if(confirm('✅ Modo Supervisor está activo para hoy.\n\n¿Deseas desactivarlo?')){
       localStorage.removeItem('brazos_supervisor_activo');
@@ -1538,6 +1604,7 @@ function closeSupervisorModal(){
 }
 
 function activarModoSupervisor(){
+  if(SUPERVISOR_DESACTIVADO){ closeSupervisorModal(); return; }
   const pin=document.getElementById('supervisorPinInput').value.trim();
   const err=document.getElementById('supervisorPinError');
   const correctPin = S.supervisorPin || localStorage.getItem('brazos_supervisorPin') || '1234';
@@ -1551,6 +1618,7 @@ function activarModoSupervisor(){
 }
 
 function supvMoveGroup(svcId){
+  if(SUPERVISOR_DESACTIVADO){ toast('⚠️ Los cambios se hacen solo en el Scheduler'); return; }
   const grupos = Object.keys(S.grupos||{});
   const opciones = grupos.join('\n');
   const nuevo = prompt(`Mover servicio a qué grupo?\n\n${opciones}\n\nEscribe el nombre del grupo:`);
@@ -1564,6 +1632,7 @@ function supvMoveGroup(svcId){
 }
 
 function supvMoveDate(svcId){
+  if(SUPERVISOR_DESACTIVADO){ toast('⚠️ Los cambios se hacen solo en el Scheduler'); return; }
   const svc = (S.servs||[]).find(s=>String(s.id)===String(svcId));
   if(!svc) return;
   const nueva = prompt(`Nueva fecha para el servicio:\n(Formato: YYYY-MM-DD)\nFecha actual: ${svc.date}`);
@@ -1700,7 +1769,7 @@ function saveSess(){
     localStorage.setItem(SESS, JSON.stringify({
       empId:S.empId, empName:S.empName, group:S.group,
       selectedDate:S.selectedDate, weekStart:S.weekStart, view:S.view,
-      grupos:S.grupos, servs:S.servs, clis:S.clis, emps:S.emps,
+      grupos:S.grupos, gruposHistorial:S.gruposHistorial||{}, servs:S.servs, clis:S.clis, emps:S.emps,
       reports:S.reports
     }));
   }catch(e){}
