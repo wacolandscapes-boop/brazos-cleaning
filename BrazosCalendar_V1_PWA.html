@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.3';
+const APP_VERSION = '2.2.4';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -1005,7 +1005,8 @@ function renderView(){
     ? MON[ws.getMonth()]+' '+ws.getFullYear()
     : MON[ws.getMonth()]+' – '+MON[we.getMonth()]+' '+we.getFullYear();
   const firstName = (S.empName||'').split(' ')[0];
-  const grpLabel = S.group ? S.group.replace('Grupo ','G') : '';
+  const _grpDia = grupoDelDia(S.selectedDate||today());
+  const grpLabel = _grpDia ? _grpDia.replace('Grupo ','G') : '';
   const empGrpLabel = (grpLabel && firstName) ? `${grpLabel} · ${firstName}` : (grpLabel || firstName || monthLabel);
   const wlt = document.getElementById('weekLabelText');
   if (wlt) wlt.textContent = empGrpLabel + ' · ' + monthLabel;
@@ -1181,7 +1182,7 @@ function renderAgenda(){
   }
 
   // ── NOTAS DEL SUPERVISOR AL FINAL DEL DÍA ──
-  const dayNotes = (S.cellNotes || {})[S.selectedDate + '__' + S.group] || [];
+  const dayNotes = (S.cellNotes || {})[S.selectedDate + '__' + grupoDelDia(S.selectedDate)] || [];
   if (dayNotes.length > 0) {
     const notesDiv = document.createElement('div');
     notesDiv.style.cssText = 'margin:16px 0 8px;border-radius:10px;overflow:hidden;';
@@ -1208,7 +1209,7 @@ function suplenteGetReports(){
   try{ return JSON.parse(localStorage.getItem(horariosKey(S.selectedDate||today()))||'{}'); }catch(e){ return {}; }
 }
 function suplenteUpdTime(id, field, val){
-  var date=S.selectedDate, empId=S.empId, group=S.group;
+  var date=S.selectedDate, empId=S.empId, group=grupoDelDia(S.selectedDate);
   if(!date||!empId){ toast('⚠ Sin fecha o empleado'); return; }
   var key=horariosKey(date);
   var all=JSON.parse(localStorage.getItem(key)||'{}');
@@ -1283,7 +1284,7 @@ function openShopTimeEditor(field, currentVal){
 }
 
 function saveShopTime(field, inputId, directVal){
-  var date=S.selectedDate, empId=S.empId, group=S.group;
+  var date=S.selectedDate, empId=S.empId, group=grupoDelDia(S.selectedDate);
   if(!date||!empId){ toast('⚠ Sin fecha o empleado'); return; }
   var val=directVal||(inputId?(document.getElementById(inputId)||{}).value:'');
   if(!val){ var n=new Date(); val=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
@@ -1325,10 +1326,22 @@ function renderWeek(){
 }
 
 /* ── GET SERVICES ── */
+// 2026-10-05: el grupo de la empleada se decide POR FECHA (Rotación del Scheduler),
+// no con el grupo de hoy. Sin rotación ese día → su grupo actual (como antes).
+function gruposDelDia(f){
+  if(!S.empId) return S.group?[S.group]:[];
+  const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,f).includes(String(S.empId)));
+  return gs.length?gs:(S.group?[S.group]:[]);
+}
+function grupoDelDia(f){ return gruposDelDia(f)[0]||S.group||''; }
+
 function getSvcs(date){
-  const members=(S.grupos[S.group]||[]).map(String);
+  const grps=gruposDelDia(date);
+  const members=[];
+  grps.forEach(g=>_rosterGrupoFecha(g,date).forEach(id=>{ if(!members.includes(id)) members.push(id); }));
+  if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
   return S.servs
-    .filter(s=>s.date===date && (s.empId===S.group||members.includes(String(s.empId))))
+    .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
     .sort((a,b)=>{
       const ta=a.timeStart||'',tb=b.timeStart||'';
       if(ta&&tb) return ta.localeCompare(tb);
