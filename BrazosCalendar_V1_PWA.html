@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.6';
+const APP_VERSION = '2.2.7';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -1101,7 +1101,11 @@ function renderAgenda(){
 
     const blk=document.createElement('div');
     blk.className=`sb ${st}`;
-    blk.id=`blk_${svc.id}`;
+    // 2026-10-09 FIX: el id del bloque debe ir LIMPIO (igual que en tog()). Los servicios
+    // con id decimal (ej. 1791234567890.1234, creados por serie/arrastre en el Scheduler)
+    // quedaban con 'blk_1791...1234' y tog() buscaba 'blk_1791..._1234' → la tarjeta no
+    // se abría y no se podían registrar sus horas (caso Emily).
+    blk.id=`blk_${String(svc.id).replace(/[^a-zA-Z0-9]/g,'_')}`;
     if(isCancelled){
       blk.style.opacity='0.6';
       blk.style.textDecoration='line-through';
