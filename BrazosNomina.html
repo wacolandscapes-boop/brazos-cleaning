@@ -5571,6 +5571,16 @@
                 try { localStorage.setItem('nomina_ordenAlimentacionCheques', v === 'alto' ? 'alto' : 'bajo'); } catch (e) {}
                 this.renderFinalCheckOrderPreview();
             },
+            // FIX 2026-10-09: la semana se escribía de 2 formas — al calcular
+            // "MM/DD/YYYY - MM/DD/YYYY" (guion corto) y en Nóminas Guardadas
+            // "MM/DD/YYYY — MM/DD/YYYY" (guion largo). Al compararlas letra por letra
+            // nunca coincidían, y por eso Reimprimir creaba cheques duplicados.
+            // Aquí se comparan tratando ambos guiones como iguales y sin espacios.
+            _mismoPeriodo(a, b) {
+                const n = (x) => String(x || '').replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, '');
+                return n(a) !== '' && n(a) === n(b);
+            },
+
             _ordenarParaImprimir(lista, getNum) {
                 const ord = [...lista].sort((a, b) => (parseInt(getNum(a)) || 0) - (parseInt(getNum(b)) || 0));
                 return this._ordenAlimentacion() === 'alto' ? ord.reverse() : ord;
@@ -5790,7 +5800,7 @@
                     // mismo período, se salta por completo — no se crea ningún registro.
                     const yaTieneChequeVigenteEstePeriodo = (this.checks || []).some(c =>
                         String(c.employeeId) === String(p.employeeId) &&
-                        c.period === (this.currentPayrollPeriod || '') &&
+                        this._mismoPeriodo(c.period, this.currentPayrollPeriod) &&
                         !c.voided
                     );
                     if (!shouldPrint && yaTieneChequeVigenteEstePeriodo) return;
@@ -7244,7 +7254,7 @@
                 // el período nuevo nace correctamente marcado "✅ Cheques Impresos" en
                 // vez de "⏳ Pendientes", que sería incorrecto y confuso ya que esos
                 // cheques físicos ya salieron.
-                const alreadyPrinted = (this.checks || []).some(c => c.period === label && c.printed);
+                const alreadyPrinted = (this.checks || []).some(c => this._mismoPeriodo(c.period, label) && c.printed);
                 const newPeriod = { updatedAt: new Date().toISOString(),
                     id: 'np_' + Date.now(),
                     start: startStr,
