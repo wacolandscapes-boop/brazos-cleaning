@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.7';
+const APP_VERSION = '2.2.8';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -1417,8 +1417,9 @@ function updateInfoScreen(){
    historial, los grupos actuales. Misma regla que _rosterParaFecha del Scheduler. */
 let _miSemanaLunes='';
 function _rosterGrupoFecha(g, f){
-  if(f===today()) return (S.grupos[g]||[]).map(String);
   const h=S.gruposHistorial||{};
+  // 2.2.8: si en Rotación del Scheduler se guardó un acomodo PARA HOY, ese manda
+  if(f===today()) return ((h[f] && h[f][g]) ? h[f][g] : (S.grupos[g]||[])).map(String);
   if(h[f] && h[f][g]) return (h[f][g]||[]).map(String);
   const previas=Object.keys(h).filter(x=>x<f && h[x] && h[x][g]).sort();
   return previas.length ? (h[previas[previas.length-1]][g]||[]).map(String) : (S.grupos[g]||[]).map(String);
