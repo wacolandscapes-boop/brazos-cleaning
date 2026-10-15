@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.2.8';
+const APP_VERSION = '2.3.0';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -1052,7 +1052,9 @@ function getReportsForDay(date){
 
 function renderAgenda(){
   const el=document.getElementById('agendaEl'); el.innerHTML='';
-  const svcs=getSvcs(S.selectedDate);
+  // 2.3.0: ver la agenda de otro empleado o de un grupo (solo lectura)
+  if(_verOtro){ el.appendChild(_selectorVer()); _renderVerOtro(el); return; }
+  const svcs=getSvcs(S.selectedDate, true);
   const rpts=getReportsForDay(S.selectedDate);
   // Salida/Regreso del Shop: individual por empleada (cada quien ve y edita solo lo suyo)
   var dayRpt=null;
@@ -1062,10 +1064,14 @@ function renderAgenda(){
 
   if(!svcs.length){
     el.innerHTML=`<div class="no-sv"><strong>Sin servicios</strong>No hay servicios para hoy.<br>¡Día libre! 🎉</div>`;
+    // 2.2.9: con 2+ grupos ese día, mostrar los botones para cambiar de grupo aunque este no tenga servicios
+    try{ if(gruposDelDia(S.selectedDate).length>1){ const _cb=bandaCompaneros(S.selectedDate); if(_cb) el.prepend(_cb); } }catch(e){}
+    try{ el.prepend(_selectorVer()); }catch(e){}
     return;
   }
 
   el.innerHTML="";
+  try{ el.appendChild(_selectorVer()); }catch(e){}
   // 2026-10-05: con quién trabaja ESTE día (según la Rotación de esa fecha)
   try{ const _cb=bandaCompaneros(S.selectedDate); if(_cb) el.appendChild(_cb); }catch(e){}
 
@@ -1341,7 +1347,18 @@ function gruposDelDia(f){
   const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,f).includes(String(S.empId)));
   return gs.length?gs:(S.group?[S.group]:[]);
 }
-function grupoDelDia(f){ return gruposDelDia(f)[0]||S.group||''; }
+// 2.2.9: si la empleada está en 2+ grupos el mismo día (turno doble), la agenda
+// muestra UN grupo a la vez, con botones para cambiar entre ellos — así no se
+// mezclan los servicios de los dos grupos. La vista de semana sigue mostrando todo.
+const _grupoSelDia = {};
+function gruposVisibles(f){
+  const g=gruposDelDia(f);
+  if(g.length<=1) return g;
+  const sel=_grupoSelDia[f];
+  return [g.includes(sel)?sel:g[0]];
+}
+function elegirGrupoDia(f,g){ _grupoSelDia[f]=g; renderView(); }
+function grupoDelDia(f){ return gruposVisibles(f)[0]||S.group||''; }
 
 // Compañeras de grupo en una fecha (sin incluir a la empleada actual)
 function companerosDelDia(f){
@@ -1354,8 +1371,30 @@ function companerosDelDia(f){
 }
 function bandaCompaneros(f){
   if(!S.empId) return null;
-  const grps=gruposDelDia(f);
-  const comp=companerosDelDia(f);
+  const todos=gruposDelDia(f);
+  const grps=gruposVisibles(f);
+  const _ids=[];
+  grps.forEach(g=>_rosterGrupoFecha(g,f).forEach(id=>{ if(id!==String(S.empId)&&!_ids.includes(id)) _ids.push(id); }));
+  const comp=_ids.map(id=>{ const e=(S.emps||[]).find(x=>String(x.id)===String(id)); return e?(e.name||((e.firstName||'')+' '+(e.lastName||''))).trim():null; }).filter(Boolean);
+  if(todos.length>1){
+    const wrap=document.createElement('div');
+    const chips=document.createElement('div');
+    chips.style.cssText='display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
+    todos.forEach(g=>{
+      const on=g===grps[0];
+      const bt=document.createElement('button');
+      bt.textContent='👥 '+g;
+      bt.style.cssText='flex:1;min-width:110px;padding:9px 10px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid var(--brand);'+(on?'background:var(--brand);color:#fff;':'background:transparent;color:var(--brand);');
+      bt.onclick=()=>elegirGrupoDia(f,g);
+      chips.appendChild(bt);
+    });
+    wrap.appendChild(chips);
+    wrap.appendChild(_bandaTxt(grps,comp));
+    return wrap;
+  }
+  return _bandaTxt(grps,comp);
+}
+function _bandaTxt(grps,comp){
   const b=document.createElement('div');
   b.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 12px;margin-bottom:8px;background:var(--bbg);border:1px solid var(--brand);border-radius:10px;';
   b.innerHTML='<span style="font-size:16px">👥</span><div style="font-size:13px;line-height:1.4">'
@@ -1365,8 +1404,89 @@ function bandaCompaneros(f){
   return b;
 }
 
-function getSvcs(date){
-  const grps=gruposDelDia(date);
+/* ── 2.3.0: VER AGENDA DE OTRO EMPLEADO O DE UN GRUPO (solo lectura) ── */
+let _verOtro=null; // null = mi agenda · 'g:<grupo>' · 'e:<empId>'
+function _hx(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _nombreEmp(id){ const e=(S.emps||[]).find(x=>String(x.id)===String(id)); return e?(e.name||((e.firstName||'')+' '+(e.lastName||''))).trim():''; }
+function _selectorVer(){
+  const sel=document.createElement('select');
+  sel.style.cssText='margin-bottom:8px;font-weight:700;';
+  let h='<option value="">📋 Mi agenda</option><optgroup label="Ver un grupo">';
+  Object.keys(S.grupos||{}).forEach(g=>{ h+='<option value="g:'+_hx(g)+'">👥 '+_hx(g)+'</option>'; });
+  h+='</optgroup><optgroup label="Ver un empleado">';
+  (S.emps||[]).filter(e=>String(e.id)!==String(S.empId)).map(e=>({id:e.id,n:_nombreEmp(e.id)})).filter(x=>x.n)
+    .sort((a,b)=>a.n.localeCompare(b.n)).forEach(x=>{ h+='<option value="e:'+_hx(x.id)+'">👤 '+_hx(x.n)+'</option>'; });
+  h+='</optgroup>';
+  sel.innerHTML=h; sel.value=_verOtro||'';
+  sel.onchange=()=>{ _verOtro=sel.value||null; renderView(); };
+  sel.style.margin='0'; sel.style.paddingRight='34px';
+  const w=document.createElement('div'); w.style.cssText='position:relative;margin-bottom:8px;';
+  const lb=document.createElement('div'); lb.textContent='🔍 Ver agenda de:'; lb.style.cssText='font-size:11px;color:var(--muted);margin:0 0 3px 2px;font-weight:600;';
+  const ar=document.createElement('span'); ar.textContent='▾'; ar.style.cssText='position:absolute;right:12px;bottom:10px;color:var(--brand);font-size:16px;pointer-events:none;';
+  w.appendChild(lb); w.appendChild(sel); w.appendChild(ar);
+  return w;
+}
+function _svcsDe(date, ver){
+  let grps=[], members=[];
+  if(ver.startsWith('g:')){ const g=ver.slice(2); grps=[g]; members=_rosterGrupoFecha(g,date); }
+  else { const id=ver.slice(2); grps=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,date).includes(String(id))); members=[String(id)]; }
+  return (S.servs||[]).filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
+    .sort((a,b)=>{ const ta=a.timeStart||'',tb=b.timeStart||''; if(ta&&tb) return ta.localeCompare(tb); if(ta&&!tb) return -1; if(!ta&&tb) return 1; return (parseInt(a.priority)||999)-(parseInt(b.priority)||999); });
+}
+function _rptTodos(date){
+  const acc={};
+  Object.values((S.reports||{})[date]||{}).forEach(ed=>{ (ed&&ed.services||[]).forEach(r=>{
+    const a=acc[r.id]||(acc[r.id]={});
+    if(r.checkin&&!a.checkin) a.checkin=r.checkin;
+    if(r.checkout&&!a.checkout) a.checkout=r.checkout;
+    if(r.status==='done'||a.status==='done') a.status='done'; else if(r.status==='active') a.status='active';
+  }); });
+  return acc;
+}
+function _renderVerOtro(el){
+  const date=S.selectedDate, v=_verOtro;
+  let titulo='', sub='';
+  if(v.startsWith('g:')){
+    const g=v.slice(2); titulo='👥 '+g;
+    const ns=_rosterGrupoFecha(g,date).map(_nombreEmp).filter(Boolean);
+    sub='Integrantes: '+(ns.length?ns.join(', '):'nadie asignado este día');
+  } else {
+    const id=v.slice(2); titulo='👤 '+(_nombreEmp(id)||'Empleado');
+    const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,date).includes(String(id)));
+    const comp=[]; gs.forEach(g=>_rosterGrupoFecha(g,date).forEach(x=>{ if(String(x)!==String(id)&&!comp.includes(String(x))) comp.push(String(x)); }));
+    sub=(gs.length?gs.join(' + '):'Sin grupo este día')+(comp.length?' · Trabaja con: '+comp.map(_nombreEmp).filter(Boolean).join(', '):'');
+  }
+  const ban=document.createElement('div');
+  ban.style.cssText='padding:9px 12px;margin-bottom:10px;background:var(--bbg);border:1px solid var(--brand);border-radius:10px;';
+  ban.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+    +'<div style="font-size:15px;font-weight:800;color:var(--brand)">'+_hx(titulo)+'</div>'
+    +'<button style="background:var(--brand);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-weight:700;font-size:13px;cursor:pointer;">← Mi agenda</button></div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-top:3px">'+_hx(sub)+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">👁 Solo lectura</div>';
+  ban.querySelector('button').onclick=()=>{ _verOtro=null; renderView(); };
+  el.appendChild(ban);
+  const lista=_svcsDe(date,v), rp=_rptTodos(date);
+  if(!lista.length){ const n=document.createElement('div'); n.className='no-sv'; n.innerHTML='<strong>Sin servicios</strong>No hay servicios este día.'; el.appendChild(n); return; }
+  lista.forEach(s=>{
+    const c=(S.clis||[]).find(x=>String(x.id)===String(s.cliId))||{};
+    const r=rp[String(s.id)]||{};
+    const st=s.cancelled?'cancelled':(r.status||'pending');
+    const col=st==='done'?'#22c55e':st==='active'?'#f59e0b':st==='cancelled'?'#ef4444':'var(--muted)';
+    const txt=st==='done'?'Terminado':st==='active'?'En servicio':st==='cancelled'?'❌ Cancelado':'Pendiente';
+    const hora=(r.checkin?fmt12(r.checkin)+(r.checkout?' → '+fmt12(r.checkout):''):(s.timeStart?fmt12s(s.timeStart):'Sin horario'));
+    const grp=String(s.empId||'').startsWith('Grupo')?s.empId:'';
+    const d=document.createElement('div');
+    d.style.cssText='background:var(--s2);border:1px solid var(--border);border-left:4px solid '+col+';border-radius:10px;padding:9px 12px;margin-bottom:8px;';
+    d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px"><div style="font-weight:800;font-size:15px">'+_hx(c.name||('Cliente '+s.cliId))+'</div>'
+      +'<div style="font-size:11px;font-weight:700;color:'+col+';white-space:nowrap">'+txt+'</div></div>'
+      +'<div style="font-size:12.5px;color:var(--muted)">'+_hx(hora)+(grp?' · '+_hx(grp):'')+'</div>'
+      +'<div style="font-size:12.5px;color:var(--muted)">'+_hx([c.address,c.city].filter(Boolean).join(', ')||s.propId||'')+'</div>';
+    el.appendChild(d);
+  });
+}
+
+function getSvcs(date, soloVisible){
+  const grps=soloVisible?gruposVisibles(date):gruposDelDia(date);
   const members=[];
   grps.forEach(g=>_rosterGrupoFecha(g,date).forEach(id=>{ if(!members.includes(id)) members.push(id); }));
   if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
