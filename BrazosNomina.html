@@ -1690,6 +1690,20 @@
     </div>
     
     <script>
+
+// 2026-10-16: que las ventanas de impresión/vista previa se pongan AL FRENTE al abrirse
+// (con Workspaces de Edge se abrían en otra ventana y quedaban escondidas detrás).
+(function(){
+    try {
+        const _abrir = window.open;
+        window.open = function(){
+            const w = _abrir.apply(window, arguments);
+            try { if (w) { w.focus(); setTimeout(function(){ try { w.focus(); } catch(e){} }, 400); } } catch(e){}
+            return w;
+        };
+    } catch(e){}
+})();
+
         const app = {
             employees: [],
             // Lápida de empleados borrados (FIX 2026-09-10): guarda los IDs de empleados
@@ -5780,6 +5794,75 @@
                     if (!allValid) { alert('Por favor asigna número de cheque a los empleados marcados (o usa Autollenar).'); this._processingChecks = false; return; }
                 }
 
+                // ── 2026-10-16: CANDADOS ANTES DE GUARDAR/IMPRIMIR ─────────────────────
+                // (1) Si un empleado marcado YA tiene un cheque vigente de este mismo
+                //     período, antes se creaba OTRO (duplicado). Ahora se pregunta y, si
+                //     se acepta, se REEMPLAZA ese mismo registro (no se crea uno nuevo).
+                // (2) No se permite repetir un # de cheque (en el lote, ni contra otro
+                //     cheque vigente de Nómina o de Gastos).
+                // (3) Antes de imprimir se confirma cuál cheque físico debe entrar
+                //     PRIMERO a la impresora (y que no esté en "ambos lados").
+                const _reemplazos = {};   // índice de nómina -> registro existente a reemplazar
+                {
+                    const marcados = [];
+                    payroll.forEach((p, i) => {
+                        const printChk = document.getElementById('chkprint_' + i);
+                        if (printChk && !printChk.checked) return;
+                        const emp = this.employees.find(e => e.id === p.employeeId);
+                        const method = emp ? (emp.payMethod || 'check') : 'check';
+                        const num = method === 'check' ? parseInt((document.getElementById('chknum_' + i) || {}).value) : null;
+                        marcados.push({ i, p, method, num });
+                    });
+                    // (1) cheques vigentes del mismo empleado y período
+                    const dobles = [], aReemplazar = [];
+                    marcados.forEach(m => {
+                        const vig = (this.checks || []).filter(c => String(c.employeeId) === String(m.p.employeeId) && this._mismoPeriodo(c.period, this.currentPayrollPeriod) && !c.voided);
+                        if (vig.length > 1) dobles.push(m.p.employeeName + ' (' + vig.map(c => '#' + c.checkNumber).join(', ') + ')');
+                        else if (vig.length === 1) aReemplazar.push({ m, c: vig[0] });
+                    });
+                    if (dobles.length) {
+                        alert('⚠️ Estos empleados ya tienen MÁS DE UN cheque vigente de este período:\n\n• ' + dobles.join('\n• ') + '\n\nAnula los que sobran en Historial de Cheques y vuelve a intentar. No se guardó ni se imprimió nada.');
+                        this._processingChecks = false; return;
+                    }
+                    if (aReemplazar.length) {
+                        const lista = aReemplazar.map(x => '• ' + x.m.p.employeeName + ': ya tiene el #' + x.c.checkNumber + (x.m.method === 'check' ? '  →  quedará con el #' + x.m.num : '')).join('\n');
+                        if (!confirm('⚠️ Estos empleados YA tienen un cheque vigente de este período:\n\n' + lista + '\n\nACEPTAR = REEMPLAZAR ese registro (no se crea otro). Úsalo solo si ese cheque nunca se entregó o lo vas a destruir.\nCANCELAR = no hacer nada (puedes desmarcarlos o anular el anterior primero).')) {
+                            this._processingChecks = false; return;
+                        }
+                        aReemplazar.forEach(x => { _reemplazos[x.m.i] = x.c; });
+                    }
+                    // (2) números repetidos
+                    const nums = marcados.filter(m => m.method === 'check');
+                    const rep = [];
+                    const vistos = {};
+                    nums.forEach(m => { if (vistos[m.num]) rep.push('#' + m.num + ': ' + vistos[m.num] + ' y ' + m.p.employeeName); else vistos[m.num] = m.p.employeeName; });
+                    const libres = new Set(Object.values(_reemplazos).map(c => c.id));
+                    nums.forEach(m => {
+                        const otro = (this.checks || []).find(c => !c.voided && !libres.has(c.id) && (c.payMethod || 'check') === 'check' && parseInt(c.checkNumber) === m.num);
+                        if (otro) rep.push('#' + m.num + ': ya lo tiene ' + otro.employeeName + ' (' + (otro.period || '') + ')');
+                        const gasto = (this.expenses || []).find(e => parseInt(e.checkNum) === m.num);
+                        if (gasto) rep.push('#' + m.num + ': ya se usó en Gastos (' + (gasto.vendor || gasto.description || gasto.concept || 'gasto') + ')');
+                    });
+                    if (rep.length) {
+                        alert('⚠️ Números de cheque repetidos:\n\n• ' + rep.join('\n• ') + '\n\nCorrige los números y vuelve a intentar. No se guardó ni se imprimió nada.');
+                        this._processingChecks = false; return;
+                    }
+                    // (3) qué cheque físico entra primero
+                    if (showPreview && !onlyDigital && nums.length) {
+                        const orden = this._ordenarParaImprimir(nums, m => m.num);
+                        const pri = orden[0], ult = orden[orden.length - 1];
+                        const ajuste = this._ordenAlimentacion() === 'alto' ? 'el # MÁS ALTO' : 'el # MÁS BAJO';
+                        if (!confirm('🖨️ ANTES DE IMPRIMIR revisa tu chequera:\n\n' +
+                            'La impresora debe tomar PRIMERO el cheque físico #' + pri.num + ' (' + pri.p.employeeName + ')' +
+                            (orden.length > 1 ? '\ny AL FINAL el #' + ult.num + ' (' + ult.p.employeeName + ').' : '.') +
+                            '\n\nAjuste actual: primer cheque que entra = ' + ajuste + '.\n' +
+                            'Desactiva "imprimir por ambos lados" en la impresora.\n\n' +
+                            'ACEPTAR = así está cargada, imprimir.\nCANCELAR = no hacer nada (cambia el ajuste "Primer cheque que entra" o acomoda la chequera).')) {
+                            this._processingChecks = false; return;
+                        }
+                    }
+                }
+
                 const toPrintChecks = [];
                 const toPrintDigital = [];
 
@@ -5841,8 +5924,8 @@
                             payMethod: 'check',
                             printed: shouldPrint
                         };
-                        this.checks.push(check);
-                        if (shouldPrint) toPrintChecks.push(check);
+                        if (_reemplazos[i]) { const viejo = _reemplazos[i]; const idViejo = viejo.id; Object.keys(viejo).forEach(k => { if (!(k in check)) delete viejo[k]; }); Object.assign(viejo, check, { id: idViejo, replacedAt: new Date().toISOString() }); if (shouldPrint) toPrintChecks.push(viejo); }
+                        else { this.checks.push(check); if (shouldPrint) toPrintChecks.push(check); }
                     } else {
                         const txnInput = document.getElementById('txtxn_' + i);
                         const check = {
@@ -5867,8 +5950,8 @@
                             payMethod: method,
                             printed: shouldPrint
                         };
-                        this.checks.push(check);
-                        if (shouldPrint) toPrintDigital.push(check);
+                        if (_reemplazos[i]) { const viejo = _reemplazos[i]; const idViejo = viejo.id; Object.keys(viejo).forEach(k => { if (!(k in check)) delete viejo[k]; }); Object.assign(viejo, check, { id: idViejo, replacedAt: new Date().toISOString() }); if (shouldPrint) toPrintDigital.push(viejo); }
+                        else { this.checks.push(check); if (shouldPrint) toPrintDigital.push(check); }
                     }
                 });
 
@@ -6401,7 +6484,17 @@
                     return;
                 }
                 
+                // 2026-10-16: casilla para ocultar los cheques ANULADOS (se recuerda)
+                let ocultarAnulados = false;
+                try { ocultarAnulados = localStorage.getItem('nomina_ocultarAnulados') === '1'; } catch(e) {}
+                const nAnulados = this.checks.filter(c => c.voided).length;
                 let html = `
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;color:#555;">
+                            <input type="checkbox" ${ocultarAnulados ? 'checked' : ''} onchange="try{localStorage.setItem('nomina_ocultarAnulados', this.checked ? '1' : '0')}catch(e){}; app.refreshChecks()" style="width:16px;height:16px;cursor:pointer;">
+                            Ocultar cheques anulados (${nAnulados})
+                        </label>
+                    </div>
                     <table>
                         <thead>
                             <tr>
@@ -6423,6 +6516,7 @@
                 // igual que en Cheques de Gastos, para poder marcar un cheque que
                 // salió mal impreso o se perdió sin borrarlo del historial.
                 this.checks.sort((a, b) => new Date(b.date||0) - new Date(a.date||0)).forEach(check => {
+                    if (ocultarAnulados && check.voided) return;
                     const rawDate = check.date || new Date().toISOString();
                     const dateParts = rawDate.split('T')[0].split('-');
                     const dateUSA = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
