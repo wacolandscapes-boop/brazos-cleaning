@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1d3557">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Brazos Gastos">
+<title>Brazos Gastos</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary: #1d3557; --accent: #e63946; --success: #2a9d5c; --warn: #e9a23b;
+    --bg: #f1f3f7; --border: #d9dee7; --white: #ffffff; --muted: #6b7686; --soft: #f7f9fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Barlow', system-ui, sans-serif; background: var(--bg); color: var(--primary); min-height: 100vh; }
+button, input, select, textarea { font-family: inherit; }
+
+.app-header { background: var(--primary); color: #fff; padding: 0 16px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.app-logo { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 800; }
+.app-logo em { color: #8ecae6; font-style: normal; }
+.who { font-size: .8rem; opacity: .85; text-align: right; line-height: 1.2; }
+.who b { display: block; font-size: .9rem; }
+
+.sync-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 6px 16px; font-size: .8rem; display: flex; align-items: center; gap: 8px; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; background: #bdc3c7; flex-shrink: 0; }
+.sdot.ok { background: var(--success); } .sdot.err { background: var(--accent); } .sdot.wait { background: var(--warn); }
+.sync-bar button { margin-left: auto; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--muted); }
+
+.tabs { display: flex; background: var(--white); border-bottom: 2px solid var(--border); padding: 0 8px; overflow-x: auto; }
+.tab { padding: 13px 14px; border: none; background: none; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; padding: 16px; max-width: 960px; margin: 0 auto; }
+.tab-panel.active { display: block; }
+
+.card { background: var(--white); border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 16px; }
+.card-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.form-group.full { grid-column: span 2; }
+.form-group label { font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.form-group input, .form-group select, .form-group textarea { padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 1rem; color: var(--primary); background: #fff; width: 100%; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #457b9d; }
+.hint { font-size: .78rem; color: var(--muted); }
+
+.btn { padding: 11px 18px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; font-weight: 700; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-primary { background: var(--success); color: #fff; } .btn-danger { background: var(--accent); color: #fff; }
+.btn-dark { background: var(--primary); color: #fff; } .btn-light { background: #fff; color: var(--primary); border: 1.5px solid var(--border); }
+.btn-full { width: 100%; } .btn-sm { padding: 6px 10px; font-size: .9rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.foto-box { border: 2px dashed var(--border); border-radius: 10px; padding: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--soft); }
+.foto-box img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.chip { padding: 6px 14px; border: none; border-radius: 20px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-size: .95rem; font-weight: 700; background: #e3e8f0; color: var(--primary); }
+.chip.on { background: var(--primary); color: #fff; }
+.periodo-lbl { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.05rem; min-width: 150px; text-align: center; }
+.filter-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+
+.table-wrap { overflow: auto; max-height: 60vh; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+thead th { position: sticky; top: 0; background: var(--primary); color: #fff; padding: 9px 10px; text-align: left; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; white-space: nowrap; z-index: 1; }
+tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:nth-child(even) { background: #fafbfd; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.borrado td { color: #a0a8b5; text-decoration: line-through; }
+tr.pend td:first-child::before { content: '⏳ '; }
+.acc button { background: none; border: none; cursor: pointer; font-size: 1.05rem; padding: 2px 4px; }
+.sub { font-size: .78rem; color: var(--muted); }
+.mob { display: none; }
+.periodo-nav { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .72rem; font-weight: 700; background: #e3e8f0; }
+
+.totales-bar { display: flex; justify-content: space-between; align-items: center; background: var(--primary); color: #fff; padding: 12px 18px; border-radius: 10px; margin-top: 12px; gap: 10px; flex-wrap: wrap; }
+.total-amount { font-family: 'Barlow Condensed', sans-serif; font-size: 1.9rem; font-weight: 900; color: #8ecae6; font-variant-numeric: tabular-nums; }
+.por-cat { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 12px; }
+.por-cat div { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; font-size: .9rem; }
+.por-cat b { font-variant-numeric: tabular-nums; }
+
+.cat-item { background: var(--soft); border-left: 4px solid #457b9d; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.subcat { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; margin: 3px 4px 0 0; font-size: .88rem; }
+.subcat button, .x { background: none; border: none; color: var(--accent); cursor: pointer; font-weight: 700; }
+.user-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); gap: 8px; }
+.user-row:last-child { border-bottom: none; }
+
+.login-wrap { max-width: 380px; margin: 40px auto; padding: 0 16px; }
+.msg { margin-top: 10px; font-size: .88rem; padding: 9px 12px; border-radius: 8px; }
+.msg.ok { background: #e6f6ec; color: #1e7a45; } .msg.err { background: #fdecea; color: #b3261e; }
+
+.toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--primary); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: .92rem; font-weight: 600; opacity: 0; transition: all .25s; pointer-events: none; z-index: 9999; max-width: 90vw; text-align: center; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 9000; align-items: center; justify-content: center; padding: 16px; }
+.modal-bg.show { display: flex; }
+.modal-bg img { max-width: 100%; max-height: 90vh; border-radius: 8px; background: #fff; }
+.modal-close { position: fixed; top: 14px; right: 16px; background: var(--accent); color: #fff; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 1.2rem; cursor: pointer; font-weight: 700; }
+
+@media (max-width: 640px) {
+    .form-grid { grid-template-columns: 1fr; } .form-group.full { grid-column: span 1; }
+    .filter-grid { grid-template-columns: 1fr 1fr; }
+    .mob { display: block; }
+    tbody td, thead th { padding: 7px 5px; font-size: .86rem; } .acc button { padding: 2px 1px; } .tab-panel { padding: 10px; } .card { padding: 14px; }
+    .col-opt { display: none; }
+    .periodo-nav { width: 100%; justify-content: space-between; margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<div id="loginView" style="display:none">
+  <div class="login-wrap">
+    <div style="text-align:center;margin-bottom:18px">
+      <div class="app-logo" style="color:var(--primary);font-size:2rem">Brazos<em style="color:#457b9d">Gastos</em></div>
+      <div class="sub">Brazos Cleaning Services</div>
+    </div>
+    <div class="card" id="loginCard">
+      <div class="form-group"><label>Usuario</label><input id="lUser" autocomplete="username" autocapitalize="none" placeholder="ej. victor"></div>
+      <div class="form-group" style="margin-top:10px"><label>PIN</label><input id="lPin" type="password" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()"></div>
+      <button class="btn btn-dark btn-full" style="margin-top:14px" onclick="login()">Entrar</button>
+      <div id="lMsg"></div>
+      <p class="sub" style="margin-top:14px;text-align:center"><a href="#" onclick="mostrarSetup();return false">Primera vez: crear administrador</a></p>
+    </div>
+    <div class="card" id="setupCard" style="display:none">
+      <div class="card-title">🛠️ Crear el primer administrador</div>
+      <p class="sub" style="margin-bottom:10px">Solo funciona una vez, cuando todavía no hay ningún administrador. Necesitas la clave de instalación (EXPORT_KEY).</p>
+      <div class="form-group"><label>Clave de instalación</label><input id="sKey" type="password"></div>
+      <div class="form-group" style="margin-top:8px"><label>Usuario (sin espacios)</label><input id="sId" autocapitalize="none" placeholder="ej. ranu"></div>
+      <div class="form-group" style="margin-top:8px"><label>Nombre completo</label><input id="sName"></div>
+      <div class="form-group" style="margin-top:8px"><label>PIN (mínimo 4 dígitos)</label><input id="sPin" type="password" inputmode="numeric"></div>
+      <button class="btn btn-primary btn-full" style="margin-top:12px" onclick="crearAdmin()">Crear administrador</button>
+      <div id="sMsg"></div>
+      <p class="sub" style="margin-top:12px;text-align:center"><a href="#" onclick="mostrarLogin();return false">← Volver</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ APP ═══════════ -->
+<div id="appView" style="display:none">
+  <div class="app-header">
+    <div class="app-logo">Brazos<em>Gastos</em></div>
+    <div class="who"><b id="whoName"></b><span id="whoRole"></span></div>
+  </div>
+  <div class="sync-bar">
+    <div class="sdot" id="syncDot"></div><span id="syncLbl">—</span>
+    <button onclick="sincronizar(true)">🔄 Actualizar</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-registrar" onclick="nuevoGasto()">📝 Registrar</button>
+    <button class="tab" id="tab-lista" onclick="switchTab('lista')">📋 Lista</button>
+    <button class="tab" id="tab-catalogo" onclick="switchTab('catalogo')">🏷️ Categorías</button>
+    <button class="tab" id="tab-config" onclick="switchTab('config')">⚙️ Config</button>
+  </div>
+
+  <!-- REGISTRAR -->
+  <div class="tab-panel active" id="panel-registrar">
+    <div class="card">
+      <div class="card-title" id="formTitle">📝 Nuevo gasto</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Fecha *</label><input type="date" id="gFecha"></div>
+        <div class="form-group"><label>Monto ($) *</label><input type="number" id="gMonto" step="0.01" min="0" inputmode="decimal" placeholder="0.00"></div>
+        <div class="form-group"><label>Categoría *</label><select id="gCat" onchange="llenarSubcats('gCat','gSub')"></select></div>
+        <div class="form-group"><label>Subcategoría</label><select id="gSub"></select></div>
+        <div class="form-group"><label>Proveedor</label>
+          <div class="row" style="flex-wrap:nowrap"><select id="gVendor" style="flex:1;min-width:0" onchange="if(this.value==='__nuevo')nuevoVendorPrompt()"></select></div>
+        </div>
+        <div class="form-group"><label>Tipo de pago</label>
+          <select id="gPago"><option value="Debito">💳 Débito</option><option value="Credito">💳 Crédito</option><option value="Cash">💵 Cash</option><option value="Otro">Otro</option></select>
+        </div>
+        <div class="form-group full"><label>Concepto</label><input id="gConcepto" placeholder="ej. Gasolina camioneta, productos de limpieza…"></div>
+        <div class="form-group full"><label>Notas</label><textarea id="gNotas" rows="2"></textarea></div>
+        <div class="form-group full"><label>Foto del recibo</label>
+          <div class="foto-box">
+            <img id="fotoPrev" style="display:none" onclick="zoom(this.src)" alt="Recibo">
+            <div class="row">
+              <button class="btn btn-dark btn-sm" type="button" onclick="document.getElementById('fCam').click()">📷 Tomar foto</button>
+              <button class="btn btn-light btn-sm" type="button" onclick="document.getElementById('fFile').click()">📎 Adjuntar archivo</button>
+              <button class="btn btn-light btn-sm" type="button" id="btnQuitarFoto" style="display:none" onclick="quitarFoto()">✕ Quitar</button>
+            </div>
+            <span class="hint" id="fotoInfo">Opcional. Se guarda como comprobante.</span>
+          </div>
+          <input type="file" id="fCam" accept="image/*" capture="environment" style="display:none" onchange="elegirFoto(this)">
+          <input type="file" id="fFile" accept="image/*" style="display:none" onchange="elegirFoto(this)">
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn btn-primary" style="flex:1" id="btnGuardar" onclick="guardarGasto()">💾 Guardar gasto</button>
+        <button class="btn btn-light" id="btnCancelarEd" style="display:none" onclick="nuevoGasto()">Cancelar</button>
+      </div>
+      <p class="hint" style="margin-top:8px" id="reglaHint"></p>
+    </div>
+  </div>
+
+  <!-- LISTA -->
+  <div class="tab-panel" id="panel-lista">
+    <div class="card">
+      <div class="chips">
+        <button class="chip" data-p="week" onclick="setPeriodo('week')">Semana</button>
+        <button class="chip on" data-p="month" onclick="setPeriodo('month')">Mes</button>
+        <button class="chip" data-p="year" onclick="setPeriodo('year')">Año</button>
+        <button class="chip" data-p="all" onclick="setPeriodo('all')">Todo</button>
+        <div class="periodo-nav">
+          <button class="chip" onclick="mover(-1)" aria-label="Anterior">◀</button>
+          <span class="periodo-lbl" id="periodoLbl"></span>
+          <button class="chip" onclick="mover(1)" aria-label="Siguiente">▶</button>
+        </div>
+      </div>
+      <div class="filter-grid">
+        <div class="form-group"><label>Categoría</label><select id="fCat" onchange="llenarSubcats('fCat','fSub',true);pintarLista()"></select></div>
+        <div class="form-group"><label>Subcategoría</label><select id="fSub" onchange="pintarLista()"></select></div>
+        <div class="form-group"><label>Pago</label><select id="fPago" onchange="pintarLista()"><option value="all">Todos</option><option value="Debito">Débito</option><option value="Credito">Crédito</option><option value="Cash">Cash</option><option value="Otro">Otro</option></select></div>
+        <div class="form-group"><label>Buscar monto exacto</label><input id="fMonto" type="number" step="0.01" inputmode="decimal" placeholder="ej. 45.20" oninput="pintarLista()"></div>
+        <div class="form-group" style="grid-column:span 2"><label>Buscar texto</label><input id="fTexto" placeholder="proveedor, concepto, notas…" oninput="pintarLista()"></div>
+        <div class="form-group"><label>Registró</label><select id="fQuien" onchange="pintarLista()"><option value="all">Todos</option></select></div>
+        <div class="form-group adm-only" style="justify-content:flex-end"><label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:.85rem"><input type="checkbox" id="fBorrados" style="width:auto" onchange="sincronizar(true)"> Ver borrados</label></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th class="col-opt">Categoría</th><th>Proveedor / Concepto</th><th class="col-opt">Pago</th><th class="num">Monto</th><th>📎</th><th class="col-opt">Registró</th><th></th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="totales-bar">
+        <div><div style="font-size:.8rem;opacity:.8" id="cuentaLbl"></div><div class="total-amount" id="totalLbl">$0.00</div></div>
+        <div class="row">
+          <button class="btn btn-light btn-sm" onclick="imprimirReporte(false)">🖨️ Reporte</button>
+          <button class="btn btn-light btn-sm" onclick="imprimirReporte(true)">🖨️ Con fotos</button>
+          <button class="btn btn-light btn-sm" onclick="exportarCSV()">⬇️ CSV</button>
+        </div>
+      </div>
+      <div class="por-cat" id="porCat"></div>
+    </div>
+  </div>
+
+  <!-- CATEGORÍAS / PROVEEDORES -->
+  <div class="tab-panel" id="panel-catalogo">
+    <div class="card">
+      <div class="card-title">🏷️ Categorías</div>
+      <div id="catList"></div>
+      <div class="row adm-only" style="margin-top:10px">
+        <input id="nuevaCat" placeholder="Nueva categoría" style="flex:1;padding:9px;border:1.5px solid var(--border);border-radius:8px">
+        <button class="btn btn-dark btn-sm" onclick="agregarCat()">+ Agregar</button>
+      </div>
+      <p class="hint reg-only" style="margin-top:8px">Solo el administrador puede cambiar categorías.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🏪 Proveedores</div>
+      <div id="vendorList"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="nuevoVendor" placeholder="Nuevo proveedor" style="flex:1;padding:9px;border:1.5px solid var(--border);border-radius:8px">
+        <button class="btn btn-dark btn-sm" onclick="agregarVendor(document.getElementById('nuevoVendor').value)">+ Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="tab-panel" id="panel-config">
+    <div class="card adm-only">
+      <div class="card-title">👥 Usuarios</div>
+      <div id="userList">Cargando…</div>
+      <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+        <div class="form-grid">
+          <div class="form-group"><label>Usuario (sin espacios)</label><input id="uId" autocapitalize="none" placeholder="ej. claudia"></div>
+          <div class="form-group"><label>Nombre completo</label><input id="uName"></div>
+          <div class="form-group"><label>PIN <span id="uPinHint" style="text-transform:none">(mínimo 4)</span></label><input id="uPin" inputmode="numeric"></div>
+          <div class="form-group" style="justify-content:flex-end"><label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:.9rem"><input type="checkbox" id="uAdmin" style="width:auto"> Administrador</label></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn btn-primary" style="flex:1" onclick="guardarUsuario()">💾 Guardar usuario</button>
+          <button class="btn btn-light" onclick="limpiarUsuario()">Limpiar</button>
+        </div>
+        <div id="uMsg"></div>
+      </div>
+    </div>
+    <div class="card adm-only">
+      <div class="card-title">🗂️ Respaldo de recibos</div>
+      <p class="hint" style="margin-bottom:10px">Descarga todas las fotos de recibos de un año en un archivo .zip, para guardarlo en Box.</p>
+      <div class="row">
+        <select id="zipYear" style="padding:9px;border:1.5px solid var(--border);border-radius:8px"></select>
+        <button class="btn btn-dark btn-sm" onclick="descargarZip()">⬇️ Descargar fotos del año</button>
+      </div>
+      <div id="zipMsg" class="hint" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔌 Sesión</div>
+      <p class="hint" id="pendInfo" style="margin-bottom:10px"></p>
+      <button class="btn btn-danger" onclick="cerrarSesion()">Cerrar sesión</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="zoomBg" onclick="cerrarZoom()"><button class="modal-close" onclick="cerrarZoom()">✕</button><img id="zoomImg" alt="Recibo" onclick="event.stopPropagation()"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  BrazosGastos — app de gastos de Brazos Cleaning (Cloudflare Worker + D1 + R2)
+// ═══════════════════════════════════════════════════════════════════
+const API_DEFAULT = 'https://brazos-gastos-worker.ranulfocast.workers.dev';
+const API = (new URLSearchParams(location.search).get('api')) || lsGet('bg_api') || API_DEFAULT;
+const VENTANA_MS = 24 * 60 * 60 * 1000;
+const FOTO_MAX_LADO = 1800, FOTO_META_BYTES = 420 * 1024;
+
+let SES = lsJson('bg_ses', null);          // {token,id,name,isAdmin}
+let GASTOS = lsJson('bg_gastos', []);      // copia local de lo último bajado
+let NOMBRES = lsJson('bg_nombres', {});
+let CFG = lsJson('bg_cfg', { cats: {}, vendors: [] });
+let COLA = lsJson('bg_cola', []);          // operaciones pendientes (sin internet)
+let editandoId = null, fotoNueva = null, fotoQuitada = false, periodo = 'month', offset = 0, sincronizando = false;
+const fotoCache = {};
+
+// ── utilidades ───────────────────────────────────────────────────
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+function lsJson(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSave(k, v) { return lsSet(k, JSON.stringify(v)); }
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => '$' + (Number(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const fmtF = f => { const [y, m, d] = (f || '').split('-'); return y ? `${m}/${d}/${y.slice(2)}` : ''; };
+const nuevoId = () => 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pagoTxt = t => ({ Debito: '💳 Débito', Credito: '💳 Crédito', Cash: '💵 Cash' }[t] || t || '—');
+function toast(m, ms = 2800) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
+function dot(st, txt) { $('syncDot').className = 'sdot ' + (st || ''); $('syncLbl').textContent = txt; }
+
+async function api(path, opts = {}) {
+  const h = Object.assign({}, opts.headers || {});
+  if (SES && SES.token) h.Authorization = 'Bearer ' + SES.token;
+  if (opts.json !== undefined) { h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const r = await fetch(API + path, { method: opts.method || 'GET', headers: h, body: opts.body });
+  if (r.status === 401 && SES && path !== '/api/login') { sesionExpirada(); throw Object.assign(new Error('Tu sesión expiró'), { status: 401 }); }
+  const ct = r.headers.get('content-type') || '';
+  const data = ct.includes('json') ? await r.json() : await r.blob();
+  if (!r.ok) throw Object.assign(new Error((data && data.error) || ('Error ' + r.status)), { status: r.status });
+  return data;
+}
+const esErrorDeRed = e => !e.status;   // fetch falló = sin internet
+
+// ── sesión ───────────────────────────────────────────────────────
+function mostrarLogin() { $('setupCard').style.display = 'none'; $('loginCard').style.display = 'block'; }
+function mostrarSetup() { $('setupCard').style.display = 'block'; $('loginCard').style.display = 'none'; }
+async function login() {
+  $('lMsg').innerHTML = '';
+  try {
+    const d = await api('/api/login', { method: 'POST', json: { username: $('lUser').value, pin: $('lPin').value } });
+    SES = { token: d.token, id: d.id, name: d.name, isAdmin: d.isAdmin }; lsSave('bg_ses', SES);
+    $('lPin').value = ''; iniciarApp();
+  } catch (e) { $('lMsg').innerHTML = `<div class="msg err">${esc(esErrorDeRed(e) ? 'Sin conexión. Revisa el internet.' : e.message)}</div>`; }
+}
+async function crearAdmin() {
+  $('sMsg').innerHTML = '';
+  try {
+    await api('/api/setup', { method: 'POST', json: { setupKey: $('sKey').value, id: $('sId').value, name: $('sName').value, pin: $('sPin').value } });
+    $('sMsg').innerHTML = '<div class="msg ok">✅ Administrador creado. Ahora entra con tu usuario y PIN.</div>';
+    $('lUser').value = $('sId').value; setTimeout(mostrarLogin, 1500);
+  } catch (e) { $('sMsg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+function sesionExpirada() {
+  const pend = COLA.length;
+  SES = null; lsSave('bg_ses', null);
+  $('appView').style.display = 'none'; $('loginView').style.display = 'block'; mostrarLogin();
+  $('lMsg').innerHTML = `<div class="msg err">Tu sesión expiró. Vuelve a entrar.${pend ? ' Tus ' + pend + ' cambio(s) pendiente(s) se suben al entrar.' : ''}</div>`;
+}
+function cerrarSesion() {
+  if (COLA.length && !confirm(`Tienes ${COLA.length} cambio(s) sin subir (sin internet). Si cierras sesión se quedan guardados en este teléfono y se suben cuando vuelvas a entrar. ¿Cerrar sesión?`)) return;
+  SES = null; lsSave('bg_ses', null); GASTOS = []; lsSave('bg_gastos', []);
+  $('appView').style.display = 'none'; $('loginView').style.display = 'block'; mostrarLogin();
+}
+
+// ── arranque ─────────────────────────────────────────────────────
+function iniciarApp() {
+  $('loginView').style.display = 'none'; $('appView').style.display = 'block';
+  $('whoName').textContent = SES.name; $('whoRole').textContent = SES.isAdmin ? 'Administrador' : 'Registrador';
+  document.querySelectorAll('.adm-only').forEach(e => e.style.display = SES.isAdmin ? '' : 'none');
+  document.querySelectorAll('.reg-only').forEach(e => e.style.display = SES.isAdmin ? 'none' : '');
+  $('reglaHint').textContent = SES.isAdmin ? '' : 'Puedes corregir o borrar tus gastos durante 24 horas después de registrarlos.';
+  const y = new Date().getFullYear(); $('zipYear').innerHTML = [y, y - 1, y - 2].map(a => `<option>${a}</option>`).join('');
+  pintarCatalogos(); nuevoGasto(); actualizarPeriodoLbl(); pintarLista();
+  sincronizar(true);
+}
+window.addEventListener('DOMContentLoaded', () => {
+  if (SES && SES.token) iniciarApp(); else { $('loginView').style.display = 'block'; mostrarLogin(); }
+});
+window.addEventListener('online', () => sincronizar(true));
+setInterval(() => { if (SES && COLA.length) sincronizar(false); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && SES) sincronizar(true); });
+
+// ── sincronización: primero sube lo pendiente, luego baja todo ──
+async function sincronizar(bajar) {
+  if (!SES || sincronizando) return;
+  sincronizando = true;
+  try {
+    dot('wait', COLA.length ? `Subiendo ${COLA.length} pendiente(s)…` : 'Actualizando…');
+    await subirCola();
+    if (bajar) {
+      const [cfg, lista] = await Promise.all([api('/api/config'), api('/api/gastos' + (SES.isAdmin && $('fBorrados').checked ? '?borrados=1' : ''))]);
+      CFG = cfg; lsSave('bg_cfg', CFG);
+      GASTOS = lista.gastos; NOMBRES = lista.nombres; lsSave('bg_nombres', NOMBRES);
+      if (!lsSave('bg_gastos', GASTOS)) console.warn('No cupo la copia local');
+      pintarCatalogos(true); pintarLista();
+      if (SES.isAdmin && $('panel-config').classList.contains('active')) cargarUsuarios();
+    }
+    dot(COLA.length ? 'wait' : 'ok', COLA.length ? `${COLA.length} pendiente(s) por subir` : 'Al día · ' + new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }));
+  } catch (e) {
+    if (e.status === 401) return;
+    dot('err', esErrorDeRed(e) ? `Sin internet${COLA.length ? ' · ' + COLA.length + ' pendiente(s) guardados aquí' : ''}` : e.message);
+  } finally { sincronizando = false; $('pendInfo').textContent = COLA.length ? `⏳ ${COLA.length} cambio(s) guardados en este dispositivo, esperando internet.` : '✅ No hay cambios pendientes.'; }
+}
+async function subirCola() {
+  while (COLA.length) {
+    const op = COLA[0];
+    try {
+      if (op.tipo === 'crear') await api('/api/gastos', { method: 'POST', json: op.datos });
+      else if (op.tipo === 'editar') await api('/api/gastos/' + encodeURIComponent(op.id), { method: 'PUT', json: op.datos });
+      else if (op.tipo === 'borrar') await api('/api/gastos/' + encodeURIComponent(op.id), { method: 'DELETE' });
+      else if (op.tipo === 'foto') await api('/api/gastos/' + encodeURIComponent(op.id) + '/foto', { method: 'POST', body: dataUrlABlob(op.foto), headers: { 'Content-Type': 'image/jpeg' } });
+    } catch (e) {
+      if (esErrorDeRed(e) || e.status === 401 || e.status >= 500) throw e;   // se reintenta después
+      toast('⚠️ No se pudo guardar un cambio: ' + e.message, 6000);         // rechazado (ej. pasaron las 24 h): se descarta
+    }
+    COLA.shift(); lsSave('bg_cola', COLA);
+  }
+}
+function encolar(op) {
+  COLA.push(op);
+  if (!lsSave('bg_cola', COLA)) { COLA.pop(); alert('No hay espacio en este dispositivo para guardar el cambio sin internet. Conéctate e intenta de nuevo.'); return false; }
+  return true;
+}
+
+// ── catálogos (categorías, subcategorías, proveedores) ──────────
+function pintarCatalogos(conservar) {
+  const cats = Object.keys(CFG.cats || {});
+  const keep = id => conservar ? $(id).value : null;
+  const gc = keep('gCat'), gs = keep('gSub'), gv = keep('gVendor'), fc = keep('fCat'), fs = keep('fSub');
+  $('gCat').innerHTML = '<option value="">-- Selecciona --</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('fCat').innerHTML = '<option value="all">Todas</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('gVendor').innerHTML = '<option value="">-- Selecciona --</option>' + (CFG.vendors || []).map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('') + '<option value="__nuevo">➕ Agregar otro…</option>';
+  if (gc !== null) { $('gCat').value = gc; llenarSubcats('gCat', 'gSub'); $('gSub').value = gs; $('gVendor').value = gv; $('fCat').value = fc || 'all'; llenarSubcats('fCat', 'fSub', true); $('fSub').value = fs || 'all'; }
+  else llenarSubcats('fCat', 'fSub', true);
+  // pestaña de catálogos
+  const adm = SES && SES.isAdmin;
+  $('catList').innerHTML = cats.map(c => `<div class="cat-item"><div class="row" style="justify-content:space-between"><b>${esc(c)}</b>${adm ? `<button class="x" onclick="borrarCat('${encodeURIComponent(c)}')">Eliminar</button>` : ''}</div>
+      <div>${(CFG.cats[c] || []).map(s => `<span class="subcat">${esc(s)}${adm ? `<button onclick="borrarSub('${encodeURIComponent(c)}','${encodeURIComponent(s)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('')}
+      ${adm ? `<button class="subcat" style="cursor:pointer;color:#457b9d" onclick="agregarSub('${encodeURIComponent(c)}')">+ subcategoría</button>` : ''}</div></div>`).join('') || '<p class="hint">Sin categorías.</p>';
+  $('vendorList').innerHTML = (CFG.vendors || []).map(v => `<span class="subcat">${esc(v)}${adm ? `<button onclick="borrarVendor('${encodeURIComponent(v)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('');
+  const quien = $('fQuien').value || 'all';
+  $('fQuien').innerHTML = '<option value="all">Todos</option>' + Object.entries(NOMBRES).map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join('');
+  $('fQuien').value = NOMBRES[quien] ? quien : 'all';
+}
+function llenarSubcats(catId, subId, filtro) {
+  const c = $(catId).value, subs = (CFG.cats || {})[c] || [];
+  $(subId).innerHTML = (filtro ? '<option value="all">Todas</option>' : '<option value="">-- Sin subcategoría --</option>') + subs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  if (!filtro && subs.includes('Gas')) $(subId).value = 'Gas';
+}
+async function guardarCfg(nuevo) {
+  try { CFG = await api('/api/config', { method: 'PUT', json: nuevo }); lsSave('bg_cfg', CFG); pintarCatalogos(true); toast('✅ Guardado'); }
+  catch (e) { alert(esErrorDeRed(e) ? 'Necesitas internet para cambiar categorías.' : e.message); }
+}
+function agregarCat() { const n = $('nuevaCat').value.trim(); if (!n) return; if (CFG.cats[n]) return alert('Ya existe'); const c = { ...CFG.cats, [n]: [] }; $('nuevaCat').value = ''; guardarCfg({ cats: c }); }
+function borrarCat(k) { const c = decodeURIComponent(k); if (GASTOS.some(g => g.categoria === c && !g.deleted) && !confirm(`Hay gastos con la categoría "${c}". Esos gastos la conservan, pero ya no aparecerá para gastos nuevos. ¿Eliminarla?`)) return; const n = { ...CFG.cats }; delete n[c]; guardarCfg({ cats: n }); }
+function agregarSub(k) { const c = decodeURIComponent(k); const s = (prompt('Nueva subcategoría para ' + c) || '').trim(); if (!s) return; const n = { ...CFG.cats, [c]: [...(CFG.cats[c] || []), s] }; guardarCfg({ cats: n }); }
+function borrarSub(k, sk) { const c = decodeURIComponent(k), s = decodeURIComponent(sk); const n = { ...CFG.cats, [c]: (CFG.cats[c] || []).filter(x => x !== s) }; guardarCfg({ cats: n }); }
+function borrarVendor(k) { const v = decodeURIComponent(k); if (!confirm('¿Quitar "' + v + '" de la lista?')) return; guardarCfg({ vendors: CFG.vendors.filter(x => x !== v) }); }
+async function agregarVendor(nombre) {
+  const v = (nombre || '').trim(); if (!v) return null;
+  try { const d = await api('/api/vendors', { method: 'POST', json: { vendor: v } }); CFG.vendors = d.vendors; }
+  catch (e) { if (!esErrorDeRed(e)) { alert(e.message); return null; } if (!CFG.vendors.includes(v)) CFG.vendors.push(v); toast('Sin internet: el proveedor se usa en este gasto'); }
+  lsSave('bg_cfg', CFG); $('nuevoVendor').value = ''; pintarCatalogos(true); return v;
+}
+async function nuevoVendorPrompt() {
+  const v = (prompt('Nombre del proveedor') || '').trim();
+  if (!v) { $('gVendor').value = ''; return; }
+  const ok = await agregarVendor(v); if (ok) $('gVendor').value = ok;
+}
+
+// ── registrar / editar ───────────────────────────────────────────
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.id === 'tab-' + t));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + t));
+  if (t === 'config' && SES.isAdmin) cargarUsuarios();
+  if (t === 'lista') pintarLista();
+}
+function nuevoGasto() {
+  editandoId = null; fotoNueva = null; fotoQuitada = false;
+  $('formTitle').textContent = '📝 Nuevo gasto'; $('btnGuardar').textContent = '💾 Guardar gasto'; $('btnCancelarEd').style.display = 'none';
+  $('gFecha').value = hoy(); $('gMonto').value = ''; $('gCat').value = ''; llenarSubcats('gCat', 'gSub');
+  $('gVendor').value = ''; $('gPago').value = 'Debito'; $('gConcepto').value = ''; $('gNotas').value = '';
+  mostrarFotoForm(null); switchTab('registrar');
+}
+function puedeModificar(g) {
+  if (!SES) return false; if (SES.isAdmin) return true;
+  return g.createdBy === SES.id && (Date.now() - Date.parse(g.createdAt || new Date().toISOString())) < VENTANA_MS;
+}
+async function editarGasto(id) {
+  const g = GASTOS.find(x => x.id === id); if (!g) return;
+  if (!puedeModificar(g)) return alert('Solo puedes corregir tus propios gastos durante 24 horas. Pídeselo al administrador.');
+  editandoId = id; fotoNueva = null; fotoQuitada = false;
+  $('formTitle').textContent = '✏️ Corregir gasto'; $('btnGuardar').textContent = '💾 Guardar cambios'; $('btnCancelarEd').style.display = '';
+  $('gFecha').value = g.fecha; $('gMonto').value = g.monto;
+  if (g.categoria && !CFG.cats[g.categoria]) $('gCat').insertAdjacentHTML('beforeend', `<option value="${esc(g.categoria)}">${esc(g.categoria)}</option>`);
+  $('gCat').value = g.categoria; llenarSubcats('gCat', 'gSub');
+  if (g.subcategoria && ![...$('gSub').options].some(o => o.value === g.subcategoria)) $('gSub').insertAdjacentHTML('beforeend', `<option value="${esc(g.subcategoria)}">${esc(g.subcategoria)}</option>`);
+  $('gSub').value = g.subcategoria || '';
+  if (g.vendor && !CFG.vendors.includes(g.vendor)) $('gVendor').insertAdjacentHTML('afterbegin', `<option value="${esc(g.vendor)}">${esc(g.vendor)}</option>`);
+  $('gVendor').value = g.vendor || ''; $('gPago').value = g.tipoPago || 'Otro'; $('gConcepto').value = g.concepto || ''; $('gNotas').value = g.notas || '';
+  mostrarFotoForm(g.fotoLocal || null);
+  if (!g.fotoLocal && g.foto) urlFoto(g.foto).then(u => { if (editandoId === id && !fotoNueva) mostrarFotoForm(u); }).catch(() => {});
+  switchTab('registrar'); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function datosForm() {
+  const monto = Math.round(parseFloat($('gMonto').value) * 100) / 100;
+  const d = { fecha: $('gFecha').value, monto, categoria: $('gCat').value, subcategoria: $('gSub').value, vendor: $('gVendor').value === '__nuevo' ? '' : $('gVendor').value,
+    concepto: $('gConcepto').value.trim(), tipoPago: $('gPago').value, notas: $('gNotas').value.trim() };
+  if (!d.fecha || !(monto > 0) || !d.categoria) { alert('Completa Fecha, Monto y Categoría.'); return null; }
+  return d;
+}
+async function guardarGasto() {
+  const d = datosForm(); if (!d) return;
+  const btn = $('btnGuardar'); btn.disabled = true;
+  try {
+    if (editandoId) {
+      const g = GASTOS.find(x => x.id === editandoId);
+      Object.assign(g, d, { pendiente: true });
+      if (!encolar({ tipo: 'editar', id: editandoId, datos: d })) return;
+      if (fotoNueva) { g.fotoLocal = fotoNueva; encolar({ tipo: 'foto', id: editandoId, foto: fotoNueva }); }
+      toast('✅ Cambios guardados');
+    } else {
+      const id = nuevoId();
+      const g = Object.assign({ id, createdBy: SES.id, createdAt: new Date().toISOString(), foto: '', pendiente: true }, d);
+      if (!encolar({ tipo: 'crear', datos: Object.assign({ id }, d) })) return;
+      if (fotoNueva) { g.fotoLocal = fotoNueva; encolar({ tipo: 'foto', id, foto: fotoNueva }); }
+      GASTOS.unshift(g);
+      toast('✅ Gasto guardado — puedes registrar otro');
+    }
+    lsSave('bg_gastos', GASTOS);
+    const eraEdicion = !!editandoId;
+    nuevoGasto(); if (eraEdicion) switchTab('lista');
+    pintarLista(); sincronizar(true);
+  } finally { btn.disabled = false; }
+}
+async function borrarGasto(id) {
+  const g = GASTOS.find(x => x.id === id); if (!g) return;
+  if (!puedeModificar(g)) return alert('Solo puedes borrar tus propios gastos durante 24 horas. Pídeselo al administrador.');
+  if (!confirm(`¿Borrar el gasto de ${money(g.monto)} (${g.vendor || g.categoria}, ${fmtF(g.fecha)})?\n\nNo se pierde: el administrador lo puede ver y restaurar.`)) return;
+  if (!encolar({ tipo: 'borrar', id })) return;
+  GASTOS = GASTOS.filter(x => x.id !== id); lsSave('bg_gastos', GASTOS); pintarLista(); sincronizar(true);
+}
+async function restaurarGasto(id) {
+  try { await api('/api/gastos/' + encodeURIComponent(id) + '/restaurar', { method: 'POST' }); toast('✅ Restaurado'); sincronizar(true); }
+  catch (e) { alert(esErrorDeRed(e) ? 'Necesitas internet para restaurar.' : e.message); }
+}
+
+// ── fotos ────────────────────────────────────────────────────────
+function mostrarFotoForm(src) {
+  $('fotoPrev').style.display = src ? '' : 'none'; if (src) $('fotoPrev').src = src;
+  $('btnQuitarFoto').style.display = fotoNueva ? '' : 'none';
+  $('fotoInfo').textContent = fotoNueva ? `Foto lista (${Math.round(fotoNueva.length * 0.75 / 1024)} KB)` : (src ? 'Foto guardada. Toma otra para reemplazarla (la anterior queda en el historial).' : 'Opcional. Se guarda como comprobante.');
+}
+function quitarFoto() { fotoNueva = null; mostrarFotoForm(null); }
+async function elegirFoto(input) {
+  const f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return alert('Solo fotos (JPG, PNG). Si el escáner da PDF, guárdalo como imagen.');
+  $('fotoInfo').textContent = 'Preparando foto…';
+  try { fotoNueva = await comprimir(f); mostrarFotoForm(fotoNueva); }
+  catch (e) { fotoNueva = null; mostrarFotoForm(null); alert('No se pudo leer la foto: ' + e.message); }
+}
+function comprimir(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, FOTO_MAX_LADO / Math.max(w, h));
+      w = Math.round(w * k); h = Math.round(h * k);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+      let q = 0.85, out = c.toDataURL('image/jpeg', q);
+      while (out.length * 0.75 > FOTO_META_BYTES && q > 0.5) { q -= 0.07; out = c.toDataURL('image/jpeg', q); }
+      res(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('formato no soportado')); };
+    img.src = url;
+  });
+}
+function dataUrlABlob(d) { const [h, b] = d.split(','); const bin = atob(b); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: (h.match(/:(.*?);/) || [])[1] || 'image/jpeg' }); }
+async function urlFoto(key) {
+  if (fotoCache[key]) return fotoCache[key];
+  const blob = await api('/api/foto?key=' + encodeURIComponent(key));
+  return (fotoCache[key] = URL.createObjectURL(blob));
+}
+async function verFoto(id) {
+  const g = GASTOS.find(x => x.id === id); if (!g) return;
+  if (g.fotoLocal) return zoom(g.fotoLocal);
+  try { zoom(await urlFoto(g.foto)); } catch (e) { alert(esErrorDeRed(e) ? 'Necesitas internet para ver la foto.' : e.message); }
+}
+function zoom(src) { $('zoomImg').src = src; $('zoomBg').classList.add('show'); }
+function cerrarZoom() { $('zoomBg').classList.remove('show'); }
+
+// ── lista y filtros ──────────────────────────────────────────────
+function rangoPeriodo() {
+  const d = new Date(); let a, b, lbl;
+  if (periodo === 'week') {
+    const lun = new Date(d); lun.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7);
+    const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
+    a = iso(lun); b = iso(dom); lbl = `${fmtF(a)} – ${fmtF(b)}`;
+  } else if (periodo === 'month') {
+    const m = new Date(d.getFullYear(), d.getMonth() + offset, 1);
+    a = iso(m); b = iso(new Date(m.getFullYear(), m.getMonth() + 1, 0));
+    lbl = m.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+  } else if (periodo === 'year') {
+    const y = d.getFullYear() + offset; a = y + '-01-01'; b = y + '-12-31'; lbl = String(y);
+  } else { a = '0000-00-00'; b = '9999-12-31'; lbl = 'Todo'; }
+  return { a, b, lbl };
+}
+function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function setPeriodo(p) { periodo = p; offset = 0; document.querySelectorAll('.chip[data-p]').forEach(c => c.classList.toggle('on', c.dataset.p === p)); actualizarPeriodoLbl(); pintarLista(); }
+function mover(n) { if (periodo === 'all') return; offset += n; actualizarPeriodoLbl(); pintarLista(); }
+function actualizarPeriodoLbl() { const l = rangoPeriodo().lbl; $('periodoLbl').textContent = l.charAt(0).toUpperCase() + l.slice(1); }
+function filtrados() {
+  const { a, b } = rangoPeriodo();
+  const fc = $('fCat').value, fs = $('fSub').value, fp = $('fPago').value, fq = $('fQuien').value;
+  const fm = parseFloat($('fMonto').value), ft = $('fTexto').value.trim().toLowerCase();
+  return GASTOS.filter(g => {
+    if (!isNaN(fm)) { if (Math.abs(g.monto - fm) > 0.001) return false; }      // monto exacto busca en TODAS las fechas
+    else if (g.fecha < a || g.fecha > b) return false;
+    if (fc !== 'all' && g.categoria !== fc) return false;
+    if (fs !== 'all' && g.subcategoria !== fs) return false;
+    if (fp !== 'all' && g.tipoPago !== fp) return false;
+    if (fq !== 'all' && g.createdBy !== fq) return false;
+    if (ft && !`${g.vendor} ${g.concepto} ${g.notas} ${g.categoria} ${g.subcategoria}`.toLowerCase().includes(ft)) return false;
+    return true;
+  }).sort((x, y) => (y.fecha.localeCompare(x.fecha)) || String(y.createdAt).localeCompare(String(x.createdAt)));
+}
+function pintarLista() {
+  const L = filtrados(), vivos = L.filter(g => !g.deleted);
+  const total = vivos.reduce((s, g) => s + g.monto, 0);
+  $('tbody').innerHTML = L.map(g => {
+    const puede = !g.deleted && puedeModificar(g);
+    const tieneFoto = g.foto || g.fotoLocal;
+    return `<tr class="${g.deleted ? 'borrado' : ''} ${g.pendiente ? 'pend' : ''}">
+      <td style="white-space:nowrap">${fmtF(g.fecha)}</td>
+      <td class="col-opt">${esc(g.categoria)}${g.subcategoria ? `<div class="sub">${esc(g.subcategoria)}</div>` : ''}</td>
+      <td>${esc(g.vendor || '—')}${g.concepto ? `<div class="sub">${esc(g.concepto)}</div>` : ''}<div class="sub mob">${esc(g.categoria)}${g.subcategoria ? ' · ' + esc(g.subcategoria) : ''}</div></td>
+      <td class="col-opt" style="white-space:nowrap">${pagoTxt(g.tipoPago)}</td>
+      <td class="num"><b>${money(g.monto)}</b></td>
+      <td>${tieneFoto ? `<button class="acc" style="background:none;border:none;cursor:pointer;font-size:1.05rem" onclick="verFoto('${esc(g.id)}')" aria-label="Ver foto">📎</button>` : ''}</td>
+      <td class="col-opt"><span class="badge">${esc((NOMBRES[g.createdBy] || g.createdBy || '').split(' ')[0])}</span></td>
+      <td class="acc" style="white-space:nowrap">${g.deleted ? (SES.isAdmin ? `<button onclick="restaurarGasto('${esc(g.id)}')" title="Restaurar">♻️</button>` : '')
+        : (puede ? `<button onclick="editarGasto('${esc(g.id)}')" title="Corregir">✏️</button><button onclick="borrarGasto('${esc(g.id)}')" title="Borrar">🗑️</button>` : '')}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">No hay gastos en este periodo.</td></tr>';
+  $('totalLbl').textContent = money(total);
+  $('cuentaLbl').textContent = `${vivos.length} gasto(s) · ${rangoPeriodo().lbl}`;
+  const porCat = {}; vivos.forEach(g => porCat[g.categoria] = (porCat[g.categoria] || 0) + g.monto);
+  $('porCat').innerHTML = Object.entries(porCat).sort((x, y) => y[1] - x[1]).map(([c, m]) => `<div><span>${esc(c)}</span><b>${money(m)}</b></div>`).join('');
+}
+
+// ── reportes ─────────────────────────────────────────────────────
+async function imprimirReporte(conFotos) {
+  const L = filtrados().filter(g => !g.deleted);
+  if (!L.length) return alert('No hay gastos para imprimir con estos filtros.');
+  const w = window.open('', '_blank');
+  if (!w) return alert('El navegador bloqueó la ventana. Permite ventanas emergentes para esta página.');
+  w.document.write('<p style="font-family:sans-serif;padding:20px">Preparando reporte…</p>');
+  const total = L.reduce((s, g) => s + g.monto, 0);
+  const porCat = {}; L.forEach(g => porCat[g.categoria] = (porCat[g.categoria] || 0) + g.monto);
+  const filtros = [$('fCat').value !== 'all' && 'Categoría: ' + $('fCat').value, $('fSub').value !== 'all' && 'Subcategoría: ' + $('fSub').value,
+    $('fPago').value !== 'all' && 'Pago: ' + $('fPago').value, $('fQuien').value !== 'all' && 'Registró: ' + (NOMBRES[$('fQuien').value] || ''), $('fTexto').value && 'Texto: ' + $('fTexto').value].filter(Boolean).join(' · ');
+  let fotosHtml = '';
+  if (conFotos) {
+    const conF = L.filter(g => g.foto || g.fotoLocal);
+    for (const g of conF) {
+      let src = g.fotoLocal;
+      if (!src) { try { src = await blobADataUrl(await api('/api/foto?key=' + encodeURIComponent(g.foto))); } catch (e) { src = ''; } }
+      fotosHtml += `<div class="recibo"><div class="rh"><b>${fmtF(g.fecha)}</b> · ${esc(g.vendor || g.categoria)} · <b>${money(g.monto)}</b> · ${esc(g.concepto || '')}</div>${src ? `<img src="${src}">` : '<p>(No se pudo cargar la foto)</p>'}</div>`;
+    }
+  }
+  w.document.open();
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gastos Brazos ${esc(rangoPeriodo().lbl)}</title><style>
+    body{font-family:Arial,sans-serif;color:#1d3557;margin:24px;font-size:12px} h1{font-size:20px;margin:0} .s{color:#666;margin:4px 0 14px}
+    table{width:100%;border-collapse:collapse} th{background:#1d3557;color:#fff;text-align:left;padding:6px} td{padding:5px 6px;border-bottom:1px solid #ddd} .n{text-align:right;white-space:nowrap}
+    .tot td{font-weight:bold;border-top:2px solid #1d3557;font-size:13px} .cats{margin-top:14px;max-width:360px} .recibo{page-break-before:always} .rh{margin-bottom:8px;font-size:13px}
+    .recibo img{max-width:100%;max-height:900px;border:1px solid #ccc} .np{margin:0 0 14px} @media print{.np{display:none}}
+  </style></head><body>
+  <div class="np"><button onclick="print()" style="padding:8px 18px;font-size:14px;background:#1d3557;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Imprimir / Guardar PDF</button></div>
+  <h1>Brazos Cleaning Services — Reporte de Gastos</h1>
+  <div class="s">Periodo: ${esc(rangoPeriodo().lbl)}${filtros ? ' · ' + esc(filtros) : ''} · Generado ${new Date().toLocaleDateString('es-MX')} por ${esc(SES.name)}</div>
+  <table><thead><tr><th>Fecha</th><th>Categoría</th><th>Proveedor</th><th>Concepto</th><th>Pago</th><th class="n">Monto</th><th>📎</th></tr></thead><tbody>
+  ${L.map(g => `<tr><td>${fmtF(g.fecha)}</td><td>${esc(g.categoria)}${g.subcategoria ? ' / ' + esc(g.subcategoria) : ''}</td><td>${esc(g.vendor)}</td><td>${esc(g.concepto)}</td><td>${esc(g.tipoPago)}</td><td class="n">${money(g.monto)}</td><td>${g.foto || g.fotoLocal ? '📎' : ''}</td></tr>`).join('')}
+  <tr class="tot"><td colspan="5">TOTAL (${L.length} gastos)</td><td class="n">${money(total)}</td><td></td></tr></tbody></table>
+  <table class="cats"><thead><tr><th>Por categoría</th><th class="n">Monto</th></tr></thead><tbody>${Object.entries(porCat).sort((x, y) => y[1] - x[1]).map(([c, m]) => `<tr><td>${esc(c)}</td><td class="n">${money(m)}</td></tr>`).join('')}</tbody></table>
+  ${fotosHtml}</body></html>`);
+  w.document.close(); w.focus();
+}
+function blobADataUrl(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); }); }
+function exportarCSV() {
+  const L = filtrados().filter(g => !g.deleted);
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = ['Fecha,Categoría,Subcategoría,Proveedor,Concepto,Tipo de pago,Monto,Notas,Registró,Foto']
+    .concat(L.map(g => [g.fecha, g.categoria, g.subcategoria, g.vendor, g.concepto, g.tipoPago, g.monto.toFixed(2), g.notas, NOMBRES[g.createdBy] || g.createdBy, g.foto ? 'Sí' : 'No'].map(q).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
+  a.download = `Gastos_Brazos_${rangoPeriodo().lbl.replace(/[^\w-]+/g, '_')}.csv`; a.click();
+}
+async function descargarZip() {
+  if (typeof JSZip === 'undefined') return alert('No se pudo cargar el componente para crear el .zip. Revisa el internet y recarga.');
+  const y = $('zipYear').value, msg = $('zipMsg');
+  try {
+    const { gastos } = await api(`/api/gastos?desde=${y}-01-01&hasta=${y}-12-31`);
+    const conF = gastos.filter(g => g.foto);
+    if (!conF.length) { msg.textContent = 'No hay fotos en ' + y + '.'; return; }
+    const zip = new JSZip(), usados = {};
+    for (let i = 0; i < conF.length; i++) {
+      const g = conF[i]; msg.textContent = `Descargando ${i + 1} de ${conF.length}…`;
+      const blob = await api('/api/foto?key=' + encodeURIComponent(g.foto));
+      let base = `${g.fecha}_${(g.vendor || g.categoria).replace(/[^\w]+/g, '')}_${g.monto.toFixed(2)}`;
+      usados[base] = (usados[base] || 0) + 1; if (usados[base] > 1) base += '_' + usados[base];
+      zip.file(`${base}.${(g.foto.split('.').pop() || 'jpg')}`, blob);
+    }
+    msg.textContent = 'Creando el archivo…';
+    const out = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(out); a.download = `Brazos_Recibos_${y}.zip`; a.click();
+    msg.textContent = `✅ ${conF.length} foto(s) descargadas en Brazos_Recibos_${y}.zip`;
+  } catch (e) { msg.textContent = '❌ ' + (esErrorDeRed(e) ? 'Sin internet.' : e.message); }
+}
+
+// ── usuarios (admin) ─────────────────────────────────────────────
+async function cargarUsuarios() {
+  try {
+    const { usuarios } = await api('/api/admin/usuarios');
+    $('userList').innerHTML = usuarios.map(u => `<div class="user-row" style="${u.active ? '' : 'opacity:.5'}">
+      <div><b>${esc(u.name)}</b> <span class="sub">(${esc(u.id)})</span> ${u.is_admin ? '<span class="badge">admin</span>' : ''} ${u.active ? '' : '<span class="badge">desactivado</span>'}</div>
+      <div class="row"><button class="btn btn-light btn-sm" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>${u.active ? 'Editar' : 'Reactivar'}</button>
+      ${u.active && u.id !== SES.id ? `<button class="btn btn-light btn-sm" style="color:var(--accent)" onclick="desactivarUsuario('${esc(u.id)}')">Desactivar</button>` : ''}</div></div>`).join('');
+  } catch (e) { $('userList').innerHTML = `<div class="msg err">${esc(esErrorDeRed(e) ? 'Sin internet.' : e.message)}</div>`; }
+}
+function editarUsuario(u) { $('uId').value = u.id; $('uId').readOnly = true; $('uName').value = u.name; $('uPin').value = ''; $('uAdmin').checked = !!u.is_admin; $('uPinHint').textContent = '(déjalo vacío para no cambiarlo)'; $('uMsg').innerHTML = ''; }
+function limpiarUsuario() { $('uId').value = ''; $('uId').readOnly = false; $('uName').value = ''; $('uPin').value = ''; $('uAdmin').checked = false; $('uPinHint').textContent = '(mínimo 4)'; $('uMsg').innerHTML = ''; }
+async function guardarUsuario() {
+  try {
+    await api('/api/admin/usuarios', { method: 'POST', json: { id: $('uId').value, name: $('uName').value, pin: $('uPin').value, isAdmin: $('uAdmin').checked } });
+    limpiarUsuario(); $('uMsg').innerHTML = '<div class="msg ok">✅ Usuario guardado.</div>'; cargarUsuarios();
+  } catch (e) { $('uMsg').innerHTML = `<div class="msg err">${esc(esErrorDeRed(e) ? 'Sin internet.' : e.message)}</div>`; }
+}
+async function desactivarUsuario(id) {
+  if (!confirm(`¿Desactivar a "${id}"? Ya no podrá entrar, pero sus gastos se conservan con su nombre.`)) return;
+  try { await api('/api/admin/usuarios/desactivar', { method: 'POST', json: { id } }); cargarUsuarios(); }
+  catch (e) { alert(esErrorDeRed(e) ? 'Sin internet.' : e.message); }
+}
+</script>
+</body>
+</html>
