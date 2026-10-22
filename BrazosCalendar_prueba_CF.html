@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.0.1';
 const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
 
 async function checkForUpdate() {
@@ -70,6 +70,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 /* ── HEADER ── */
 .hdr{background:var(--s1);border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:21px;letter-spacing:-.5px}.logo em{color:var(--brand);font-style:normal}
+@media(max-width:380px){#scrAgenda .hdr .badge{display:none}}
 .badge{font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:20px;text-transform:uppercase;background:var(--bbg);color:var(--brand);border:1px solid var(--brand)}
 .hdr-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif}
 .sync{display:flex;align-items:center;gap:7px;padding:7px 16px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
@@ -235,9 +236,15 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 <!-- ══ SCREEN: AGENDA ══ -->
 <div id="scrAgenda" class="screen">
   <div class="hdr">
-    <div style="display:flex;align-items:center;gap:9px">
-      <div class="logo">Brazos<em>Calendar</em></div>
-      <div class="badge">BRAZOS</div>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="logo">Brazos<em>Calendar</em></div>
+        <div class="badge">BRAZOS</div>
+      </div>
+      <div id="hdrUser" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0">
+        <span id="hdrUserName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw"></span>
+        <button onclick="cerrarSesion()" title="Cerrar sesión" style="background:none;border:1px solid #e74c3c;color:#e74c3c;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔌 Salir</button>
+      </div>
     </div>
     <div style="display:flex;gap:6px">
       <button class="hdr-btn" onclick="refreshData()" id="btnRefresh" title="Actualizar">🔄</button>
@@ -715,6 +722,8 @@ async function loadHorariosFromDrive(){
 
 
 function updateDriveHeaderBtn(){
+  try{ var hu=document.getElementById('hdrUser'), hn=document.getElementById('hdrUserName');
+    if(hu&&hn){ if(S.driveToken&&S.empName){ hn.textContent='👤 '+S.empName; hu.style.display='flex'; } else { hu.style.display='none'; } } }catch(e){}
   const btn = document.getElementById('btnDriveHeader');
   if(!btn) return;
   const pend=_getPendientes().length;
