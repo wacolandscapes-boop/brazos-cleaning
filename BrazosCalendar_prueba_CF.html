@@ -26,8 +26,9 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.1';
-const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
+const APP_VERSION = '3.0.2';
+// Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
+const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
 async function checkForUpdate() {
   try {
