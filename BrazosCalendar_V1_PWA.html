@@ -15,7 +15,7 @@
 const _manifest={
   name:"BrazosCalendar · Brazos Cleaning",short_name:"BrazosCalendar",
   description:"Tu horario de servicios — Brazos Cleaning Services",
-  start_url:"./",display:"standalone",
+  id:location.origin+location.pathname,start_url:location.origin+location.pathname,scope:location.origin+location.pathname,display:"standalone",
   background_color:"#0f1117",theme_color:"#0ea5e9",orientation:"portrait",
   icons:[
     {src:"data:image/png;base64,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",sizes:"192x192",type:"image/png"},
@@ -26,8 +26,9 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '2.3.0';
-const APP_URL = 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html';
+const APP_VERSION = '3.0.3';
+// Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
+const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
 async function checkForUpdate() {
   try {
@@ -60,7 +61,6 @@ function doInstall(){if(_installPrompt){_installPrompt.prompt();_installPrompt.u
 function dismissBanner(){const b=document.getElementById('_pwaBanner');if(b)b.remove();}
 window.addEventListener('appinstalled',()=>{dismissBanner();});
 </script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0f1117;--s1:#1a1d27;--s2:#22263a;--border:#2e3349;--blue:#3b82f6;--green:#60a5fa;--gbg:#1e2d3d;--yellow:#f59e0b;--ybg:#451a03;--text:#f1f5f9;--muted:#94a3b8;--brand:#0ea5e9;--bbg:#0c2a3a;--sms:#10b981;--smsbg:#064e3b}
@@ -71,6 +71,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 /* ── HEADER ── */
 .hdr{background:var(--s1);border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:21px;letter-spacing:-.5px}.logo em{color:var(--brand);font-style:normal}
+@media(max-width:380px){#scrAgenda .hdr .badge{display:none}}
 .badge{font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:20px;text-transform:uppercase;background:var(--bbg);color:var(--brand);border:1px solid var(--brand)}
 .hdr-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif}
 .sync{display:flex;align-items:center;gap:7px;padding:7px 16px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
@@ -210,40 +211,25 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
     <div class="setup-sub">Tu horario de servicios</div>
 
     <div class="card">
-      <h3>Google Drive</h3>
-      <div class="ds" id="driveStatus">Sin conectar — toca para autenticar</div>
+      <h3>Entrar</h3>
+      <div class="ds" id="driveStatus">Elige tu nombre y escribe tu PIN de Nómina</div>
       <div id="avisoPendientes" style="display:none;background:#7f1d1d;color:#fff;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12px;font-weight:700;text-align:center;"></div>
-      <button class="btn-drive" id="btnDrive" onclick="connectDrive()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M6.28 3l5.72 9.9L6.28 3zm-3.7 6.42L.86 13.1c-.4.69-.4 1.53 0 2.22l2.97 5.14h5.94L6.28 15.2 2.58 9.42zm18.84 0L17.72 3l-5.72 9.9 3.44 5.95h5.94l2.97-5.14c.4-.69.4-1.53 0-2.22l-3.69-3.07zm-7.12 8.76H9l-2.22 3.84h10.44l-2.22-3.84z"/></svg>
-        Conectar Drive
-      </button>
-
-      <div id="empSection" style="display:none">
-        <h3>¿Quién eres?</h3>
-        <input type="text" class="emp-search" id="empSearch" placeholder="Busca tu nombre…" oninput="filterEmps()" autocomplete="off">
-        <div class="emp-list" id="empList"></div>
-      </div>
-
-      <div id="empSelected" style="display:none">
-        <h3>Empleado</h3>
-        <div class="emp-selected">
-          <div>
-            <div class="emp-selected-name" id="selEmpName">—</div>
-            <div class="emp-selected-grp" id="selEmpGrp">—</div>
-          </div>
-          <button class="emp-change" onclick="changeEmp()">Cambiar</button>
-        </div>
-      </div>
-
-      <button class="btn" id="btnStart" onclick="startCalendar()" disabled>📅 VER MI CALENDARIO</button>
+      <select id="loginEmp" class="emp-search" style="margin-top:10px"><option value="">Cargando nombres…</option></select>
+      <input type="password" id="loginPin" class="emp-search" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrarCalendar()" style="margin-top:8px">
+      <button class="btn" id="btnLogin" onclick="entrarCalendar()" style="margin-top:10px">🔓 ENTRAR</button>
+      <div id="loginMsg" style="font-size:13px;margin-top:8px;text-align:center"></div>
+      <button class="btn-drive" id="btnDrive" style="display:none"></button>
+      <div id="empSection" style="display:none"><input type="text" id="empSearch"><div id="empList"></div></div>
+      <div id="empSelected" style="display:none!important"><div id="selEmpName"></div><div id="selEmpGrp"></div></div>
+      <button class="btn" id="btnStart" onclick="startCalendar()" disabled style="display:none">📅 VER MI CALENDARIO</button>
 
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
-        <button onclick="loadLocal()" style="width:100%;padding:10px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer">📱 Usar localStorage</button>
+        <button onclick="loadLocal()" style="display:none;width:100%;padding:10px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer">📱 Usar localStorage</button>
       </div>
     </div>
 
     <div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.7;max-width:300px">
-      Lee <strong style="color:var(--text)">brazosCS_sync.json</strong> desde Drive.<br>Solo lectura — no modifica nada.
+      Tus horas se guardan en la oficina automáticamente.<br>Si no hay señal, se guardan en el teléfono y se suben solas.
     </div>
   </div>
 </div>
@@ -251,9 +237,15 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
 <!-- ══ SCREEN: AGENDA ══ -->
 <div id="scrAgenda" class="screen">
   <div class="hdr">
-    <div style="display:flex;align-items:center;gap:9px">
-      <div class="logo">Brazos<em>Calendar</em></div>
-      <div class="badge">BRAZOS</div>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="logo">Brazos<em>Calendar</em></div>
+        <div class="badge">BRAZOS</div>
+      </div>
+      <div id="hdrUser" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0">
+        <span id="hdrUserName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw"></span>
+        <button onclick="cerrarSesion()" title="Cerrar sesión" style="background:none;border:1px solid #e74c3c;color:#e74c3c;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔌 Salir</button>
+      </div>
     </div>
     <div style="display:flex;gap:6px">
       <button class="hdr-btn" onclick="refreshData()" id="btnRefresh" title="Actualizar">🔄</button>
@@ -261,9 +253,9 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <button class="hdr-btn" id="btnSuplente" onclick="openSuplenteModal()" title="Modo Suplente" style="display:none;">🔑</button>
       <button class="hdr-btn" id="btnSupervisor" onclick="openSupervisorModal()" title="Modo Supervisor" style="display:none;">🔐</button>
       <button class="hdr-btn" onclick="openSett()">⚙</button>
-      <button id="btnDriveHeader" onclick="connectDriveFromHeader()" 
+      <button id="btnDriveHeader" onclick="refreshData()" 
         style="border:none;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;background:#ef4444;color:white;">
-        ☁️ Drive
+        ☁️ —
       </button>
     </div>
   </div>
@@ -323,7 +315,7 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       </div>
       <div id="miSemanaList"></div>
     </div>
-    <button class="btn-outline" onclick="changeEmpFromInfo()">🔄 Cambiar empleado</button>
+    <button class="btn-outline" onclick="cerrarSesion()">🔌 Cerrar sesión</button>
   </div>
 </div>
 
@@ -338,9 +330,8 @@ select:focus,input:focus{outline:none;border-color:var(--brand)}
       <div class="sett-emp-grp" id="settEmpGrp">—</div>
     </div>
     <button class="btn-outline" onclick="closeSett();updateInfoScreen();showTab('info')" style="border-color:var(--brand);color:var(--brand);">📅 Mi semana y compañeras</button>
-    <button class="btn-outline" onclick="changeEmpFromSett()">👤 Cambiar empleado</button>
-    <button class="btn-outline" onclick="refreshData();closeSett()">🔄 Actualizar datos</button>
-    <button class="btn-outline" onclick="disconnectDrive()" style="border-color:#e74c3c;color:#e74c3c;">🔌 Cambiar cuenta de Drive</button>
+        <button class="btn-outline" onclick="refreshData();closeSett()">🔄 Actualizar datos</button>
+    <button class="btn-outline" onclick="cerrarSesion()" style="border-color:#e74c3c;color:#e74c3c;">🔌 Cerrar sesión</button>
   </div>
 </div>
 
@@ -394,7 +385,21 @@ const CLIENT_ID='1032764332702-uvnqg0ccaer5gp2hr12gmniqe38ria1t.apps.googleuserc
 const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
 const FOLDER='BrazosCleaningApp', FILE='brazosCS_sync.json', RFILE='quiktrack_bra_reports.json';
 const RPTS_KEY='qt_bra_reports';
-const SESS='ac_bra_sess', TKEY='brazos_drive_token', TEXP='brazos_drive_token_expiry';
+const SESS='ac_bra_sess', TKEY='brazos_cal_jwt', TEXP='brazos_cal_jwt_exp';
+// 2026-10-21 v3.0.0: el teléfono YA NO se conecta a Google Drive. Habla solo con el
+// Worker de Cloudflare, que es el único con acceso a Drive. S.driveToken guarda ahora
+// la sesión del Worker (para no reescribir toda la app) y S.folderId='worker'.
+const API=(new URLSearchParams(location.search).get('api'))||'https://brazos-calendar-worker.ranulfocast.workers.dev';
+async function api(path, opts){
+  opts=opts||{};
+  const h={}; if(S.driveToken) h.Authorization='Bearer '+S.driveToken;
+  if(opts.json!==undefined) h['Content-Type']='application/json';
+  const r=await fetch(API+path,{method:opts.method||'GET',headers:h,body:opts.json!==undefined?JSON.stringify(opts.json):undefined});
+  let d={}; try{ d=await r.json(); }catch(e){}
+  if(r.status===401 && path!=='/api/login'){ sesionExpirada(); }
+  if(!r.ok){ const e=new Error(d.error||('Error '+r.status)); e.status=r.status; throw e; }
+  return d;
+}
 const DAYS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MON=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -410,180 +415,120 @@ const S={
 let allEmpsList = [];
 
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState === 'visible'){
-    updateDriveHeaderBtn();
-    // Verificar si token está expirado o por expirar
-    const exp=parseInt(localStorage.getItem(TEXP)||'0');
-    if(S.driveToken && exp && Date.now() > exp - (5*60*1000)){
-      // Token expirado o expira en menos de 5 min — renovar silenciosamente
-      try{
-        const tcS=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,prompt:'',callback:function(r){
-          if(r.error) return;
-          S.driveToken=r.access_token;
-          localStorage.setItem(TKEY,r.access_token);
-          localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
-        }});
-        tcS.requestAccessToken({prompt:''});
-      }catch(e){}
-    }
+  if(document.visibilityState === 'visible' && S.driveToken){
     setTimeout(()=>{ try{ refreshData() }catch(e){} }, 800);
-    // FIX 2026-09-03: al volver la app a primer plano, además de descargar,
-    // reintentar subir cualquier horario que se haya quedado "pendiente"
-    // (p.ej. el líder guardó Salida/Regreso al Shop sin señal y luego solo
-    // apagó la pantalla, sin cerrar y reabrir la app). Antes esto solo se
-    // reintentaba al reconectar Drive manualmente o al recargar la app desde
-    // cero, así que un dato pendiente podía quedarse atorado por días.
-    setTimeout(()=>{ try{ if(S.driveToken && S.folderId) subirPendientes(); }catch(e){} }, 1500);
+    setTimeout(()=>{ try{ subirPendientes(); }catch(e){} }, 1500);
   }
 });
 
 // Auto-sync cada 3 minutos
 setInterval(()=>{ try{ if(S.driveToken && S.folderId){ refreshData(); subirPendientes(); } }catch(e){} }, 3 * 60 * 1000);
+window.addEventListener('online', ()=>{ try{ if(S.driveToken) subirPendientes(); }catch(e){} });
 
 window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(checkForUpdate, 3000);
   setTimeout(function(){try{actualizarAvisoPendientes();}catch(e){}}, 1500);
-  const tok=localStorage.getItem(TKEY), exp=parseInt(localStorage.getItem(TEXP)||'0');
-  if(tok && Date.now()<exp){
-    S.driveToken=tok; markConnected();
-    loadSyncFile().then(()=>{
-      tryRestoreSession();
-    });
-  } else {
-    // Token expirado — restaurar sesión local primero, luego reconectar Drive
+  // Limpiar la sesión vieja de Google Drive (ya no se usa)
+  try{ localStorage.removeItem('brazos_drive_token'); localStorage.removeItem('brazos_drive_token_expiry'); }catch(e){}
+  const tok=localStorage.getItem(TKEY);
+  if(tok){
+    S.driveToken=tok; S.folderId='worker';
     tryRestoreSession();
-    // Si hubo sesión guardada, intentar reconectar Drive automáticamente
-    if(tok && typeof google !== 'undefined'){
-      setTimeout(()=>{
-        try{
-          const tc2=google.accounts.oauth2.initTokenClient({
-            client_id:CLIENT_ID, scope:SCOPES,
-            callback:async(r)=>{
-              if(r.error) return;
-              S.driveToken=r.access_token;
-              localStorage.setItem(TKEY,r.access_token);
-              localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
-              markConnected();
-              await loadSyncFile();
-            }
-          });
-          tc2.requestAccessToken({prompt:''});
-        }catch(e){}
-      }, 1000);
-    }
+    loadSyncFile();
+  } else {
+    cargarListaLogin();
   }
 });
+
+/* ── ENTRADA (nombre + PIN de Nómina) ── */
+async function cargarListaLogin(){
+  const sel=document.getElementById('loginEmp'), msg=document.getElementById('loginMsg');
+  try{
+    const d=await api('/api/empleados');
+    sel.innerHTML='<option value="">— Elige tu nombre —</option>'+d.empleados.map(e=>'<option value="'+_hx(e.id)+'">'+_hx(e.name)+'</option>').join('');
+    const ult=localStorage.getItem('brazos_cal_ultimo'); if(ult) sel.value=ult;
+  }catch(e){
+    sel.innerHTML='<option value="">Sin conexión</option>';
+    msg.innerHTML='<span style="color:#ef4444">⚠ No hay conexión. Revisa el internet y vuelve a abrir la app.</span>';
+    setTimeout(cargarListaLogin, 15000);
+  }
+}
+async function entrarCalendar(){
+  const id=document.getElementById('loginEmp').value, pin=document.getElementById('loginPin').value.trim();
+  const msg=document.getElementById('loginMsg'), btn=document.getElementById('btnLogin');
+  if(!id||!pin){ msg.innerHTML='<span style="color:#ef4444">Elige tu nombre y escribe tu PIN</span>'; return; }
+  btn.disabled=true; msg.textContent='Entrando…';
+  try{
+    const d=await api('/api/login',{method:'POST',json:{id:id,pin:pin}});
+    localStorage.setItem(TKEY,d.token); localStorage.setItem('brazos_cal_ultimo',id);
+    S.driveToken=d.token; S.folderId='worker';
+    S.empId=String(d.empId); S.empName=d.empName; S.group='';
+    document.getElementById('loginPin').value=''; msg.textContent='';
+    await loadSyncFile();
+    startCalendar();
+    subirPendientes();
+  }catch(e){
+    msg.innerHTML='<span style="color:#ef4444">'+_hx(e.status?e.message:'Sin conexión. Intenta de nuevo.')+'</span>';
+  }finally{ btn.disabled=false; }
+}
+function sesionExpirada(){
+  localStorage.removeItem(TKEY); S.driveToken=null; S.folderId=null;
+  sdot('err','Sesión vencida — vuelve a entrar');
+  toast('🔐 Vuelve a entrar con tu PIN. Tus horas guardadas no se pierden.');
+  goSetup();
+}
+function cerrarSesion(){
+  var p=_getPendientes();
+  if(p.length && !confirm('Tienes '+p.length+' día(s) de horas sin subir. Se quedan guardados en este teléfono y se suben al volver a entrar. ¿Cerrar sesión?')) return;
+  localStorage.removeItem(TKEY); S.driveToken=null; S.folderId=null;
+  S.empId=null; S.empName=''; S.group='';
+  try{ localStorage.removeItem(SESS); }catch(e){}
+  closeSett(); goSetup();
+}
+// Grupo de este empleado según la Rotación de hoy (o los grupos fijos)
+function _grupoDeEmp(){
+  try{ const g=gruposDelDia(today()); if(g&&g.length) return g[0]; }catch(e){}
+  return Object.keys(S.grupos||{}).find(g=>(S.grupos[g]||[]).map(String).includes(String(S.empId)))||'';
+}
 
 function tryRestoreSession(){
   try{
     const sess=JSON.parse(localStorage.getItem(SESS)||'null');
-    if(sess && sess.empId && sess.group){
+    if(sess && sess.empId){
       Object.assign(S, sess);
       if(S.emps && S.emps.length) buildEmpsList();
       showEmpSelected(S.empName, S.group);
       launch(false);
-      const tok=localStorage.getItem(TKEY);
-      const exp=parseInt(localStorage.getItem(TEXP)||'0');
-      if(tok && Date.now() < exp){ setTimeout(()=>refreshData(), 1500); } 
       setTimeout(updateDriveHeaderBtn, 500);
-      try{checkBtnSuplente();}catch(e){} try{checkBtnSupervisor();}catch(e2){}
       return;
     }
   }catch(e){}
 }
 
-/* ── DRIVE AUTH ── */
-let tc=null;
-function connectDrive(){
-  if(S.driveToken){loadSyncFile();return;}
-  if(typeof google==='undefined'){setDS('err','⚠ Google API no cargó');return;}
-  tc=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:async(r)=>{
-    if(r.error){setDS('err','⚠ '+r.error);return;}
-    S.driveToken=r.access_token;
-    localStorage.setItem(TKEY,r.access_token);
-    localStorage.setItem(TEXP,(Date.now()+(r.expires_in||3600)*1000).toString());
-    markConnected(); 
-    await loadSyncFile();
-    // Subir horarios pendientes en localStorage que no se pudieron subir antes
-    if(S.group){ setTimeout(function(){ try{ saveHorariosToDrive(); }catch(e){} }, 1000); }
-    // Iniciar refresh silencioso cada 50 minutos
-    startSilentRefresh();
-  }});
-  tc.requestAccessToken({prompt:'select_account', login_hint:'wacolandscapes@gmail.com'});
-}
-
-let _silentRefreshInterval = null;
-function startSilentRefresh(){
-  if(_silentRefreshInterval) clearInterval(_silentRefreshInterval);
-  _silentRefreshInterval = setInterval(function(){
-    if(typeof google==='undefined' || !tc) return;
-    try{
-      // Solicitar nuevo token silenciosamente sin prompt
-      const tcSilent = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        prompt: '',
-        callback: function(r){
-          if(r.error){ 
-            console.warn('Silent refresh failed:', r.error);
-            sdot('err','Reconecta Drive');
-            return; 
-          }
-          S.driveToken = r.access_token;
-          localStorage.setItem(TKEY, r.access_token);
-          localStorage.setItem(TEXP, (Date.now()+(r.expires_in||3600)*1000).toString());
-          console.log('Token renovado silenciosamente');
-        }
-      });
-      tcSilent.requestAccessToken({prompt:''});
-    }catch(e){ console.warn('Silent refresh error:', e); }
-  }, 50 * 60 * 1000); // cada 50 minutos
-}
-function markConnected(){
-  const b=document.getElementById('btnDrive');
-  b.classList.add('connected');
-  b.innerHTML='✅ Drive conectado';
-  updateDriveHeaderBtn();
-  setTimeout(function(){ try{ subirPendientes(); }catch(e){} }, 1200);
-}
+/* ── (v3.0.0) Ya no hay conexión a Google Drive desde el teléfono ── */
+function connectDrive(){ refreshData(); }
+function markConnected(){ updateDriveHeaderBtn(); setTimeout(function(){ try{ subirPendientes(); }catch(e){} }, 1200); }
 
 async function loadSyncFile(){
   setDS('spin','Buscando datos…');
   try{
-    const fr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${FOLDER}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
-    if(!fr.files||!fr.files.length){setDS('err',`⚠ Carpeta "${FOLDER}" no encontrada`);return;}
-    S.folderId=fr.files[0].id;
-    const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${FILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
-    if(!sr.files||!sr.files.length){setDS('err',`⚠ ${FILE} no encontrado`);return;}
-    const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-    if(!data||(data.exportType!=='anaCS_sync'&&data.exportType!=='brazosCS_sync')){setDS('err','⚠ Archivo inválido');return;}
+    const data=await api('/api/sync');
     S.grupos=data.grupos||{}; S.servs=data.servs||[]; S.clis=data.clis||[]; S.emps=data.emps||[];
     S.gruposHistorial=data.gruposHistorial||{};
     S.cellNotes=data.cellNotes||{};
-    if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
-    if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
-    const mod=new Date(sr.files[0].modifiedTime).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const mod=new Date(data.modifiedTime||Date.now()).toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     setDS('ok',`✅ ${S.servs.length} servicios · ${mod}`);
-    // Si ya hay grupo seleccionado (sesión restaurada), descargar horarios
     try{ await loadHorariosFromDrive(); }catch(e){}
     buildEmpsList();
-    // Solo mostrar pantalla de selección si NO hay empleado ya seleccionado
-    if(!S.empId){
-      showEmpSection();
-    } else {
-      showEmpSelected(S.empName, S.group);
-    }
+    if(S.empId){ const g=_grupoDeEmp(); if(g) S.group=g; }
+    if(S.empId && document.getElementById('scrAgenda').classList.contains('active')){ saveSess(); buildStrip(); }
     renderView();
+    updateDriveHeaderBtn();
     try{checkNotesBadge();}catch(e2){}
-  }catch(e){setDS('err','⚠ '+e.message);if(e.status===401){S.driveToken=null;localStorage.removeItem(TKEY);}}
-  try{checkNotesBadge();}catch(e3){}
+  }catch(e){ setDS('err','⚠ '+e.message); updateDriveHeaderBtn(); }
 }
 
-async function dGet(url){
-  const r=await fetch(url,{headers:{Authorization:`Bearer ${S.driveToken}`}});
-  if(!r.ok){const e=new Error(await r.text());e.status=r.status;throw e;}
-  return r.json();
-}
+async function dGet(url){ throw new Error('Drive directo ya no se usa'); }
 
 // ── Cola de días PENDIENTES de subir (si el token vence, NO se pierden las horas) ──
 var PEND_KEY='brazos_cal_pendientes';
@@ -601,53 +546,25 @@ function quitarPendiente(date){
 function actualizarAvisoPendientes(){
   var p=_getPendientes(), el=document.getElementById('avisoPendientes');
   if(!el) return;
-  if(p.length){ el.style.display='block'; el.textContent='⚠ '+p.length+' día(s) de horarios SIN subir al Drive — reconecta el Drive para subirlos'; }
+  if(p.length){ el.style.display='block'; el.textContent='⚠ '+p.length+' día(s) de horarios guardados en el teléfono, esperando internet para subirse'; }
   else { el.style.display='none'; }
 }
 
-// Sube los horarios de UN día específico. Devuelve true si subió OK, false si falló.
+// Sube los horarios de UN día específico (solo el registro de ESTE empleado).
+// Devuelve true si subió OK, false si falló (queda en la cola de pendientes).
 async function subirHorariosDia(date){
-  if(!S.driveToken||!S.folderId||!date) return false;
-  var exp=parseInt(localStorage.getItem(TEXP)||'0');
-  if(exp && Date.now() > exp) return false;   // token vencido → no sube (se marca pendiente)
+  if(!S.driveToken||!date||!S.empId) return false;
   try{
-    var fname=horariosFile(date), key=horariosKey(date);
+    var key=horariosKey(date);
     var data=JSON.parse(localStorage.getItem(key)||'{}');
-    if(!Object.keys(data).length) return true;   // nada que subir = ok
-    var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
-    var merged=Object.assign({},data);
-    if(sr.files&&sr.files.length){
-      try{
-        var driveData=await dGet('https://www.googleapis.com/drive/v3/files/'+sr.files[0].id+'?alt=media');
-        Object.keys(driveData||{}).forEach(function(eid){
-          if(!merged[eid]){ merged[eid]=driveData[eid]; return; }
-          // Fusionar CAMPO por campo (no sobrescribir el objeto entero): así NO se pierde
-          // una punta (shopOut/shopBack) si un lado la tiene y el otro no.
-          var d=driveData[eid], m=merged[eid];
-          ['shopOut','shopBack'].forEach(function(f){ if(!m[f]&&d[f]) m[f]=d[f]; });
-          if((!m.services||!m.services.length)&&d.services&&d.services.length) m.services=d.services;
-          if(!m.empName&&d.empName) m.empName=d.empName;
-          if(!m.group&&d.group) m.group=d.group;
-        });
-      }catch(e2){}
-    }
-    var form=new FormData(), blob=new Blob([JSON.stringify(merged)],{type:'application/json'});
-    var url2,method;
-    if(sr.files&&sr.files.length){
-      form.append('metadata',new Blob([JSON.stringify({name:fname})],{type:'application/json'}));
-      form.append('file',blob);
-      url2='https://www.googleapis.com/upload/drive/v3/files/'+sr.files[0].id+'?uploadType=multipart';
-      method='PATCH';
-    } else {
-      form.append('metadata',new Blob([JSON.stringify({name:fname,parents:[S.folderId]})],{type:'application/json'}));
-      form.append('file',blob);
-      url2='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      method='POST';
-    }
-    var res=await fetch(url2,{method:method,headers:{Authorization:'Bearer '+S.driveToken},body:form});
-    if(!res.ok){
-      if(res.status===401){ S.driveToken=null; localStorage.removeItem(TKEY); sdot('err','Reconecta Drive'); }
-      return false;
+    var mio=data[S.empId];
+    if(!mio) return true;   // nada mío que subir = ok
+    var r=await api('/api/horarios',{method:'POST',json:{date:date,entry:mio}});
+    if(r && r.dia){
+      // Guardar lo que quedó en Drive (incluye lo de las compañeras)
+      localStorage.setItem(key,JSON.stringify(r.dia));
+      if(!S.reports) S.reports={};
+      S.reports[date]=Object.assign({},r.dia);
     }
     return true;
   }catch(e){ return false; }
@@ -657,13 +574,13 @@ async function subirHorariosDia(date){
 async function saveHorariosToDrive(){
   if(!S.selectedDate) return;
   var date=S.selectedDate;
-  if(!S.driveToken){ marcarPendiente(date); sdot('err','Sin Drive — pendiente'); return; }
+  if(!S.driveToken){ marcarPendiente(date); sdot('err','Sin sesión — pendiente'); return; }
   var ok=await subirHorariosDia(date);
   if(ok){ quitarPendiente(date); sdot('ok','Sync '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})); }
   else {
     marcarPendiente(date);
     sdot('err','⚠ No subió — pendiente');
-    toast('⚠️ No se pudo subir al Drive (token vencido). Se GUARDÓ y se reintentará al reconectar.');
+    toast('⚠️ Sin señal: tu registro se GUARDÓ en el teléfono y se sube solo cuando haya internet.');
   }
 }
 
@@ -766,80 +683,56 @@ async function saveSyncToDrive(){
   }
 }
 async function loadHorariosFromDrive(){
-  if(!S.driveToken || !S.folderId) return;
+  if(!S.driveToken) return;
   try{
-    // Cargar archivos de las últimas 2 semanas + próximas 2 semanas
-    const dates=[];
+    const base=new Date(today()+'T12:00:00');
+    const d1=new Date(base); d1.setDate(d1.getDate()-14);
+    const d2=new Date(base); d2.setDate(d2.getDate()+14);
+    const f=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const r=await api('/api/horarios?desde='+f(d1)+'&hasta='+f(d2));
+    const drv=r.horarios||{};
+    S.reports={};
+    for(let i=-14;i<=14;i++){
+      const d=new Date(base); d.setDate(d.getDate()+i);
+      const date=f(d), key=horariosKey(date);
+      const local=JSON.parse(localStorage.getItem(key)||'{}');
+      // Merge: para cada empId, el más reciente gana (igual que antes)
+      const merged=Object.assign({},drv[date]||{});
+      Object.keys(local).forEach(function(eid){
+        var lt=new Date((local[eid]||{}).savedAt||0).getTime();
+        var dt=new Date((merged[eid]||{}).savedAt||0).getTime();
+        if(lt>=dt) merged[eid]=local[eid];
+      });
+      if(Object.keys(merged).length){
+        localStorage.setItem(key,JSON.stringify(merged));
+        S.reports[date]=Object.assign({},merged);
+      }
+    }
+  }catch(e){
+    console.warn('loadHorarios:',e.message);
+    // Sin internet: usar lo guardado en el teléfono
+    S.reports=S.reports||{};
     const base=new Date(today()+'T12:00:00');
     for(let i=-14;i<=14;i++){
       const d=new Date(base); d.setDate(d.getDate()+i);
-      dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+      const date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      try{ const local=JSON.parse(localStorage.getItem(horariosKey(date))||'{}'); if(Object.keys(local).length) S.reports[date]=local; }catch(e2){}
     }
-    S.reports={};
-    await Promise.all(dates.map(async function(date){
-      var fname=horariosFile(date), key=horariosKey(date);
-      var local=JSON.parse(localStorage.getItem(key)||'{}');
-      try{
-        var sr=await dGet("https://www.googleapis.com/drive/v3/files?q=name='"+fname+"'+and+'"+S.folderId+"'+in+parents+and+trashed=false&fields=files(id)");
-        if(!sr.files||!sr.files.length){
-          // No en Drive — guardar local si hay datos
-          if(Object.keys(local).length){
-            if(!S.reports[date]) S.reports[date]={};
-            Object.keys(local).forEach(function(eid){ S.reports[date][eid]=local[eid]; });
-          }
-          return;
-        }
-        var drive=await dGet('https://www.googleapis.com/drive/v3/files/'+sr.files[0].id+'?alt=media');
-        // Merge: para cada empId, el más reciente gana
-        var merged=Object.assign({},drive||{});
-        Object.keys(local).forEach(function(eid){
-          var lt=new Date((local[eid]||{}).savedAt||0).getTime();
-          var dt=new Date((merged[eid]||{}).savedAt||0).getTime();
-          if(lt>=dt) merged[eid]=local[eid];
-        });
-        localStorage.setItem(key,JSON.stringify(merged));
-        if(!S.reports[date]) S.reports[date]={};
-        Object.keys(merged).forEach(function(eid){ S.reports[date][eid]=merged[eid]; });
-      }catch(e2){
-        // Error descargando — usar local
-        if(Object.keys(local).length){
-          if(!S.reports[date]) S.reports[date]={};
-          Object.keys(local).forEach(function(eid){ S.reports[date][eid]=local[eid]; });
-        }
-      }
-    }));
-    toast('✅ Horarios sincronizados');
-  }catch(e){ console.warn('loadHorariosFromDrive:',e.message); }
+  }
 }
 
 
 function updateDriveHeaderBtn(){
+  try{ var hu=document.getElementById('hdrUser'), hn=document.getElementById('hdrUserName');
+    if(hu&&hn){ if(S.driveToken&&S.empName){ hn.textContent='👤 '+S.empName; hu.style.display='flex'; } else { hu.style.display='none'; } } }catch(e){}
   const btn = document.getElementById('btnDriveHeader');
   if(!btn) return;
-  const exp = parseInt(localStorage.getItem(TEXP)||'0');
-  if(S.driveToken && exp && Date.now() < exp){
-    btn.style.background = '#22c55e'; // Verde — conectado
-    btn.textContent = '☁️ Drive ✓';
-    btn.title = 'Drive conectado — toca para reconectar';
-  } else if(S.driveToken && (!exp || Date.now() >= exp)){
-    btn.style.background = '#ef4444'; // Rojo — token expirado
-    btn.textContent = '☁️ Drive ⚠';
-    btn.title = 'Token expirado — toca para reconectar';
-  } else {
-    btn.style.background = '#ef4444'; // Rojo — desconectado
-    btn.textContent = '☁️ Drive';
-    btn.title = 'Toca para conectar Drive';
-  }
+  const pend=_getPendientes().length;
+  if(!S.driveToken){ btn.style.background='#ef4444'; btn.textContent='🔐 Entrar'; btn.title='Sesión cerrada'; }
+  else if(pend){ btn.style.background='#f59e0b'; btn.textContent='⏳ '+pend; btn.title=pend+' día(s) esperando internet — toca para reintentar'; }
+  else { btn.style.background='#22c55e'; btn.textContent='☁️ ✓'; btn.title='Conectado — toca para actualizar'; }
 }
-
-function connectDriveFromHeader(){
-  // Si token válido — reconectar de todas formas para refrescar
-  S.driveToken = null;
-  localStorage.removeItem(TKEY);
-  const btn = document.getElementById('btnDriveHeader');
-  if(btn){ btn.style.background = '#f59e0b'; btn.textContent = '☁️ Conectando...'; }
-  connectDrive();
-}
+function connectDriveFromHeader(){ if(!S.driveToken){ goSetup(); return; } refreshData(); }
 
 
 function setDS(t,m){
@@ -949,8 +842,9 @@ function launch(save){
   document.getElementById('scrSetup').classList.remove('active');
   document.getElementById('scrAgenda').classList.add('active');
   document.getElementById('bnav').style.display='block';
-  sdot('ok', S.driveToken?`Drive · ${FILE}`:'Datos locales');
-  document.getElementById('syncLbl').textContent=S.driveToken?`Drive · ${FILE}`:'Datos locales';
+  sdot('ok', S.driveToken?'Conectado':'Datos locales');
+  document.getElementById('syncLbl').textContent=S.driveToken?'Conectado':'Datos locales';
+  updateDriveHeaderBtn();
   buildStrip(); renderView();
   updateInfoScreen();
   try{checkNotesBadge();}catch(e){}
@@ -1345,7 +1239,16 @@ function renderWeek(){
 function gruposDelDia(f){
   if(!S.empId) return S.group?[S.group]:[];
   const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,f).includes(String(S.empId)));
-  return gs.length?gs:(S.group?[S.group]:[]);
+  if(gs.length) return gs;
+  // 2026-10-22: si la empleada SÍ está en la Rotación/grupos pero ese día no aparece
+  // en ningún grupo → descansa: sin grupo (antes caía al grupo de hoy y veía servicios ajenos).
+  if(_empEnRotacion()) return [];
+  return S.group?[S.group]:[];
+}
+function _empEnRotacion(){
+  const id=String(S.empId), h=S.gruposHistorial||{};
+  if(Object.keys(S.grupos||{}).some(g=>(S.grupos[g]||[]).map(String).includes(id))) return true;
+  return Object.keys(h).some(f=>Object.keys(h[f]||{}).some(g=>(h[f][g]||[]).map(String).includes(id)));
 }
 // 2.2.9: si la empleada está en 2+ grupos el mismo día (turno doble), la agenda
 // muestra UN grupo a la vez, con botones para cambiar entre ellos — así no se
@@ -1489,7 +1392,8 @@ function getSvcs(date, soloVisible){
   const grps=soloVisible?gruposVisibles(date):gruposDelDia(date);
   const members=[];
   grps.forEach(g=>_rosterGrupoFecha(g,date).forEach(id=>{ if(!members.includes(id)) members.push(id); }));
-  if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
+  if(!grps.length){ if(S.empId) members.push(String(S.empId)); } // descanso: solo servicios asignados directo a ella
+  else if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
   return S.servs
     .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
     .sort((a,b)=>{
@@ -1576,21 +1480,15 @@ function showTab(t){
   document.getElementById('niInfo').classList.toggle('active',t==='info');
 }
 
-function changeEmpFromInfo(){S.empId=null;S.empName='';S.group='';showTab('agenda');goSetup();}
-function changeEmpFromSett(){S.empId=null;S.empName='';S.group='';closeSett();goSetup();}
+function changeEmpFromInfo(){ cerrarSesion(); }
+function changeEmpFromSett(){ cerrarSesion(); }
 
 function goSetup(){
   ['scrAgenda','scrInfo'].forEach(id=>document.getElementById(id).classList.remove('active'));
   document.getElementById('scrSetup').classList.add('active');
   document.getElementById('bnav').style.display='none';
-  // Asegurar que se muestre la lista de empleados (no la pantalla de "ya seleccionado")
-  // sin depender de que allEmpsList ya tenga datos cargados.
-  document.getElementById('empSelected').style.display='none';
-  const search=document.getElementById('empSearch');
-  if(search) search.value='';
-  if(!allEmpsList.length && S.emps && S.emps.length) buildEmpsList();
-  else renderEmpList('');
-  document.getElementById('empSection').style.display='block';
+  ['empSelected','empSection'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  cargarListaLogin();
 }
 
 /* ── SETTINGS ── */
@@ -1601,14 +1499,7 @@ function openSett(){
 }
 function closeSett(){document.getElementById('sp').classList.remove('open');}
 
-function disconnectDrive(){
-  localStorage.removeItem('brazos_drive_token');
-  localStorage.removeItem('brazos_drive_token_expiry');
-  S.driveToken=null; S.folderId=null; S.reportsFileId=null;
-  closeSett();
-  toast('🔌 Drive desconectado — reconecta para cambiar cuenta');
-  setTimeout(()=>goSetup(), 1200);
-}
+function disconnectDrive(){ cerrarSesion(); }
 
 /* ── REFRESH ── */
 async function refreshData(){
@@ -1618,37 +1509,24 @@ async function refreshData(){
     if(S.driveToken && S.folderId){
       sdot('spin','Actualizando…');
       document.getElementById('syncLbl').textContent='Actualizando…';
-      // Reload sync file
-      const sr=await dGet(`https://www.googleapis.com/drive/v3/files?q=name='${FILE}'+and+'${S.folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
-      if(sr.files&&sr.files.length){
-        const data=await dGet(`https://www.googleapis.com/drive/v3/files/${sr.files[0].id}?alt=media`);
-        if(data&&(data.exportType==='anaCS_sync'||data.exportType==='brazosCS_sync')){
+      // Reload sync file (desde el Worker)
+      const data=await api('/api/sync');
+      if(data){
           S.servs=data.servs||[]; S.clis=data.clis||[]; S.grupos=data.grupos||{}; S.emps=data.emps||[];
           S.gruposHistorial=data.gruposHistorial||{};
           S.cellNotes=data.cellNotes||{};
-          if(data.supervisorPin) S.supervisorPin=data.supervisorPin;
-          if(data.clavesSuplente) S.clavesSuplente=data.clavesSuplente;
-          // FIX 2026-09-21: selectEmp() fija S.group UNA SOLA VEZ, en el setup inicial
-          // (cuando el empleado elige su nombre) — a partir de ahí, aunque refreshData()
-          // sí baja la composición de grupos actualizada, nunca volvía a revisar en cuál
-          // grupo está AHORA este empleado. Si el Scheduler lo mueve de grupo después
-          // (ej. Grupo B → Grupo A), el teléfono se quedaba viendo los servicios de su
-          // grupo VIEJO para siempre, hasta que alguien tocara "Cambiar empleado" y se
-          // volviera a elegir — parecía que los servicios movidos "no llegaban". Ahora,
-          // cada vez que se refrescan datos, si S.empId ya no pertenece al grupo guardado
-          // pero SÍ aparece en otro, S.group se actualiza solo.
+          // FIX 2026-09-21: si el Scheduler movió a este empleado de grupo, S.group se actualiza solo.
           if(S.empId){
-            const _nuevoGrupo=Object.keys(S.grupos).find(g=>(S.grupos[g]||[]).map(String).includes(String(S.empId)));
+            const _nuevoGrupo=_grupoDeEmp();
             if(_nuevoGrupo && _nuevoGrupo!==S.group){ S.group=_nuevoGrupo; }
           }
-        }
       }
       // Recargar horarios del grupo
       try{ await loadHorariosFromDrive(); }catch(e){}
       const mod=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
       sdot('ok','Actualizado '+mod);
       document.getElementById('syncLbl').textContent='Actualizado '+mod;
-      saveSess(); buildStrip(); renderView(); updateInfoScreen(); try{checkNotesBadge();}catch(e2){} try{checkBtnSuplente();}catch(e3){} try{checkBtnSupervisor();}catch(e4){}
+      saveSess(); buildStrip(); renderView(); updateInfoScreen(); updateDriveHeaderBtn(); try{checkNotesBadge();}catch(e2){}
       toast('✅ Datos actualizados');
     } else {
       // localStorage fallback — leer archivos por fecha
@@ -1672,8 +1550,9 @@ async function refreshData(){
       toast('✅ Actualizado desde local');
     }
   }catch(e){
-    sdot('err','Error al actualizar');
-    toast('⚠ Error: '+e.message);
+    if(e.status===401) return;
+    sdot('err', e.status ? 'Error al actualizar' : 'Sin internet — usando datos guardados');
+    if(e.status) toast('⚠ Error: '+e.message);
   } finally {
     if(btn){btn.innerHTML='🔄';btn.style.pointerEvents='auto';}
   }
@@ -1806,6 +1685,7 @@ function supvMoveDate(svcId){
 
 /* ── MODO SUPLENTE ── */
 function checkSuplenteActivo(){
+  return false;   // 2026-10-21: Modo Suplente eliminado (decisión de Ranu)
   const data = JSON.parse(localStorage.getItem('brazos_suplente_activo')||'null');
   if(!data) return false;
   // Verificar que sea del día actual y no haya pasado medianoche
@@ -1819,6 +1699,7 @@ function checkSuplenteActivo(){
 function checkBtnSuplente(){
   const btn = document.getElementById('btnSuplente');
   if(!btn) return;
+  btn.style.display='none'; return;   // 2026-10-21: Modo Suplente eliminado
   const claves = S.clavesSuplente || [];
   const tieneClaves = claves.some(c => c.estado === 'activa');
   // Mostrar botón solo si hay claves activas disponibles o ya está activo el modo
