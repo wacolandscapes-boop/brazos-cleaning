@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.2';
+const APP_VERSION = '3.0.3';
 // Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
 const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
@@ -1239,7 +1239,16 @@ function renderWeek(){
 function gruposDelDia(f){
   if(!S.empId) return S.group?[S.group]:[];
   const gs=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,f).includes(String(S.empId)));
-  return gs.length?gs:(S.group?[S.group]:[]);
+  if(gs.length) return gs;
+  // 2026-10-22: si la empleada SÍ está en la Rotación/grupos pero ese día no aparece
+  // en ningún grupo → descansa: sin grupo (antes caía al grupo de hoy y veía servicios ajenos).
+  if(_empEnRotacion()) return [];
+  return S.group?[S.group]:[];
+}
+function _empEnRotacion(){
+  const id=String(S.empId), h=S.gruposHistorial||{};
+  if(Object.keys(S.grupos||{}).some(g=>(S.grupos[g]||[]).map(String).includes(id))) return true;
+  return Object.keys(h).some(f=>Object.keys(h[f]||{}).some(g=>(h[f][g]||[]).map(String).includes(id)));
 }
 // 2.2.9: si la empleada está en 2+ grupos el mismo día (turno doble), la agenda
 // muestra UN grupo a la vez, con botones para cambiar entre ellos — así no se
@@ -1383,7 +1392,8 @@ function getSvcs(date, soloVisible){
   const grps=soloVisible?gruposVisibles(date):gruposDelDia(date);
   const members=[];
   grps.forEach(g=>_rosterGrupoFecha(g,date).forEach(id=>{ if(!members.includes(id)) members.push(id); }));
-  if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
+  if(!grps.length){ if(S.empId) members.push(String(S.empId)); } // descanso: solo servicios asignados directo a ella
+  else if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
   return S.servs
     .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
     .sort((a,b)=>{
