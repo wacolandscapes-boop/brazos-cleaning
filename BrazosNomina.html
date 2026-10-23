@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto</div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-10-23.4</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -1286,6 +1286,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 <!-- PANEL NÓMINAS -->
                 <div id="histPanelNomina">
                     <p style="color:#666; margin-bottom:15px;">Nóminas guardadas manualmente. Cada registro recalcula en tiempo real desde las asistencias.</p>
+                    <div style="margin-bottom:12px;"><button class="btn btn-success" onclick="app.exportAllPayrollsCSV()">📥 Exportar todas las nóminas (CSV)</button></div>
                     <div id="histNominaList"></div>
                     <div id="histNominaDetail"></div>
                 </div>
@@ -5517,13 +5518,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             </table>
                         </div>
                         <div style="text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;">
-                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#555;" title="Se guarda: solo hay que elegirlo una vez">
-                                🖨️ Primer cheque que entra a la impresora:
-                                <select id="checkFeedOrder" onchange="app._guardarOrdenAlimentacion(this.value)" style="padding:4px 6px;border:1px solid #90caf9;border-radius:6px;font-size:0.85rem;">
-                                    <option value="bajo" ${this._ordenAlimentacion() === 'bajo' ? 'selected' : ''}>el # MÁS BAJO</option>
-                                    <option value="alto" ${this._ordenAlimentacion() === 'alto' ? 'selected' : ''}>el # MÁS ALTO</option>
-                                </select>
-                            </label>
+                            <span style="font-size:0.85rem;color:#555;">🖨️ Coloca la chequera <strong>tal como viene del paquete, boca abajo</strong> — se imprime primero el <strong># MÁS ALTO</strong>.</span>
                             <button type="button" onclick="app.renderFinalCheckOrderPreview()" style="background:#fff;color:#1565c0;border:1.5px solid #1565c0;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">🔍 Ver orden final</button>
                             <button type="button" onclick="app.imprimirPruebaCheques()" title="Imprime en HOJAS NORMALES el orden en que saldrán los cheques. No guarda nada." style="background:#fff;color:#e67e22;border:1.5px solid #e67e22;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">🧪 Imprimir prueba</button>
                             <button onclick="app.printChecksOnly()" style="background:#27ae60;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold;">🖨️ Imprimir Cheques</button>
@@ -5588,7 +5583,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // debía llevar el 3865 y salió en el 3870). Ahora el orden sale del # de
             // cheque, y el ajuste se guarda una sola vez.
             _ordenAlimentacion() {
-                try { return localStorage.getItem('nomina_ordenAlimentacionCheques') === 'alto' ? 'alto' : 'bajo'; } catch (e) { return 'bajo'; }
+                // 2026-10-23 (Ranu): FIJO. La chequera se coloca boca abajo tal como viene
+                // del paquete → el primer cheque que se imprime es el # MÁS ALTO.
+                return 'alto';
             },
             _guardarOrdenAlimentacion(v) {
                 try { localStorage.setItem('nomina_ordenAlimentacionCheques', v === 'alto' ? 'alto' : 'bajo'); } catch (e) {}
@@ -5602,6 +5599,24 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             _mismoPeriodo(a, b) {
                 const n = (x) => String(x || '').replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, '');
                 return n(a) !== '' && n(a) === n(b);
+            },
+
+            // 2026-10-23: comprobado con la impresora de Ranu — con la vista previa correcta
+            // (ej. #3888 Angelina primero) el papel salió INVERTIDO (Sarahi en la hoja #3888):
+            // la impresora saca primero la ÚLTIMA página del trabajo. Si esta casilla está
+            // activa (por defecto SÍ), las hojas se ENVÍAN en orden inverso para que el papel
+            // salga exactamente como dice la vista previa / "Ver orden final".
+            _impresoraInvierte() {
+                // 2026-10-23 (corrección de Ranu): la impresora NO invierte; el orden lo da
+                // la chequera boca abajo tal como viene del paquete (el # más ALTO queda
+                // arriba y entra primero). Se envía exactamente en el orden de la lista.
+                return false;
+            },
+            _guardarImpresoraInvierte(v) {
+                try { localStorage.setItem('nomina_impresoraInvierte', v ? '1' : '0'); } catch (e) {}
+            },
+            _ordenEnvio(lista) {
+                return this._impresoraInvierte() ? [...lista].reverse() : lista;
             },
 
             _ordenarParaImprimir(lista, getNum) {
@@ -5630,7 +5645,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 const orden = this._ordenarParaImprimir(filas, f => f.num);
                 const total = orden.length;
                 const primero = this._ordenAlimentacion() === 'alto' ? 'el # MÁS ALTO' : 'el # MÁS BAJO';
-                const paginas = orden.map((f, k) => `
+                const paginas = this._ordenEnvio(orden.map((f, k) => ({ ...f, k }))).map((f) => { const k = f.k; return `
                     <div class="pg">
                         <div class="banda">🧪 PRUEBA — NO ES UN CHEQUE</div>
                         <div class="hoja">Hoja ${k + 1} de ${total} (orden en que entra a la impresora)</div>
@@ -5638,7 +5653,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         <div class="nom">${f.name}</div>
                         <div class="monto">$${this.formatMoney(f.net)}</div>
                         <div class="nota">Esta hoja debe caer sobre el cheque físico <b>#${f.num}</b>.<br>Ajuste actual: primer cheque que entra = ${primero}.</div>
-                    </div>`).join('');
+                    </div>`; }).join('');
                 const w = window.open('', '', 'width=900,height=800');
                 if (!w) { alert('El navegador bloqueó la ventana de impresión.'); return; }
                 w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Prueba de impresión de cheques</title>
@@ -6284,7 +6299,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 const p = this._pendingPrintChecks;
                 if (p) {
                     // Abrir directamente ventana de impresión sin fondo distorsionado
-                    this.printMultipleChecks(p.checks, p.cfg, '');
+                    this.printMultipleChecks(this._ordenEnvio(p.checks), p.cfg, '');
                 }
             },
 
@@ -6446,6 +6461,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     </style>
                 </head><body>
                     <div id="printBar" style="text-align:center;padding:16px;background:#f8f8f8;border-bottom:2px solid #27ae60;position:sticky;top:0;z-index:999;">
+                        ${self._impresoraInvierte() && checks.length > 1 ? '<div style="font-size:0.85rem;color:#8a6d3b;margin-bottom:8px;">↕️ Aquí se ven en orden inverso a propósito: tu impresora saca primero la última hoja, así cada cheque cae en su número.</div>' : ''}
                         <button onclick="window.print()" style="background:#27ae60;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin-right:10px;">🖨️ Imprimir</button>
                         <button onclick="window.close()" style="background:#95a5a6;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;">✕ Cerrar</button>
                     </div>
@@ -7538,6 +7554,37 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 
                 document.getElementById('histNominaDetail').innerHTML = html;
                 document.getElementById('histNominaDetail').scrollIntoView({behavior:'smooth', block:'start'});
+            },
+
+            // 2026-10-22: todas las nóminas guardadas en UN solo CSV (un renglón por
+            // empleado por período), usando lo realmente guardado (period.payroll).
+            exportAllPayrollsCSV() {
+                const periods = [...(this.savedPayrollPeriods || [])].sort((a,b) => String(a.start||'').localeCompare(String(b.start||'')));
+                const n = v => (parseFloat(v) || 0);
+                const estado = s => s === 'printed' ? 'Cheques impresos' : s === 'digital' ? 'Pago digital' : 'Cheques pendientes';
+                const headers = ['Inicio','Fin','Periodo','Estado','Empleado','Horas','Pago Regular','Pago Extra','Bono','Pago Bruto','Tardanza (min)','Desc. Tardanza','Deduccion %','Desc. Deduccion','Reembolso','Pago Neto'];
+                const rows = [];
+                const tot = {h:0, bruto:0, tard:0, ded:0, reemb:0, neto:0};
+                periods.forEach(per => {
+                    ((per.payroll || []).slice()).sort((a,b)=>(a.employeeName||'').localeCompare(b.employeeName||'')).forEach(p => {
+                        rows.push([per.start||'', per.end||'', per.label||'', estado(per.checksStatus), p.employeeName||'',
+                            n(p.totalHours).toFixed(2), n(p.regularPay).toFixed(2), n(p.overtimePay).toFixed(2), n(p.bonus).toFixed(2),
+                            n(p.grossPay).toFixed(2), n(p.lateMinutes), n(p.latePenalty).toFixed(2), (p.empDeduction ?? ''),
+                            n(p.deductions).toFixed(2), n(p.reimbursement).toFixed(2), n(p.netPay).toFixed(2)]);
+                        tot.h += n(p.totalHours); tot.bruto += n(p.grossPay); tot.tard += n(p.latePenalty);
+                        tot.ded += n(p.deductions); tot.reemb += n(p.reimbursement); tot.neto += n(p.netPay);
+                    });
+                });
+                if (rows.length === 0) { alert('No hay nóminas guardadas con datos para exportar.'); return; }
+                rows.push(['','','','','TOTAL', tot.h.toFixed(2),'','','', tot.bruto.toFixed(2),'', tot.tard.toFixed(2),'', tot.ded.toFixed(2), tot.reemb.toFixed(2), tot.neto.toFixed(2)]);
+                const esc = v => '"' + String(v).replace(/"/g,'""') + '"';
+                const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n');
+                const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nominas_todas_${new Date().toLocaleDateString('en-CA')}.csv`;
+                a.click();
             },
 
             exportSavedPayrollCSV(id) {
