@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-10-23.4</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-10-26.1</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -1212,8 +1212,14 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 <div class="form-group">
                     <label>🏢 Vendor / Pagado a:</label>
                     <input type="text" id="expVendor" placeholder="Ej: Home Depot, Walmart..." list="vendorList" autocomplete="off"
+                        onchange="app._autollenarDireccionVendor()"
                         style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
                     <datalist id="vendorList"></datalist>
+                </div>
+                <div class="form-group">
+                    <label>📍 Dirección del vendor <span style="font-weight:400;color:#888;font-size:0.85em;">(opcional — se imprime en el cheque)</span></label>
+                    <input type="text" id="expAddress" placeholder="Ej: 123 Main St" autocomplete="off" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem; margin-bottom:6px;">
+                    <input type="text" id="expCity" placeholder="Ej: Waco, TX 76710" autocomplete="off" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
                 </div>
                 <div class="form-group">
                     <label>📋 Descripción / Memo:</label>
@@ -8743,6 +8749,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             openExpenseModal(id) {
                 document.getElementById('expId').value = '';
                 document.getElementById('expVendor').value = '';
+                if (document.getElementById('expAddress')) document.getElementById('expAddress').value = '';
+                if (document.getElementById('expCity')) document.getElementById('expCity').value = '';
                 document.getElementById('expDesc').value = '';
                 document.getElementById('expAmount').value = '';
                 document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
@@ -8775,6 +8783,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     if (exp) {
                         document.getElementById('expId').value = exp.id;
                         document.getElementById('expVendor').value = exp.vendor || '';
+                        if (document.getElementById('expAddress')) document.getElementById('expAddress').value = exp.address || '';
+                        if (document.getElementById('expCity')) document.getElementById('expCity').value = exp.city || '';
                         document.getElementById('expDesc').value = exp.desc;
                         document.getElementById('expAmount').value = exp.amount;
                         document.getElementById('expDate').value = exp.date;
@@ -8785,6 +8795,17 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     }
                 }
                 document.getElementById('expenseModal').classList.add('active');
+            },
+
+            // 2026-10-26: al escribir/elegir un vendor, si los campos de dirección están
+            // vacíos, se llenan con la última dirección usada para ese mismo vendor
+            // (se guarda dentro de cada gasto — viaja con Drive igual que los gastos).
+            _autollenarDireccionVendor() {
+                const v = (document.getElementById('expVendor').value || '').trim().toLowerCase();
+                const a = document.getElementById('expAddress'), c = document.getElementById('expCity');
+                if (!v || !a || !c || a.value.trim() || c.value.trim()) return;
+                const prev = [...(this.expenses || [])].reverse().find(e => (e.vendor || '').trim().toLowerCase() === v && (e.address || e.city));
+                if (prev) { a.value = prev.address || ''; c.value = prev.city || ''; }
             },
 
             closeExpenseModal() {
@@ -8875,6 +8896,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     `<div style="position:absolute;top:${px(cfg.date_top||0.8)}px;right:${px(cfg.date_right||0.5)}px;font-size:9pt;">${dateUSA}</div>` +
                     // Payee (vendor)
                     `<div style="position:absolute;top:${px(cfg.payee_top||1.2)}px;left:${px(cfg.payee_left||1.2)}px;font-size:10pt;font-weight:bold;">${exp.vendor||exp.desc}</div>` +
+                    (exp.address ? `<div style="position:absolute;top:${px(cfg.address_top||1.4)}px;left:${px(cfg.address_left||1.2)}px;font-size:10pt;">${exp.address}</div>` : '') +
+                    (exp.city ? `<div style="position:absolute;top:${px(cfg.city_top || ((cfg.address_top||1.4) + 0.15))}px;left:${px(cfg.city_left || cfg.address_left || 1.2)}px;font-size:10pt;">${exp.city}</div>` : '') +
                     // Monto numérico
                     `<div style="position:absolute;top:${px(cfg.amount_top||1.2)}px;right:${px(cfg.amount_right||0.5)}px;font-size:12pt;font-weight:bold;">$${this.formatMoney(exp.amount)}</div>` +
                     // Monto en letras
@@ -8955,6 +8978,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     .cf-number   { position:absolute; top:${cfg.number_top||0.3}in; right:${cfg.number_right||0.5}in; font-size:9pt; }
                     .cf-date     { position:absolute; top:${cfg.date_top||0.8}in; right:${cfg.date_right||0.5}in; font-size:9pt; }
                     .cf-payee    { position:absolute; top:${cfg.payee_top||1.2}in; left:${cfg.payee_left||1.2}in; font-size:10pt; font-weight:bold; }
+                    .cf-address  { position:absolute; top:${cfg.address_top||1.4}in; left:${cfg.address_left||1.2}in; font-size:10pt; }
+                    .cf-city     { position:absolute; top:${cfg.city_top || ((cfg.address_top||1.4) + 0.15)}in; left:${cfg.city_left || cfg.address_left || 1.2}in; font-size:10pt; }
                     .cf-amount   { position:absolute; top:${cfg.amount_top||1.2}in; right:${cfg.amount_right||0.5}in; font-size:12pt; font-weight:bold; }
                     .cf-words    { position:absolute; top:${cfg.words_top||1.6}in; left:${cfg.words_left||0.5}in; font-size:8.5pt; }
                     .cf-memo     { position:absolute; top:${cfg.memo_top||2.9}in; left:${cfg.memo_left||0.5}in; font-size:9pt; }
@@ -8972,6 +8997,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         <div class="cf-number">${exp.checkNum}</div>
                         <div class="cf-date">${dateUSA}</div>
                         <div class="cf-payee">${exp.vendor||exp.desc}</div>
+                        ${exp.address ? `<div class="cf-address">${exp.address}</div>` : ''}
+                        ${exp.city ? `<div class="cf-city">${exp.city}</div>` : ''}
                         <div class="cf-amount">$${this.formatMoney(exp.amount)}</div>
                         <div class="cf-words">${amountWords}</div>
                         ${exp.desc ? `<div class="cf-memo">${exp.desc}</div>` : ''}
@@ -9006,7 +9033,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     this.vendors.sort();
                 }
 
-                const expObj = { id: id || 'exp' + Date.now(), vendor, desc, amount, date, checkNum, category, notes };
+                const address  = (document.getElementById('expAddress')?.value || '').trim();
+                const city     = (document.getElementById('expCity')?.value || '').trim();
+                const expObj = { id: id || 'exp' + Date.now(), vendor, address, city, desc, amount, date, checkNum, category, notes };
                 if (id) {
                     const idx = this.expenses.findIndex(e => e.id === id);
                     if (idx !== -1) this.expenses[idx] = expObj;
