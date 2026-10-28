@@ -189,6 +189,7 @@ tr.pend td:first-child::before { content: '⏳ '; }
             <div class="row">
               <button class="btn btn-dark btn-sm" type="button" onclick="document.getElementById('fCam').click()">📷 Tomar foto</button>
               <button class="btn btn-light btn-sm" type="button" onclick="document.getElementById('fFile').click()">📎 Adjuntar archivo</button>
+              <button class="btn btn-light btn-sm" type="button" id="btnCamPC" style="display:none" onclick="abrirCamaraPC()">💻 Cámara de la PC</button>
               <button class="btn btn-light btn-sm" type="button" id="btnQuitarFoto" style="display:none" onclick="quitarFoto()">✕ Quitar</button>
             </div>
             <span class="hint" id="fotoInfo">Opcional. Se guarda como comprobante.</span>
@@ -573,6 +574,53 @@ function mostrarFotoForm(src) {
   $('fotoInfo').textContent = fotoNueva ? `Foto lista (${Math.round(fotoNueva.length * 0.75 / 1024)} KB)` : (src ? 'Foto guardada. Toma otra para reemplazarla (la anterior queda en el historial).' : 'Opcional. Se guarda como comprobante.');
 }
 function quitarFoto() { fotoNueva = null; mostrarFotoForm(null); }
+// 2026-10-26: en la PC el botón "Tomar foto" abre archivos (los navegadores de escritorio
+// ignoran capture=). Este botón usa la webcam directo. Solo aparece en equipos con mouse.
+let _camStream = null;
+function _initCamPC() {
+  try {
+    const esPC = !(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+    if (esPC && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $('btnCamPC').style.display = '';
+  } catch (e) {}
+}
+async function abrirCamaraPC() {
+  let m = document.getElementById('camPCModal'); if (m) m.remove();
+  m = document.createElement('div'); m.id = 'camPCModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px';
+  m.innerHTML = '<video id="camPCVideo" autoplay playsinline muted style="max-width:min(900px,95vw);max-height:70vh;border-radius:10px;background:#000"></video>' +
+    '<div style="color:#ddd;font-size:14px;text-align:center">Acerca el recibo a la cámara, con buena luz y sin reflejos.</div>' +
+    '<div style="display:flex;gap:10px"><button class="btn btn-primary" type="button" id="camPCBtn" onclick="capturarCamaraPC()" disabled>📸 Capturar</button>' +
+    '<button class="btn btn-light" type="button" onclick="cerrarCamaraPC()">Cancelar</button></div>';
+  document.body.appendChild(m);
+  try {
+    _camStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    const v = $('camPCVideo'); v.srcObject = _camStream;
+    v.onloadedmetadata = () => { $('camPCBtn').disabled = false; };
+  } catch (e) {
+    cerrarCamaraPC();
+    alert('No se pudo abrir la cámara: ' + (e.name === 'NotAllowedError' ? 'permiso negado. Permite la cámara en el candado 🔒 junto a la dirección.' : e.name === 'NotFoundError' ? 'no se encontró ninguna cámara.' : e.message));
+  }
+}
+function cerrarCamaraPC() {
+  try { if (_camStream) _camStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  _camStream = null;
+  const m = document.getElementById('camPCModal'); if (m) m.remove();
+}
+function capturarCamaraPC() {
+  const v = $('camPCVideo'); if (!v || !v.videoWidth) return;
+  const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  c.toBlob(async b => {
+    cerrarCamaraPC();
+    if (!b) return alert('No se pudo capturar la foto.');
+    $('fotoInfo').textContent = 'Preparando foto…';
+    try { fotoNueva = await comprimir(new File([b], 'camara.jpg', { type: 'image/jpeg' })); mostrarFotoForm(fotoNueva); }
+    catch (e) { fotoNueva = null; mostrarFotoForm(null); alert('No se pudo usar la foto: ' + e.message); }
+  }, 'image/jpeg', 0.92);
+}
+document.addEventListener('DOMContentLoaded', _initCamPC);
+if (document.readyState !== 'loading') setTimeout(_initCamPC, 0);
+
 async function elegirFoto(input) {
   const f = input.files && input.files[0]; input.value = '';
   if (!f) return;
