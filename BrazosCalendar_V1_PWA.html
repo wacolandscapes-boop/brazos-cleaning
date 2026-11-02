@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.3';
+const APP_VERSION = '3.0.4';
 // Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
 const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
@@ -1329,11 +1329,19 @@ function _selectorVer(){
   w.appendChild(lb); w.appendChild(sel); w.appendChild(ar);
   return w;
 }
+// 3.0.4 (2026-11-02): cliente con "⏸️ Servicio suspendido" en el Scheduler → sus servicios
+// desde la fecha de suspensión NO se muestran (igual que en el Scheduler). Caso Overhead Door.
+function _cliSuspendido(cliId, date){
+  const c=(S.clis||[]).find(x=>String(x.id)===String(cliId));
+  if(!c||!c.servicePaused) return false;
+  if(!c.pausedSince) return true;
+  return String(date||'')>=String(c.pausedSince);
+}
 function _svcsDe(date, ver){
   let grps=[], members=[];
   if(ver.startsWith('g:')){ const g=ver.slice(2); grps=[g]; members=_rosterGrupoFecha(g,date); }
   else { const id=ver.slice(2); grps=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,date).includes(String(id))); members=[String(id)]; }
-  return (S.servs||[]).filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
+  return (S.servs||[]).filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))) && !_cliSuspendido(s.cliId,date))
     .sort((a,b)=>{ const ta=a.timeStart||'',tb=b.timeStart||''; if(ta&&tb) return ta.localeCompare(tb); if(ta&&!tb) return -1; if(!ta&&tb) return 1; return (parseInt(a.priority)||999)-(parseInt(b.priority)||999); });
 }
 function _rptTodos(date){
@@ -1395,7 +1403,7 @@ function getSvcs(date, soloVisible){
   if(!grps.length){ if(S.empId) members.push(String(S.empId)); } // descanso: solo servicios asignados directo a ella
   else if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
   return S.servs
-    .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))))
+    .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))) && !_cliSuspendido(s.cliId,date))
     .sort((a,b)=>{
       const ta=a.timeStart||'',tb=b.timeStart||'';
       if(ta&&tb) return ta.localeCompare(tb);
