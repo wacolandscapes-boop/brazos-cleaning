@@ -171,7 +171,7 @@ tr.pend td:first-child::before { content: '⏳ '; }
     <div class="card">
       <div class="card-title" id="formTitle">📝 Nuevo gasto</div>
       <div class="form-grid">
-        <div class="form-group"><label>Fecha *</label><input type="date" id="gFecha"></div>
+        <div class="form-group"><label>Fecha * <a href="#" id="lnkHoy" onclick="setFecha(hoy());ultimaFecha='';try{localStorage.removeItem('bg_ultimaFecha')}catch(e){};return false;" style="display:none;font-weight:400;font-size:0.85em;margin-left:6px">↺ usar hoy</a></label><div style="display:flex;gap:6px;align-items:center;position:relative;"><input type="text" id="gFechaTxt" inputmode="numeric" placeholder="mm/dd/aaaa" maxlength="10" autocomplete="off" oninput="fechaTxtInput(this)" onblur="fechaTxtBlur()" style="flex:1;min-width:0"><button type="button" onclick="abrirCalendarioFecha()" title="Elegir en el calendario" style="padding:6px 10px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer;font-size:1.1rem;line-height:1">📅</button><input type="date" id="gFecha" onchange="setFecha(this.value)" tabindex="-1" aria-hidden="true" style="position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;margin:0"></div></div>
         <div class="form-group"><label>Monto ($) *</label><input type="number" id="gMonto" step="0.01" min="0" inputmode="decimal" placeholder="0.00"></div>
         <div class="form-group"><label>Categoría *</label><select id="gCat" onchange="llenarSubcats('gCat','gSub')"></select></div>
         <div class="form-group"><label>Subcategoría</label><select id="gSub"></select></div>
@@ -334,7 +334,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '$' + (Number(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-const fmtF = f => { const [y, m, d] = (f || '').split('-'); return y ? `${m}/${d}/${y.slice(2)}` : ''; };
+const fmtF = f => { const [y, m, d] = (f || '').split('-'); return y ? `${m}/${d}/${y}` : ''; };
 const nuevoId = () => 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const pagoTxt = t => ({ Debito: '💳 Débito', Credito: '💳 Crédito', Cash: '💵 Cash' }[t] || t || '—');
 function toast(m, ms = 2800) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
@@ -497,10 +497,38 @@ function switchTab(t) {
   if (t === 'config' && SES.isAdmin) cargarUsuarios();
   if (t === 'lista') pintarLista();
 }
+// 2026-10-28: después de guardar un gasto nuevo, la fecha se queda en la del último
+// gasto (para capturar varios recibos del mismo mes sin volver a elegirla).
+// 2026-11-03: ahora se GUARDA en el dispositivo, así se conserva aunque se cierre o
+// recargue la app. "↺ usar hoy" la regresa a la fecha actual.
+let ultimaFecha = (() => { try { return localStorage.getItem('bg_ultimaFecha') || ''; } catch (e) { return ''; } })();
+// 2026-11-03: la fecha se escribe y se ve como mm/dd/aaaa (el selector nativo usaba el
+// formato del idioma del navegador, dd/mm/aaaa en español). Por dentro sigue en aaaa-mm-dd.
+const isoAMdy = iso => { const [y, m, d] = (iso || '').split('-'); return y ? `${m}/${d}/${y}` : ''; };
+function setFecha(iso) {
+  $('gFecha').value = iso || ''; $('gFechaTxt').value = isoAMdy(iso);
+  $('lnkHoy').style.display = iso && iso !== hoy() ? '' : 'none';
+}
+function fechaTxtInput(el) {
+  let dg = el.value.replace(/\D/g, '').slice(0, 8);
+  el.value = dg.length > 4 ? dg.slice(0, 2) + '/' + dg.slice(2, 4) + '/' + dg.slice(4) : dg.length > 2 ? dg.slice(0, 2) + '/' + dg.slice(2) : dg;
+  if (dg.length === 8) {
+    const m = +dg.slice(0, 2), d = +dg.slice(2, 4), y = +dg.slice(4);
+    const dt = new Date(y, m - 1, d);
+    if (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) {
+      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      $('gFecha').value = iso; $('lnkHoy').style.display = iso !== hoy() ? '' : 'none';
+      el.style.borderColor = '';
+    } else el.style.borderColor = '#e74c3c';
+  }
+}
+function fechaTxtBlur() { const t = $('gFechaTxt'); t.style.borderColor = ''; t.value = isoAMdy($('gFecha').value); }
+function abrirCalendarioFecha() { const f = $('gFecha'); try { f.showPicker(); } catch (e) { f.focus(); f.click(); } }
 function nuevoGasto() {
   editandoId = null; fotoNueva = null; fotoQuitada = false;
   $('formTitle').textContent = '📝 Nuevo gasto'; $('btnGuardar').textContent = '💾 Guardar gasto'; $('btnCancelarEd').style.display = 'none';
-  $('gFecha').value = hoy(); $('gMonto').value = ''; $('gCat').value = ''; llenarSubcats('gCat', 'gSub');
+  setFecha(ultimaFecha || hoy());
+  $('gMonto').value = ''; $('gCat').value = ''; llenarSubcats('gCat', 'gSub');
   $('gVendor').value = ''; $('gPago').value = 'Debito'; $('gConcepto').value = ''; $('gNotas').value = '';
   mostrarFotoForm(null); switchTab('registrar');
 }
@@ -513,7 +541,7 @@ async function editarGasto(id) {
   if (!puedeModificar(g)) return alert('Solo puedes corregir tus propios gastos durante 24 horas. Pídeselo al administrador.');
   editandoId = id; fotoNueva = null; fotoQuitada = false;
   $('formTitle').textContent = '✏️ Corregir gasto'; $('btnGuardar').textContent = '💾 Guardar cambios'; $('btnCancelarEd').style.display = '';
-  $('gFecha').value = g.fecha; $('gMonto').value = g.monto;
+  setFecha(g.fecha); $('gMonto').value = g.monto;
   if (g.categoria && !CFG.cats[g.categoria]) $('gCat').insertAdjacentHTML('beforeend', `<option value="${esc(g.categoria)}">${esc(g.categoria)}</option>`);
   $('gCat').value = g.categoria; llenarSubcats('gCat', 'gSub');
   if (g.subcategoria && ![...$('gSub').options].some(o => o.value === g.subcategoria)) $('gSub').insertAdjacentHTML('beforeend', `<option value="${esc(g.subcategoria)}">${esc(g.subcategoria)}</option>`);
@@ -547,6 +575,7 @@ async function guardarGasto() {
       if (!encolar({ tipo: 'crear', datos: Object.assign({ id }, d) })) return;
       if (fotoNueva) { g.fotoLocal = fotoNueva; encolar({ tipo: 'foto', id, foto: fotoNueva }); }
       GASTOS.unshift(g);
+      ultimaFecha = d.fecha; try { localStorage.setItem('bg_ultimaFecha', d.fecha); } catch (e) {}
       toast('✅ Gasto guardado — puedes registrar otro');
     }
     lsSave('bg_gastos', GASTOS);
