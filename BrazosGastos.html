@@ -233,7 +233,8 @@ tr.pend td:first-child::before { content: '⏳ '; }
           <button class="chip" onclick="mover(1)" aria-label="Siguiente">▶</button>
         </div>
       </div>
-      <div class="filter-grid">
+      <button class="btn btn-light btn-sm" id="btnFiltros" onclick="toggleFiltros()" style="margin:8px 0">🔎 Filtros</button>
+      <div class="filter-grid" id="filtrosLista" style="display:none">
         <div class="form-group"><label>Categoría</label><select id="fCat" onchange="llenarSubcats('fCat','fSub',true);pintarLista()"></select></div>
         <div class="form-group"><label>Subcategoría</label><select id="fSub" onchange="pintarLista()"></select></div>
         <div class="form-group"><label>Pago</label><select id="fPago" onchange="pintarLista()"><option value="all">Todos</option><option value="Debito">Débito</option><option value="Credito">Crédito</option><option value="Cash">Cash</option><option value="Otro">Otro</option></select></div>
@@ -279,7 +280,8 @@ tr.pend td:first-child::before { content: '⏳ '; }
         <input id="ntLast4" inputmode="numeric" maxlength="4" placeholder="1234" style="width:80px;padding:9px;border:1.5px solid var(--border);border-radius:8px">
         <input id="ntNombre" placeholder="Nombre (ej. Débito Chase)" style="flex:1;min-width:140px;padding:9px;border:1.5px solid var(--border);border-radius:8px">
         <select id="ntDueno" style="padding:9px;border:1.5px solid var(--border);border-radius:8px"></select>
-        <button class="btn btn-dark btn-sm" onclick="agregarTarjetaAdm()">+ Agregar</button>
+        <button class="btn btn-dark btn-sm" id="btnTarjetaAdm" onclick="agregarTarjetaAdm()">+ Agregar</button>
+        <button class="btn btn-light btn-sm" id="btnTarjetaCancel" style="display:none" onclick="cancelarEdicionTarjeta()">Cancelar</button>
       </div>
       <p class="hint reg-only" style="margin-top:8px">Solo el administrador puede editar o quitar tarjetas.</p>
     </div>
@@ -563,14 +565,32 @@ function reembolsoCambio() {
 function pintarTarjetas() {
   const adm = SES && SES.isAdmin;
   if (!$('tarjetaList')) return;
-  $('tarjetaList').innerHTML = (CFG.tarjetas || []).map(t => `<span class="subcat">💳 ••${esc(t.last4)} · ${esc(t.nombre || '')} ${t.dueno === 'empresa' ? '🏢 Empresa' : '👤 ' + esc(t.duenoNombre || empNombre(t.dueno))}${adm ? `<button onclick="borrarTarjeta('${esc(t.last4)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('') || '<p class="hint">Todavía no hay tarjetas.</p>';
+  $('tarjetaList').innerHTML = (CFG.tarjetas || []).map(t => `<span class="subcat">💳 ••${esc(t.last4)} · ${esc(t.nombre || '')} ${t.dueno === 'empresa' ? '🏢 Empresa' : '👤 ' + esc(t.duenoNombre || empNombre(t.dueno))}${adm ? `<button onclick="editarTarjeta('${esc(t.last4)}')" aria-label="Editar" title="Editar">✏️</button><button onclick="borrarTarjeta('${esc(t.last4)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('') || '<p class="hint">Todavía no hay tarjetas.</p>';
+}
+// 2026-11-03: editar una tarjeta (ej. el empleado cambió de tarjeta). Los gastos ya
+// registrados conservan los 4 dígitos con que se capturaron.
+let tarjetaEditando = '';
+function editarTarjeta(l4) {
+  const t = tarjetaDe(l4); if (!t) return;
+  tarjetaEditando = l4;
+  $('ntLast4').value = t.last4; $('ntNombre').value = t.nombre || ''; $('ntDueno').value = t.dueno || 'empresa';
+  $('btnTarjetaAdm').textContent = '💾 Guardar cambios'; $('btnTarjetaCancel').style.display = '';
+  $('ntLast4').focus();
+}
+function cancelarEdicionTarjeta() {
+  tarjetaEditando = ''; $('ntLast4').value = ''; $('ntNombre').value = ''; $('ntDueno').value = 'empresa';
+  $('btnTarjetaAdm').textContent = '+ Agregar'; $('btnTarjetaCancel').style.display = 'none';
 }
 function agregarTarjetaAdm() {
   const l4 = $('ntLast4').value.replace(/\D/g, ''); if (l4.length !== 4) return alert('Escribe los últimos 4 dígitos.');
-  if (tarjetaDe(l4)) return alert('Esa tarjeta ya está en la lista.');
+  if (tarjetaDe(l4) && l4 !== tarjetaEditando) return alert('Esa tarjeta ya está en la lista.');
   const dueno = $('ntDueno').value || 'empresa';
-  guardarCfg({ tarjetas: (CFG.tarjetas || []).concat([{ last4: l4, nombre: $('ntNombre').value.trim(), dueno, duenoNombre: dueno === 'empresa' ? '' : empNombre(dueno) }]) });
-  $('ntLast4').value = ''; $('ntNombre').value = '';
+  const nueva = { last4: l4, nombre: $('ntNombre').value.trim(), dueno, duenoNombre: dueno === 'empresa' ? '' : empNombre(dueno) };
+  const lista = (CFG.tarjetas || []).filter(t => t.last4 !== tarjetaEditando);
+  guardarCfg({ tarjetas: tarjetaEditando
+    ? (CFG.tarjetas || []).map(t => t.last4 === tarjetaEditando ? nueva : t)
+    : lista.concat([nueva]) });
+  cancelarEdicionTarjeta();
 }
 function borrarTarjeta(l4) { if (!confirm('¿Quitar la tarjeta ••' + l4 + ' de la lista?')) return; guardarCfg({ tarjetas: (CFG.tarjetas || []).filter(t => t.last4 !== l4) }); }
 function resetPagoForm(g) {
@@ -615,11 +635,23 @@ async function nuevoVendorPrompt() {
 }
 
 // ── registrar / editar ───────────────────────────────────────────
+// 2026-11-03: los filtros de la lista van plegados (no estorban al ver los gastos);
+// el botón dice cuántos hay activos.
+function toggleFiltros(forzar) {
+  const f = $('filtrosLista'); const abrir = forzar !== undefined ? forzar : f.style.display === 'none';
+  f.style.display = abrir ? '' : 'none'; contarFiltros();
+}
+function contarFiltros() {
+  const n = ['fCat', 'fSub', 'fPago', 'fQuien'].filter(id => $(id) && $(id).value && $(id).value !== 'all').length
+    + ['fMonto', 'fTexto'].filter(id => $(id) && $(id).value.trim()).length;
+  const abierto = $('filtrosLista').style.display !== 'none';
+  $('btnFiltros').textContent = (abierto ? '▲ Ocultar filtros' : '🔎 Filtros') + (n ? ` (${n} activo${n > 1 ? 's' : ''})` : '');
+}
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.id === 'tab-' + t));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + t));
   if (t === 'config' && SES.isAdmin) cargarUsuarios();
-  if (t === 'lista') pintarLista();
+  if (t === 'lista') { pintarLista(); contarFiltros(); }
 }
 // 2026-10-28: después de guardar un gasto nuevo, la fecha se queda en la del último
 // gasto (para capturar varios recibos del mismo mes sin volver a elegirla).
@@ -859,6 +891,7 @@ function filtrados() {
   }).sort((x, y) => (y.fecha.localeCompare(x.fecha)) || String(y.createdAt).localeCompare(String(x.createdAt)));
 }
 function pintarLista() {
+  try { contarFiltros(); } catch (e) {}
   const L = filtrados(), vivos = L.filter(g => !g.deleted);
   const total = vivos.reduce((s, g) => s + g.monto, 0);
   $('tbody').innerHTML = L.map(g => {
