@@ -179,7 +179,20 @@ tr.pend td:first-child::before { content: '⏳ '; }
           <div class="row" style="flex-wrap:nowrap"><select id="gVendor" style="flex:1;min-width:0" onchange="if(this.value==='__nuevo')nuevoVendorPrompt()"></select></div>
         </div>
         <div class="form-group"><label>Tipo de pago</label>
-          <select id="gPago"><option value="Debito">💳 Débito</option><option value="Credito">💳 Crédito</option><option value="Cash">💵 Cash</option><option value="Otro">Otro</option></select>
+          <select id="gPago" onchange="pagoCambio()"><option value="Debito">💳 Débito</option><option value="Credito">💳 Crédito</option><option value="Cash">💵 Cash</option><option value="Otro">Otro</option></select>
+        </div>
+        <!-- 2026-11-03: tarjeta (últimos 4) / quién pagó en efectivo / reembolso a empleado -->
+        <div class="form-group" id="wrapTarjeta"><label>Tarjeta (últimos 4)</label>
+          <input id="gTarjeta4" inputmode="numeric" maxlength="4" placeholder="1234" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4);tarjetaCambio()">
+          <div id="tarjetaInfo" class="hint" style="margin-top:4px"></div>
+        </div>
+        <div class="form-group" id="wrapQuienPago" style="display:none"><label>¿Quién pagó?</label>
+          <select id="gQuienPago" onchange="quienPagoCambio()"></select>
+        </div>
+        <div class="form-group full" id="wrapReembolso" style="background:#fff8e1;border:1px solid #f0c36d;border-radius:8px;padding:8px 10px">
+          <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:.95rem;cursor:pointer"><input type="checkbox" id="gReembolsar" style="width:auto" onchange="reembolsoCambio()"> 💵 Pagado con dinero propio — <b>reembolsar a:</b></label>
+          <select id="gReembolsoA" style="margin-top:6px"></select>
+          <div id="reembolsoInfo" class="hint" style="margin-top:4px"></div>
         </div>
         <div class="form-group full"><label>Concepto</label><input id="gConcepto" placeholder="ej. Gasolina camioneta, productos de limpieza…"></div>
         <div class="form-group full"><label>Notas</label><textarea id="gNotas" rows="2"></textarea></div>
@@ -257,6 +270,18 @@ tr.pend td:first-child::before { content: '⏳ '; }
         <button class="btn btn-dark btn-sm" onclick="agregarCat()">+ Agregar</button>
       </div>
       <p class="hint reg-only" style="margin-top:8px">Solo el administrador puede cambiar categorías.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">💳 Tarjetas</div>
+      <p class="hint" style="margin-bottom:8px">Solo los últimos 4 dígitos. Si la tarjeta es de un empleado, sus gastos se marcan solos para reembolso.</p>
+      <div id="tarjetaList"></div>
+      <div class="row adm-only" style="margin-top:10px;flex-wrap:wrap;gap:6px">
+        <input id="ntLast4" inputmode="numeric" maxlength="4" placeholder="1234" style="width:80px;padding:9px;border:1.5px solid var(--border);border-radius:8px">
+        <input id="ntNombre" placeholder="Nombre (ej. Débito Chase)" style="flex:1;min-width:140px;padding:9px;border:1.5px solid var(--border);border-radius:8px">
+        <select id="ntDueno" style="padding:9px;border:1.5px solid var(--border);border-radius:8px"></select>
+        <button class="btn btn-dark btn-sm" onclick="agregarTarjetaAdm()">+ Agregar</button>
+      </div>
+      <p class="hint reg-only" style="margin-top:8px">Solo el administrador puede editar o quitar tarjetas.</p>
     </div>
     <div class="card">
       <div class="card-title">🏪 Proveedores</div>
@@ -393,6 +418,7 @@ function iniciarApp() {
   $('reglaHint').textContent = SES.isAdmin ? '' : 'Puedes corregir o borrar tus gastos durante 24 horas después de registrarlos.';
   const y = new Date().getFullYear(); $('zipYear').innerHTML = [y, y - 1, y - 2].map(a => `<option>${a}</option>`).join('');
   pintarCatalogos(); nuevoGasto(); actualizarPeriodoLbl(); pintarLista();
+  cargarEmpleados();
   sincronizar(true);
 }
 window.addEventListener('DOMContentLoaded', () => {
@@ -460,6 +486,7 @@ function pintarCatalogos(conservar) {
       <div>${(CFG.cats[c] || []).map(s => `<span class="subcat">${esc(s)}${adm ? `<button onclick="borrarSub('${encodeURIComponent(c)}','${encodeURIComponent(s)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('')}
       ${adm ? `<button class="subcat" style="cursor:pointer;color:#457b9d" onclick="agregarSub('${encodeURIComponent(c)}')">+ subcategoría</button>` : ''}</div></div>`).join('') || '<p class="hint">Sin categorías.</p>';
   $('vendorList').innerHTML = (CFG.vendors || []).map(v => `<span class="subcat">${esc(v)}${adm ? `<button onclick="borrarVendor('${encodeURIComponent(v)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('');
+  pintarTarjetas(); pintarSelectsEmpleados();
   const quien = $('fQuien').value || 'all';
   $('fQuien').innerHTML = '<option value="all">Todos</option>' + Object.entries(NOMBRES).map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join('');
   $('fQuien').value = NOMBRES[quien] ? quien : 'all';
@@ -469,6 +496,103 @@ function llenarSubcats(catId, subId, filtro) {
   $(subId).innerHTML = (filtro ? '<option value="all">Todas</option>' : '<option value="">-- Sin subcategoría --</option>') + subs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
   if (!filtro && subs.includes('Gas')) $(subId).value = 'Gas';
 }
+// ── 2026-11-03: empleados (de la Nómina), tarjetas y reembolsos ────
+const SCHED_API = 'https://brazos-scheduler-worker.ranulfocast.workers.dev';
+let EMPS = lsJson('bg_emps', []);
+async function cargarEmpleados() {
+  try { const d = await fetch(SCHED_API + '/api/empleados').then(r => r.json()); if (d.empleados) { EMPS = d.empleados; lsSave('bg_emps', EMPS); } } catch (e) {}
+  pintarSelectsEmpleados();
+}
+const empNombre = id => (EMPS.find(e => String(e.id) === String(id)) || {}).name || '';
+const tarjetaDe = l4 => (CFG.tarjetas || []).find(t => t.last4 === l4);
+function opcionesEmps(extra) { return (extra || '') + EMPS.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join(''); }
+function pintarSelectsEmpleados() {
+  const keep = id => $(id) ? $(id).value : '';
+  const a = keep('gReembolsoA'), q = keep('gQuienPago'), d = keep('ntDueno');
+  if ($('gReembolsoA')) { $('gReembolsoA').innerHTML = opcionesEmps('<option value="">-- Elige empleado --</option>'); $('gReembolsoA').value = a; }
+  if ($('gQuienPago')) { $('gQuienPago').innerHTML = opcionesEmps('<option value="empresa">🏢 Empresa (caja)</option>'); $('gQuienPago').value = q || 'empresa'; }
+  if ($('ntDueno')) { $('ntDueno').innerHTML = opcionesEmps('<option value="empresa">🏢 Empresa</option>'); $('ntDueno').value = d || 'empresa'; }
+}
+// Empleado que corresponde a quien está registrando (por nombre), para proponerlo por defecto.
+function empDeSesion() {
+  const n = String((SES && SES.name) || '').toLowerCase().trim(); if (!n) return '';
+  const e = EMPS.find(x => x.name.toLowerCase().trim() === n) || EMPS.find(x => x.name.toLowerCase().split(' ')[0] === n.split(' ')[0]);
+  return e ? e.id : '';
+}
+function setReembolso(on, empId, motivo) {
+  if (reembolsoBloqueado) return;
+  $('gReembolsar').checked = !!on; if (empId !== undefined) $('gReembolsoA').value = empId || '';
+  $('gReembolsoA').disabled = !on; $('reembolsoInfo').textContent = motivo || '';
+}
+function pagoCambio() {
+  const tarjeta = ['Debito', 'Credito'].includes($('gPago').value);
+  $('wrapTarjeta').style.display = tarjeta ? '' : 'none';
+  $('wrapQuienPago').style.display = tarjeta ? 'none' : '';
+  if (tarjeta) tarjetaCambio(); else quienPagoCambio();
+}
+let reembolsoBloqueado = false;
+function tarjetaCambio() {
+  const l4 = $('gTarjeta4').value, info = $('tarjetaInfo');
+  if (l4.length < 4) { info.innerHTML = ''; return; }
+  const t = tarjetaDe(l4);
+  if (!t) {
+    info.innerHTML = `❓ Tarjeta nueva — ¿de quién es? <select id="tNuevaDueno" style="margin-top:4px">${opcionesEmps('<option value="">-- Elige --</option><option value="empresa">🏢 Empresa</option>')}</select> <button type="button" class="btn btn-light btn-sm" onclick="guardarTarjetaNueva()">Guardar</button>`;
+    return;
+  }
+  if (t.dueno === 'empresa') { info.textContent = `🏢 ${t.nombre || 'Tarjeta de la empresa'} — no se reembolsa`; setReembolso(false, '', ''); }
+  else { const n = t.duenoNombre || empNombre(t.dueno); info.textContent = `👤 Tarjeta de ${n}`; setReembolso(true, t.dueno, `Se marcó solo: tarjeta de ${n}.`); }
+}
+async function guardarTarjetaNueva() {
+  const l4 = $('gTarjeta4').value, dueno = ($('tNuevaDueno') || {}).value;
+  if (!dueno) return alert('Elige de quién es la tarjeta.');
+  const nueva = { last4: l4, nombre: '', dueno, duenoNombre: dueno === 'empresa' ? '' : empNombre(dueno) };
+  CFG.tarjetas = (CFG.tarjetas || []).concat([nueva]); lsSave('bg_cfg', CFG);
+  try { const d = await api('/api/tarjetas', { method: 'POST', json: nueva }); CFG.tarjetas = d.tarjetas; lsSave('bg_cfg', CFG); }
+  catch (e) { if (!esErrorDeRed(e)) alert(e.message); }
+  tarjetaCambio(); pintarTarjetas();
+}
+function quienPagoCambio() {
+  const q = $('gQuienPago').value;
+  if (q && q !== 'empresa') setReembolso(true, q, `Se marcó solo: pagó ${empNombre(q)}.`); else setReembolso(false, '', '');
+}
+function reembolsoCambio() {
+  const on = $('gReembolsar').checked; $('gReembolsoA').disabled = !on;
+  if (on && !$('gReembolsoA').value) $('gReembolsoA').value = empDeSesion();
+  $('reembolsoInfo').textContent = '';
+}
+function pintarTarjetas() {
+  const adm = SES && SES.isAdmin;
+  if (!$('tarjetaList')) return;
+  $('tarjetaList').innerHTML = (CFG.tarjetas || []).map(t => `<span class="subcat">💳 ••${esc(t.last4)} · ${esc(t.nombre || '')} ${t.dueno === 'empresa' ? '🏢 Empresa' : '👤 ' + esc(t.duenoNombre || empNombre(t.dueno))}${adm ? `<button onclick="borrarTarjeta('${esc(t.last4)}')" aria-label="Quitar">✕</button>` : ''}</span>`).join('') || '<p class="hint">Todavía no hay tarjetas.</p>';
+}
+function agregarTarjetaAdm() {
+  const l4 = $('ntLast4').value.replace(/\D/g, ''); if (l4.length !== 4) return alert('Escribe los últimos 4 dígitos.');
+  if (tarjetaDe(l4)) return alert('Esa tarjeta ya está en la lista.');
+  const dueno = $('ntDueno').value || 'empresa';
+  guardarCfg({ tarjetas: (CFG.tarjetas || []).concat([{ last4: l4, nombre: $('ntNombre').value.trim(), dueno, duenoNombre: dueno === 'empresa' ? '' : empNombre(dueno) }]) });
+  $('ntLast4').value = ''; $('ntNombre').value = '';
+}
+function borrarTarjeta(l4) { if (!confirm('¿Quitar la tarjeta ••' + l4 + ' de la lista?')) return; guardarCfg({ tarjetas: (CFG.tarjetas || []).filter(t => t.last4 !== l4) }); }
+function resetPagoForm(g) {
+  reembolsoBloqueado = false;
+  $('gTarjeta4').value = (g && g.tarjeta4) || ''; $('tarjetaInfo').innerHTML = '';
+  $('gQuienPago').value = (g && g.reembolsar && !['Debito', 'Credito'].includes(g.tipoPago)) ? g.reembolsoA : 'empresa';
+  $('wrapTarjeta').style.display = ['Debito', 'Credito'].includes($('gPago').value) ? '' : 'none';
+  $('wrapQuienPago').style.display = ['Debito', 'Credito'].includes($('gPago').value) ? 'none' : '';
+  $('gReembolsar').checked = !!(g && g.reembolsar); $('gReembolsoA').value = (g && g.reembolsoA) || ''; $('gReembolsoA').disabled = !(g && g.reembolsar);
+  $('gReembolsar').disabled = false; $('reembolsoInfo').textContent = '';
+  if (g && (g.reembolsoEstado === 'pagado' || g.reembolsoEstado === 'no')) {
+    reembolsoBloqueado = true; $('gReembolsar').disabled = true; $('gReembolsoA').disabled = true;
+    $('reembolsoInfo').textContent = g.reembolsoEstado === 'pagado' ? `✅ Ya se reembolsó en la Nómina (${g.reembolsoPeriodo || ''}) — no se puede cambiar aquí.` : '🚫 La Nómina lo marcó como "no se reembolsa".';
+  } else if (g && g.tarjeta4) tarjetaCambio();
+}
+function reembolsoTxt(g) {
+  if (!g.reembolsar) return '';
+  const n = esc(String(g.reembolsoNombre || empNombre(g.reembolsoA) || '').split(' ')[0]);
+  const st = g.reembolsoEstado === 'pagado' ? '✅ reembolsado' : g.reembolsoEstado === 'no' ? '🚫 no se reembolsa' : '⏳ por reembolsar';
+  return `<div class="sub" style="color:#b7791f">💵 ${n} · ${st}</div>`;
+}
+
 async function guardarCfg(nuevo) {
   try { CFG = await api('/api/config', { method: 'PUT', json: nuevo }); lsSave('bg_cfg', CFG); pintarCatalogos(true); toast('✅ Guardado'); }
   catch (e) { alert(esErrorDeRed(e) ? 'Necesitas internet para cambiar categorías.' : e.message); }
@@ -530,6 +654,7 @@ function nuevoGasto() {
   setFecha(ultimaFecha || hoy());
   $('gMonto').value = ''; $('gCat').value = ''; llenarSubcats('gCat', 'gSub');
   $('gVendor').value = ''; $('gPago').value = 'Debito'; $('gConcepto').value = ''; $('gNotas').value = '';
+  resetPagoForm(null);
   mostrarFotoForm(null); switchTab('registrar');
 }
 function puedeModificar(g) {
@@ -548,6 +673,7 @@ async function editarGasto(id) {
   $('gSub').value = g.subcategoria || '';
   if (g.vendor && !CFG.vendors.includes(g.vendor)) $('gVendor').insertAdjacentHTML('afterbegin', `<option value="${esc(g.vendor)}">${esc(g.vendor)}</option>`);
   $('gVendor').value = g.vendor || ''; $('gPago').value = g.tipoPago || 'Otro'; $('gConcepto').value = g.concepto || ''; $('gNotas').value = g.notas || '';
+  resetPagoForm(g);
   mostrarFotoForm(g.fotoLocal || null);
   if (!g.fotoLocal && g.foto) urlFoto(g.foto).then(u => { if (editandoId === id && !fotoNueva) mostrarFotoForm(u); }).catch(() => {});
   switchTab('registrar'); window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -557,6 +683,14 @@ function datosForm() {
   const d = { fecha: $('gFecha').value, monto, categoria: $('gCat').value, subcategoria: $('gSub').value, vendor: $('gVendor').value === '__nuevo' ? '' : $('gVendor').value,
     concepto: $('gConcepto').value.trim(), tipoPago: $('gPago').value, notas: $('gNotas').value.trim() };
   if (!d.fecha || !(monto > 0) || !d.categoria) { alert('Completa Fecha, Monto y Categoría.'); return null; }
+  // 2026-11-03: tarjeta y reembolso
+  d.tarjeta4 = ['Debito', 'Credito'].includes(d.tipoPago) && /^\d{4}$/.test($('gTarjeta4').value) ? $('gTarjeta4').value : '';
+  if (!reembolsoBloqueado) {
+    d.reembolsar = $('gReembolsar').checked; d.reembolsoA = d.reembolsar ? $('gReembolsoA').value : ''; d.reembolsoNombre = d.reembolsar ? empNombre(d.reembolsoA) : '';
+    if (d.reembolsar && !d.reembolsoA) { alert('Elige a qué empleado se le reembolsa.'); return null; }
+    if (d.reembolsar) d.reembolsoEstado = 'pendiente';
+  }
+
   return d;
 }
 async function guardarGasto() {
@@ -734,7 +868,7 @@ function pintarLista() {
       <td style="white-space:nowrap">${fmtF(g.fecha)}</td>
       <td class="col-opt">${esc(g.categoria)}${g.subcategoria ? `<div class="sub">${esc(g.subcategoria)}</div>` : ''}</td>
       <td>${esc(g.vendor || '—')}${g.concepto ? `<div class="sub">${esc(g.concepto)}</div>` : ''}<div class="sub mob">${esc(g.categoria)}${g.subcategoria ? ' · ' + esc(g.subcategoria) : ''}</div></td>
-      <td class="col-opt" style="white-space:nowrap">${pagoTxt(g.tipoPago)}</td>
+      <td class="col-opt" style="white-space:nowrap">${pagoTxt(g.tipoPago)}${g.tarjeta4 ? ` <span class="sub">••${esc(g.tarjeta4)}</span>` : ''}${reembolsoTxt(g)}</td>
       <td class="num"><b>${money(g.monto)}</b></td>
       <td>${tieneFoto ? `<button class="acc" style="background:none;border:none;cursor:pointer;font-size:1.05rem" onclick="verFoto('${esc(g.id)}')" aria-label="Ver foto">📎</button>` : ''}</td>
       <td class="col-opt"><span class="badge">${esc((NOMBRES[g.createdBy] || g.createdBy || '').split(' ')[0])}</span></td>
