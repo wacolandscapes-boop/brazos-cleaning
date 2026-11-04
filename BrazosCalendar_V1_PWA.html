@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.4';
+const APP_VERSION = '3.0.6';
 // Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
 const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
@@ -920,7 +920,7 @@ function getReportsForDay(date){
     if(empData.empId===S.empId) return; // dejar los propios para después
     if(empData&&empData.services) empData.services.forEach(function(svc){
       if(!acc[svc.id]){
-        acc[svc.id]=Object.assign({},svc,{_readOnly:true});
+        acc[svc.id]=Object.assign({},svc,{_readOnly:true,_por:empData.empName||''}); // 3.0.5: quién lo registró
       } else {
         if(svc.checkin && !acc[svc.id].checkin) acc[svc.id].checkin=svc.checkin;
         if(svc.checkout && !acc[svc.id].checkout) acc[svc.id].checkout=svc.checkout;
@@ -933,10 +933,10 @@ function getReportsForDay(date){
   var ownData=S.reports[date][S.empId];
   if(ownData&&ownData.services) ownData.services.forEach(function(svc){
     if(!acc[svc.id]){
-      acc[svc.id]=svc;
+      acc[svc.id]=Object.assign({},svc,{_por:ownData.empName||S.empName||''});
     } else {
       // Combinar: los propios tienen prioridad, completar con datos de otros
-      var merged=Object.assign({},acc[svc.id],svc);
+      var merged=Object.assign({},acc[svc.id],svc,{_por:ownData.empName||S.empName||''});
       merged._readOnly=false;
       acc[svc.id]=merged;
     }
@@ -1020,6 +1020,9 @@ function renderAgenda(){
     const dur=(rpt.checkin&&rpt.checkout)?calcDur(rpt.checkin,rpt.checkout):null;
     const sid=String(svc.id).replace(/[^a-zA-Z0-9]/g,'_');
     window._sids=window._sids||{}; window._sids[sid]=svc.id;
+    // 3.0.5: quién registró las horas de este servicio (y a qué hora lo hizo)
+    const _hAt=iso=>{ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return ''; return fmt12(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')); };
+    const porLine=((hasCheckin||hasCheckout)&&rpt._por)?`<div style="font-size:11px;color:var(--muted);margin-top:6px;">✍️ Registró: ${rpt._por}${rpt.checkinAt?' · llegada a las '+_hAt(rpt.checkinAt):''}${rpt.checkoutAt?' · salida a las '+_hAt(rpt.checkoutAt):''}</div>`:'';
 
     blk.innerHTML=`
       <div class="sh" onclick="tog('${String(svc.id).replace(/[^a-zA-Z0-9]/g,'_')}')">
@@ -1053,7 +1056,8 @@ function renderAgenda(){
             <input type="time" id="cout_${sid}" value="${rpt.checkout||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckout?'var(--green)':'var(--border)'};color:${hasCheckout?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;">
             <button onclick="var v=document.getElementById('cout_${sid}').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');document.getElementById('cout_${sid}').value=v;}suplenteUpdTime(window._sids['${sid}'],'checkout',v);renderView();" style="width:100%;margin-top:6px;padding:10px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Salida</button>
           </div>
-        </div>` : `
+        </div>
+        ${porLine}` : `
         <div class="tr2">
           <div class="tb ${hasCheckin?'has':'empty'}">
             <div class="tbl">🟡 Llegada</div>
@@ -1067,6 +1071,7 @@ function renderAgenda(){
           </div>
         </div>
         ${dur?`<div class="dur-row">⏱ Duración: <span>${dur}</span></div>`:''}
+        ${porLine}
         ${rpt.note?`<div style="font-size:12px;color:var(--muted);padding:6px 8px;background:var(--s2);border-radius:7px;margin-top:6px">📝 ${rpt.note}</div>`:''}
         `}
       </div>`;
@@ -1138,6 +1143,7 @@ function suplenteUpdTime(id, field, val){
     all[empId].services.push(svc);
   }
   svc[field]=val;
+  svc[field+'At']=new Date().toISOString(); // 3.0.5: cuándo se registró (checkinAt / checkoutAt)
   svc.status=(svc.checkin&&svc.checkout)?'done':(svc.checkin?'active':'pending');
   all[empId].savedAt=new Date().toISOString();
   localStorage.setItem(key,JSON.stringify(all));
@@ -1342,7 +1348,7 @@ function _svcsDe(date, ver){
   if(ver.startsWith('g:')){ const g=ver.slice(2); grps=[g]; members=_rosterGrupoFecha(g,date); }
   else { const id=ver.slice(2); grps=Object.keys(S.grupos||{}).filter(g=>_rosterGrupoFecha(g,date).includes(String(id))); members=[String(id)]; }
   return (S.servs||[]).filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))) && !_cliSuspendido(s.cliId,date))
-    .sort((a,b)=>{ const ta=a.timeStart||'',tb=b.timeStart||''; if(ta&&tb) return ta.localeCompare(tb); if(ta&&!tb) return -1; if(!ta&&tb) return 1; return (parseInt(a.priority)||999)-(parseInt(b.priority)||999); });
+    .sort(_cmpScheduler).sort(_cmpRegistro(date));
 }
 function _rptTodos(date){
   const acc={};
@@ -1396,6 +1402,28 @@ function _renderVerOtro(el){
   });
 }
 
+// 3.0.6 (Ranu): MISMO orden que el Scheduler. 1) la Prioridad manda cuando está puesta,
+// luego la hora programada; 2) los servicios con LLEGADA registrada se acomodan por esa
+// hora (primero), y los que aún no tienen registro conservan el orden del paso 1.
+function _cmpScheduler(a,b){
+  const pa=parseInt(a.priority), pb=parseInt(b.priority), ha=!isNaN(pa), hb=!isNaN(pb);
+  if(ha&&hb&&pa!==pb) return pa-pb;
+  if(ha&&!hb) return -1; if(!ha&&hb) return 1;
+  const ta=a.timeStart||'', tb=b.timeStart||'';
+  if(ta&&tb) return ta.localeCompare(tb);
+  if(ta) return -1; if(tb) return 1;
+  return 0;
+}
+function _cmpRegistro(date){
+  const cin={};
+  Object.values((S.reports||{})[date]||{}).forEach(ed=>{ (ed&&ed.services||[]).forEach(r=>{ if(r&&r.checkin&&!cin[String(r.id)]) cin[String(r.id)]=r.checkin; }); });
+  return (a,b)=>{
+    const ca=cin[String(a.id)]||'', cb=cin[String(b.id)]||'';
+    if(ca&&cb&&ca!==cb) return ca.localeCompare(cb);
+    if(ca&&!cb) return -1; if(!ca&&cb) return 1;
+    return 0; // sort estable: conserva el orden del paso 1
+  };
+}
 function getSvcs(date, soloVisible){
   const grps=soloVisible?gruposVisibles(date):gruposDelDia(date);
   const members=[];
@@ -1404,12 +1432,8 @@ function getSvcs(date, soloVisible){
   else if(!members.length) (S.grupos[S.group]||[]).forEach(id=>members.push(String(id)));
   return S.servs
     .filter(s=>s.date===date && (grps.includes(s.empId)||members.includes(String(s.empId))) && !_cliSuspendido(s.cliId,date))
-    .sort((a,b)=>{
-      const ta=a.timeStart||'',tb=b.timeStart||'';
-      if(ta&&tb) return ta.localeCompare(tb);
-      if(ta&&!tb) return -1; if(!ta&&tb) return 1;
-      return (parseInt(a.priority)||999)-(parseInt(b.priority)||999);
-    })
+    .sort(_cmpScheduler)
+    .sort(_cmpRegistro(date))
     .map(s=>{
       const c=S.clis.find(x=>String(x.id)===String(s.cliId))||{};
       const showProp=(c.type==='airbnb'||c.type==='unico'||c.type==='construccion');
