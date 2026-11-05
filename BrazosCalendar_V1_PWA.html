@@ -26,7 +26,7 @@ const _blob=new Blob([JSON.stringify(_manifest)],{type:'application/json'});
 document.getElementById('pwaManifest').href=URL.createObjectURL(_blob);
 
 
-const APP_VERSION = '3.0.6';
+const APP_VERSION = '3.0.7';
 // Compara contra ESTA misma página (antes fija a V1_PWA: la página de prueba veía otra versión y el aviso nunca se quitaba)
 const APP_URL = location.protocol==='file:' ? 'https://wacolandscapes-boop.github.io/brazos-cleaning/BrazosCalendar_V1_PWA.html' : (location.origin + location.pathname);
 
@@ -1049,12 +1049,12 @@ function renderAgenda(){
           <div class="tb ${hasCheckin?'has':'empty'}">
             <div class="tbl">🟡 Llegada</div>
             <input type="time" id="cin_${sid}" value="${rpt.checkin||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckin?'var(--yellow)':'var(--border)'};color:${hasCheckin?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;">
-            <button onclick="var v=document.getElementById('cin_${sid}').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');document.getElementById('cin_${sid}').value=v;}suplenteUpdTime(window._sids['${sid}'],'checkin',v);renderView();" style="width:100%;margin-top:6px;padding:10px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Llegada</button>
+            <button onclick="guardarHoraSvc('${sid}','checkin')" style="width:100%;margin-top:6px;padding:10px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Llegada</button>
           </div>
           <div class="tb ${hasCheckout?'has':'empty'}">
             <div class="tbl">🟢 Salida</div>
             <input type="time" id="cout_${sid}" value="${rpt.checkout||''}" style="width:100%;background:transparent;border:none;border-bottom:1.5px solid ${hasCheckout?'var(--green)':'var(--border)'};color:${hasCheckout?'var(--text)':'var(--muted)'};font-size:18px;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-align:center;padding:4px 0;outline:none;">
-            <button onclick="var v=document.getElementById('cout_${sid}').value;if(!v){var n=new Date();v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');document.getElementById('cout_${sid}').value=v;}suplenteUpdTime(window._sids['${sid}'],'checkout',v);renderView();" style="width:100%;margin-top:6px;padding:10px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Salida</button>
+            <button onclick="guardarHoraSvc('${sid}','checkout')" style="width:100%;margin-top:6px;padding:10px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.95rem;">💾 Guardar Salida</button>
           </div>
         </div>
         ${porLine}` : `
@@ -1121,6 +1121,29 @@ function horariosFile(date){ return 'brazos_horarios_'+date+'.json'; }
 function suplenteGetReports(){
   try{ return JSON.parse(localStorage.getItem(horariosKey(S.selectedDate||today()))||'{}'); }catch(e){ return {}; }
 }
+// 3.0.7 (Ranu): botón 💾 Guardar Llegada/Salida.
+//  - Campo vacío SIN hora guardada → se pone la hora actual (como antes).
+//  - Campo vacío CON hora guardada (la borraste) → pregunta y la BORRA (antes ponía la hora actual).
+//  - Hora a medio escribir (sin AM/PM) → avisa y no guarda.
+function guardarHoraSvc(sid, field){
+  var el=document.getElementById((field==='checkin'?'cin_':'cout_')+sid);
+  var id=(window._sids||{})[sid];
+  if(!el||id===undefined) return;
+  var nombre=field==='checkin'?'Llegada':'Salida';
+  if(el.validity&&el.validity.badInput){ toast('⚠ Hora de '+nombre+' incompleta: llena hora, minutos y AM/PM'); return; }
+  var v=el.value||'';
+  if(!v){
+    var rpt=(getReportsForDay(S.selectedDate)||{})[id]||{};
+    var previo=rpt[field]||'';
+    if(previo){
+      if(!confirm('¿Borrar la '+nombre+' registrada ('+fmt12(previo)+')?')) { el.value=previo; return; }
+    } else {
+      var n=new Date(); v=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); el.value=v;
+    }
+  }
+  suplenteUpdTime(id, field, v);
+  renderView();
+}
 function suplenteUpdTime(id, field, val){
   var date=S.selectedDate, empId=S.empId, group=grupoDelDia(S.selectedDate);
   if(!date||!empId){ toast('⚠ Sin fecha o empleado'); return; }
@@ -1143,14 +1166,15 @@ function suplenteUpdTime(id, field, val){
     all[empId].services.push(svc);
   }
   svc[field]=val;
-  svc[field+'At']=new Date().toISOString(); // 3.0.5: cuándo se registró (checkinAt / checkoutAt)
+  if(val) svc[field+'At']=new Date().toISOString(); // 3.0.5: cuándo se registró (checkinAt / checkoutAt)
+  else delete svc[field+'At'];                      // 3.0.7: hora borrada
   svc.status=(svc.checkin&&svc.checkout)?'done':(svc.checkin?'active':'pending');
   all[empId].savedAt=new Date().toISOString();
   localStorage.setItem(key,JSON.stringify(all));
   if(!S.reports) S.reports={};
   if(!S.reports[date]) S.reports[date]={};
   S.reports[date][empId]=all[empId];
-  toast('✅ '+(field==='checkin'?'Llegada':'Salida')+' guardada');
+  toast(val ? '✅ '+(field==='checkin'?'Llegada':'Salida')+' guardada' : '🗑️ '+(field==='checkin'?'Llegada':'Salida')+' borrada');
   setTimeout(function(){try{saveHorariosToDrive();}catch(e){}},300);
 }
 function suplenteUpdNote(id, val){
