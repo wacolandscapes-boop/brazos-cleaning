@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.6</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.7</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -7546,6 +7546,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     <label style="display:flex; flex-direction:column; font-size:0.8rem; color:#555; gap:3px;">Hasta
                         <input type="date" value="${f.hasta||''}" onchange="app._histFiltroSet({hasta:this.value})" style="padding:5px 8px; border-radius:6px; border:1px solid #ccc;"></label>` : ''}
                     <div style="font-size:0.78rem; color:#888; padding-bottom:7px;">Se toma la fecha final de cada período.</div>
+                    ${nPer ? `<button class="btn btn-sm" onclick="app.printHistorialResumen()" style="margin-left:auto; background:#2c3e50; color:white;">🖨️ Imprimir Resumen</button>` : ''}
                 </div>`;
                 if (nPer === 0) {
                     html += `<div style="text-align:center; padding:30px; color:#666;">No hay nóminas en ese rango.</div>`;
@@ -7630,6 +7631,84 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     }
                     default: return { desde: '', hasta: '' };
                 }
+            },
+
+            // 2026-11-06.7: imprime el resumen de los períodos que muestra el filtro
+            // del Historial (mismo filtro, mismas sumas que en pantalla).
+            printHistorialResumen() {
+                const f = this._histFiltroLeer();
+                const rango = this._histRango(f);
+                const n = v => parseFloat(v) || 0;
+                const $ = v => '$' + this.formatMoney(n(v));
+                const suma = (p, k) => (p.payroll || []).reduce((s, e) => s + n(e[k]), 0);
+                const lista = [...(this.savedPayrollPeriods || [])].filter(p => {
+                    const fin = String(p.end || p.start || '').slice(0,10);
+                    if (rango.desde && fin < rango.desde) return false;
+                    if (rango.hasta && fin > rango.hasta) return false;
+                    return true;
+                }).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+                if (!lista.length) { alert('No hay nóminas en ese rango.'); return; }
+                const filasD = lista.map(p => ({ p, emp: (p.payroll || []).length, h: suma(p,'totalHours'), b: suma(p,'grossPay'), d: suma(p,'deductions') + suma(p,'latePenalty'), nt: suma(p,'netPay') }));
+                const tot = filasD.reduce((t, r) => ({ h: t.h + r.h, b: t.b + r.b, d: t.d + r.d, nt: t.nt + r.nt }), { h: 0, b: 0, d: 0, nt: 0 });
+                const k = lista.length;
+                const esc = t => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const fmtF = iso => { const [y,m,d] = String(iso).split('-'); return (y && m && d) ? `${m}/${d}/${y}` : ''; };
+                const nombresModo = { todos: 'Todos los períodos', mes: 'Este mes', mesPasado: 'Mes pasado', ult3: 'Últimos 3 meses', anio: 'Este año', anioPasado: 'Año pasado', rango: 'Rango de fechas' };
+                const rangoTxt = (rango.desde || rango.hasta)
+                    ? `${nombresModo[f.modo] || ''} · ${rango.desde ? fmtF(rango.desde) : '…'} — ${rango.hasta ? fmtF(rango.hasta) : '…'}`
+                    : 'Todos los períodos';
+                const estado = s => s === 'printed' ? 'Cheques impresos' : s === 'digital' ? 'Pago digital' : 'Pendiente';
+                let logo = ''; try { logo = localStorage.getItem('companyLogo') || ''; } catch (e) {}
+                const empresa = (this.getCompanyName && this.getCompanyName()) || '';
+                const filas = filasD.map(r => `<tr>
+                    <td>${esc(r.p.label)}</td><td class="c">${estado(r.p.checksStatus || 'pending')}</td>
+                    <td class="c">${r.emp}</td><td class="c">${r.h.toFixed(2)}</td>
+                    <td class="r">${$(r.b)}</td><td class="r neg">${r.d > 0 ? '-' + $(r.d) : '—'}</td><td class="r net">${$(r.nt)}</td></tr>`).join('');
+                const w = window.open('', '', 'width=900,height=800');
+                if (!w) { alert('El navegador bloqueó la ventana de impresión.'); return; }
+                w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumen de Nóminas</title>
+                <style>
+                    @page { size: letter portrait; margin: 0.5in; }
+                    body { font-family: Arial, Helvetica, sans-serif; color: #2c3e50; margin: 0; }
+                    .enc { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #2c3e50; padding-bottom: 12px; margin-bottom: 14px; }
+                    .enc img { max-height: 70px; max-width: 200px; object-fit: contain; }
+                    .enc h1 { margin: 0; font-size: 20pt; }
+                    .enc .sub { font-size: 11pt; color: #555; margin-top: 3px; }
+                    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+                    .tile { border: 1px solid #ccd3d9; border-radius: 6px; padding: 8px; text-align: center; }
+                    .tile b { display: block; font-size: 14pt; }
+                    .tile span { font-size: 9pt; color: #666; }
+                    table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+                    th { background: #2c3e50; color: #fff; padding: 7px; text-align: left; }
+                    td { padding: 6px 7px; border-bottom: 1px solid #e3e7ea; }
+                    tr:nth-child(even) td { background: #f6f8f9; }
+                    tr { page-break-inside: avoid; } thead { display: table-header-group; }
+                    .c { text-align: center; } .r { text-align: right; } th.r { text-align: right; } th.c { text-align: center; }
+                    .neg { color: #c0392b; } .net { color: #1e8449; font-weight: bold; }
+                    tr.tot td, tr.prom td { font-weight: bold; background: #ecf0f1; }
+                    tr.tot td { border-top: 2px solid #2c3e50; }
+                    .pie { margin-top: 14px; font-size: 8.5pt; color: #888; }
+                    .barra { padding: 10px; text-align: center; background: #eef6ff; }
+                    @media print { .barra { display: none; } }
+                </style></head><body>
+                <div class="barra"><button onclick="window.print()" style="padding:8px 18px;background:#2c3e50;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">🖨️ Imprimir</button>
+                    <button onclick="window.close()" style="padding:8px 18px;margin-left:8px;background:#95a5a6;color:#fff;border:none;border-radius:6px;cursor:pointer;">Cerrar</button></div>
+                <div class="enc">${logo ? `<img src="${logo}" alt="">` : ''}
+                    <div><h1>${esc(empresa) || 'Resumen de Nóminas'}</h1><div class="sub">Resumen de Nóminas · ${esc(rangoTxt)}</div></div></div>
+                <div class="tiles">
+                    <div class="tile"><b>${k}</b><span>Períodos</span></div>
+                    <div class="tile"><b>${$(tot.b)}</b><span>Pago Bruto Total</span></div>
+                    <div class="tile"><b>${$(tot.nt)}</b><span>Total Pagado (Neto)</span></div>
+                    <div class="tile"><b>${$(tot.nt / k)}</b><span>Promedio por Período</span></div>
+                </div>
+                <table><thead><tr><th>Período</th><th class="c">Estado</th><th class="c">Empleados</th><th class="c">Horas</th><th class="r">Pago Bruto</th><th class="r">Deducciones</th><th class="r">Pago Neto</th></tr></thead>
+                <tbody>${filas}
+                <tr class="tot"><td>TOTAL (${k})</td><td></td><td></td><td class="c">${tot.h.toFixed(2)}</td><td class="r">${$(tot.b)}</td><td class="r neg">${tot.d > 0 ? '-' + $(tot.d) : '—'}</td><td class="r net">${$(tot.nt)}</td></tr>
+                <tr class="prom"><td>PROMEDIO</td><td></td><td></td><td class="c">${(tot.h / k).toFixed(2)}</td><td class="r">${$(tot.b / k)}</td><td class="r neg">${tot.d > 0 ? '-' + $(tot.d / k) : '—'}</td><td class="r net">${$(tot.nt / k)}</td></tr>
+                </tbody></table>
+                <div class="pie">Impreso el ${new Date().toLocaleDateString('en-US')}</div>
+                </body></html>`);
+                w.document.close();
             },
 
             viewSavedPayroll(id) {
