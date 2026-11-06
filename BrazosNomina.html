@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-10-26.1</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.2</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -4127,11 +4127,17 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 }
                 
                 // Filtrar asistencias por rango de fechas
+                // 2026-11-06: empleadas marcadas "Solo Nómina %" en la Captura Manual de este
+                // MISMO período no se pagan por horas registradas aquí (se pagan con el %).
+                const _isoP = d => d.toLocaleDateString('en-CA');
+                const _soloPct = Object.entries(this._pagarPorLeer(_isoP(startDate), _isoP(endDate)))
+                    .filter(([, m]) => m === 'pct').map(([id]) => String(id));
                 const periodAttendances = this.attendances.filter(a => {
                     // 2026-09-14: el dueño (isOwner) nunca entra a Nómina, aunque
                     // por error se le hayan registrado horas.
                     const emp = this.employees.find(e => e.id === a.employeeId);
                     if (emp && emp.isOwner) return false;
+                    if (_soloPct.includes(String(a.employeeId))) return false;
                     const date = new Date(a.date + 'T00:00:00');
                     return date >= startDate && date <= endDate && a.checkIn;
                 });
@@ -4275,6 +4281,14 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 // FIX 2026-09-04: combinar con lo que ya esté calculado (ej. Captura
                 // Manual) en vez de reemplazarlo, si es el mismo período.
                 this.mergePayrollCalc(payrollArr, periodLabel);
+                // 2026-11-06: avisar si alguien marcado "Solo Nómina %" aún no está calculado
+                {
+                    const faltan = _soloPct.filter(id => !this.currentPayrollCalc.some(p => String(p.employeeId) === id));
+                    if (faltan.length) {
+                        const noms = faltan.map(id => (this.employees.find(e => String(e.id) === id) || {}).name || id).join(', ');
+                        setTimeout(() => alert(`ℹ️ ${noms}: marcada(s) "Solo Nómina %". No se pagan aquí por horas registradas; calcúlala(s) en "✏️ Captura Manual de Horas".`), 50);
+                    }
+                }
                 if (sortBy === 'alpha') this.currentPayrollCalc.sort((a,b) => a.employeeName.localeCompare(b.employeeName));
                 else if (sortBy === 'pay') this.currentPayrollCalc.sort((a,b) => b.netPay - a.netPay);
                 else if (sortBy === 'late') this.currentPayrollCalc.sort((a,b) => b.lateMinutes - a.lateMinutes);
@@ -4393,6 +4407,33 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // Sep2: separado de openManualHoursPanel() para poder refrescar la
             // lista cuando cambian las fechas del período, o cuando llega una
             // semana nueva del Scheduler mientras el panel ya está abierto.
+            // 2026-11-06 (Ranu): "Pagar por" — cuando una empleada tiene horas REGISTRADAS
+            // (Calendar/Reloj) Y ADEMÁS horas de "Nómina x %" del Scheduler en la misma
+            // semana, se elige qué pagar: 'suma' (como antes), 'horas' o 'pct'.
+            // Se guarda por período (inicio|fin) y empleada.
+            _pagarPorLeer(startStr, endStr) {
+                try { const all = JSON.parse(localStorage.getItem('ap_nomina_pagarPor') || '{}'); return all[startStr + '|' + endStr] || {}; } catch (e) { return {}; }
+            },
+            setPagarPor(empId, modo) {
+                const startStr = document.getElementById('manualPayrollStart')?.value || '';
+                const endStr = document.getElementById('manualPayrollEnd')?.value || '';
+                if (!startStr || !endStr) return;
+                let all = {}; try { all = JSON.parse(localStorage.getItem('ap_nomina_pagarPor') || '{}'); } catch (e) {}
+                const k = startStr + '|' + endStr;
+                all[k] = all[k] || {};
+                if (modo === 'suma') delete all[k][String(empId)]; else all[k][String(empId)] = modo;
+                try { localStorage.setItem('ap_nomina_pagarPor', JSON.stringify(all)); } catch (e) {}
+                // El bono del % solo aplica cuando se paga con el %
+                const bonusInp = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
+                if (bonusInp && bonusInp.dataset.pctBonus !== undefined) {
+                    const pb = parseFloat(bonusInp.dataset.pctBonus) || 0;
+                    const actual = parseFloat(bonusInp.value) || 0;
+                    if (modo === 'horas' && Math.abs(actual - pb) < 0.005) bonusInp.value = 0;
+                    if (modo !== 'horas' && actual === 0) bonusInp.value = pb;
+                }
+                this.renderManualHoursList();
+            },
+
             renderManualHoursList() {
                 const list = document.getElementById('manualHoursList');
                 if (!list || !this.employees || this.employees.length === 0) return;
@@ -4487,13 +4528,36 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     // sin importar prodLock, así que aquí NO se vuelve a tocar (el intento
                     // anterior lo duplicaba, sumándolo otra vez disfrazado de "Nómina x%").
                     const prePctHrs = (prodLock && pre) ? ((pre.regularHours || 0) + (pre.overtimeHours || 0)) : 0;
-                    const combinedHrs = prodHrs + prePctHrs;
+                    // 2026-11-06: "Pagar por" (solo si tiene las dos fuentes)
+                    const ambas = prodLock && !!pre && prePctHrs > 0;
+                    const modoPago = ambas ? (this._pagarPorLeer(startStr, endStr)[String(emp.id)] || 'suma') : 'suma';
+                    const combinedHrs = modoPago === 'horas' ? prodHrs : (modoPago === 'pct' ? prePctHrs : prodHrs + prePctHrs);
                     // FIX 2026-09-04: Ranu pidió que las horas de Producción se repartan
                     // igual que hace el motor de nómina normal — hasta 40 hrs van a
                     // Regulares y lo que pase de 40 va a Tiempo Extra — en vez de meter
                     // el total completo (ej. 42.64) todo en Regulares.
-                    const regValFinal = prodLock ? Math.min(combinedHrs, 40).toFixed(2) : regVal;
-                    const otValFinal = prodLock ? Math.max(combinedHrs - 40, 0).toFixed(2) : otVal;
+                    let regValFinal = prodLock ? Math.min(combinedHrs, 40).toFixed(2) : regVal;
+                    let otValFinal = prodLock ? Math.max(combinedHrs - 40, 0).toFixed(2) : otVal;
+                    // Solo %: se pagan EXACTAMENTE las horas Reg/OT que mandó el Scheduler
+                    if (modoPago === 'pct') { regValFinal = (pre.regularHours || 0).toFixed(2); otValFinal = (pre.overtimeHours || 0).toFixed(2); }
+                    let bonusFinal = bonusVal;
+                    if (modoPago === 'horas' && !prevVal) bonusFinal = 0;
+                    // Comparación para decidir (y para mostrársela a quien la necesite)
+                    let comparaHtml = '';
+                    if (ambas) {
+                        const r = parseFloat(emp.rate) || 0;
+                        const pagoH = Math.min(prodHrs, 40) * r + Math.max(prodHrs - 40, 0) * r * 1.5;
+                        const pagoP = (pre.regularHours || 0) * r + (pre.overtimeHours || 0) * r * 1.5 + (parseFloat(pre.bonus) || 0);
+                        const dif = pagoP - pagoH;
+                        const sel = (v, t) => `<option value="${v}" ${modoPago === v ? 'selected' : ''}>${t}</option>`;
+                        comparaHtml = `<div style="margin-top:4px;font-size:0.75rem;color:#555;line-height:1.5;">
+                            Pagar por: <select onchange="app.setPagarPor('${emp.id}', this.value)" style="font-size:0.75rem;padding:1px 4px;border:1px solid ${modoPago === 'suma' ? '#ccc' : '#e67e22'};border-radius:4px;">
+                              ${sel('suma', 'Horas registradas + % (suma)')}${sel('horas', 'Solo horas registradas')}${sel('pct', 'Solo Nómina %')}
+                            </select><br>
+                            🕐 Por horas: ${prodHrs.toFixed(2)} hrs = <b>$${this.formatMoney(pagoH)}</b> · 💜 Por %: ${prePctHrs.toFixed(2)} hrs${pre.bonus ? ' + bono $' + this.formatMoney(pre.bonus) : ''} = <b>$${this.formatMoney(pagoP)}</b>
+                            · <span style="color:${dif >= 0 ? '#c0392b' : '#1e8449'};font-weight:700;">${dif >= 0 ? 'por horas gana $' + this.formatMoney(dif) + ' menos' : 'por horas gana $' + this.formatMoney(-dif) + ' más'}</span>
+                          </div>`;
+                    }
                     // El badge "📤 Scheduler" solo tiene sentido cuando las horas mostradas
                     // vienen literalmente de "pre" (caso sin Producción real); cuando hay
                     // prodLock, las horas ya son la SUMA de reales + % — eso lo indican
@@ -4507,7 +4571,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
                         : '';
                     const lockAttrs = prodLock ? ` disabled data-prodlock="1" title="Horas ya registradas en Producción — se calculan aparte con 'Calcular Nómina (Reloj Checador)'" style="width:90px; padding:6px; background:#f2f3f4; color:#1e8449; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
-                    const pctExtraBadge = prePctHrs > 0
+                    const pctExtraBadge = (prePctHrs > 0 && modoPago === 'suma')
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Nómina x % del Scheduler para los días sin registrar de este período (semana ${pre.weekStart} a ${pre.weekEnd}) — ${prePctHrs.toFixed(2)} hrs ya sumadas a las reales de Producción de arriba">➕ Nómina x%: ${prePctHrs.toFixed(2)} hrs</span>`
                         : '';
 
@@ -4532,11 +4596,11 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
 
                     return `
                     <tr>
-                        <td><strong>${emp.name}</strong>${badge}${prodBadge}${pctExtraBadge}</td>
+                        <td><strong>${emp.name}</strong>${badge}${prodBadge}${pctExtraBadge}${comparaHtml}</td>
                         <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
                         <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regValFinal}"${lockAttrs}></td>
                         <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otValFinal}"${lockAttrs}></td>
-                        <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualBonus" data-emp="${emp.id}"${ambas ? ` data-pct-bonus="${parseFloat(pre.bonus) || 0}"` : ''} min="0" step="0.01" value="${bonusFinal}" style="width:90px; padding:6px;"></td>
                         <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
                     </tr>
                 `;
@@ -8346,7 +8410,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     const end = new Date(endStr + 'T12:00:00');
                     while (d <= end) { dates.push(d.toLocaleDateString('en-CA')); d.setDate(d.getDate() + 1); }
 
-                    let added = 0;
+                    let added = 0, actualizados = 0;
                     for (const dt of dates) {
                         const fname = `brazos_horarios_${dt}.json`;
                         // Búsqueda GLOBAL (sin filtrar por carpeta): BrazosCalendar guarda
@@ -8371,15 +8435,30 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             const resolvedId = resolveEmpId(empData.empId, empData.empName);
                             const resolvedEmp = this.employees.find(e => e.id === resolvedId);
                             if (resolvedEmp && resolvedEmp.isOwner) return; // 2026-09-14: el dueño nunca entra a Nómina
-                            const existe = this.attendances.some(a =>
-                                String(a.employeeId) === String(resolvedId) && a.date === dt);
-                            if (existe) return; // Reloj / captura manual / import previo ya lo cubrió
-
                             const [soh, som] = empData.shopOut.split(':').map(Number);
                             const [sbh, sbm] = empData.shopBack.split(':').map(Number);
                             let minutes = (sbh * 60 + sbm) - (soh * 60 + som);
                             if (minutes < 0) minutes = 0;
                             if (minutes >= 420) minutes -= 30; // break de 30 min si la jornada fue de 7+ horas
+
+                            const previo = this.attendances.find(a =>
+                                String(a.employeeId) === String(resolvedId) && a.date === dt);
+                            if (previo) {
+                                // 2026-11-06 (Ranu): si el registro VINO del Calendar y NO se editó a
+                                // mano en Nómina, se ACTUALIZA cuando la hora cambió en el Calendar
+                                // (antes se importaba una sola vez y las correcciones no llegaban).
+                                // Reloj Checador y capturas/ediciones manuales nunca se tocan.
+                                if (previo.source === 'calendario' && !previo.manualEdit &&
+                                    (previo.checkIn !== empData.shopOut || previo.checkOut !== empData.shopBack)) {
+                                    previo.checkIn = empData.shopOut;
+                                    previo.checkOut = empData.shopBack;
+                                    previo.hours = Math.round((minutes / 60) * 100) / 100;
+                                    previo.updatedAt = new Date().toISOString();
+                                    previo.calActualizado = previo.updatedAt;
+                                    actualizados++;
+                                }
+                                return;
+                            }
 
                             this.attendances.push({
                                 id: 'cal_' + resolvedId + '_' + dt,
@@ -8395,10 +8474,10 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             added++;
                         });
                     }
-                    if (added > 0) {
+                    if (added > 0 || actualizados > 0) {
                         this.save();
                         this.refreshAttendances();
-                        console.log(`📅 Horas de Calendario (directo): +${added} nuevas`);
+                        console.log(`📅 Horas de Calendario (directo): +${added} nuevas, ~${actualizados} actualizadas`);
                     }
                 } catch(err) {
                     console.error('driveDownloadHorasCalendarioDirecto error:', err.message);
