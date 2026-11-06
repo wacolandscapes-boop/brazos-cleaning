@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.5</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.6</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -7517,9 +7517,55 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     </div>`;
                     return;
                 }
-                const sorted = [...this.savedPayrollPeriods].sort((a,b) => new Date(b.start) - new Date(a.start));
-                let html = '<div style="display:flex; flex-direction:column; gap:10px;">';
+                // 2026-11-06.6: monto pagado por nómina + filtro de períodos y
+                // resumen (total / promedio) de los períodos mostrados.
+                const f = this._histFiltroLeer();
+                const rango = this._histRango(f);
+                const money = (n) => '$' + (Number(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+                const sumaDe = (p, k) => (p.payroll || []).reduce((s, e) => s + (Number(e[k]) || 0), 0);
+                const sortedAll = [...this.savedPayrollPeriods].sort((a,b) => new Date(b.start) - new Date(a.start));
+                // Un período cuenta en el rango según su fecha FINAL (cierre).
+                const sorted = sortedAll.filter(p => {
+                    const fin = String(p.end || p.start || '').slice(0,10);
+                    if (rango.desde && fin < rango.desde) return false;
+                    if (rango.hasta && fin > rango.hasta) return false;
+                    return true;
+                });
+                const totNeto = sorted.reduce((s,p) => s + sumaDe(p,'netPay'), 0);
+                const totBruto = sorted.reduce((s,p) => s + sumaDe(p,'grossPay'), 0);
+                const nPer = sorted.length;
+                const opt = (v, t) => `<option value="${v}" ${f.modo===v?'selected':''}>${t}</option>`;
+                let html = `<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:#f4f6f8; border:1px solid #e1e5ea; border-radius:8px; padding:12px 14px; margin-bottom:12px;">
+                    <label style="display:flex; flex-direction:column; font-size:0.8rem; color:#555; gap:3px;">Períodos
+                        <select onchange="app._histFiltroSet({modo:this.value})" style="padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
+                            ${opt('todos','Todos')}${opt('mes','Este mes')}${opt('mesPasado','Mes pasado')}${opt('ult3','Últimos 3 meses')}${opt('anio','Este año')}${opt('anioPasado','Año pasado')}${opt('rango','Rango de fechas…')}
+                        </select></label>
+                    ${f.modo==='rango' ? `
+                    <label style="display:flex; flex-direction:column; font-size:0.8rem; color:#555; gap:3px;">Desde
+                        <input type="date" value="${f.desde||''}" onchange="app._histFiltroSet({desde:this.value})" style="padding:5px 8px; border-radius:6px; border:1px solid #ccc;"></label>
+                    <label style="display:flex; flex-direction:column; font-size:0.8rem; color:#555; gap:3px;">Hasta
+                        <input type="date" value="${f.hasta||''}" onchange="app._histFiltroSet({hasta:this.value})" style="padding:5px 8px; border-radius:6px; border:1px solid #ccc;"></label>` : ''}
+                    <div style="font-size:0.78rem; color:#888; padding-bottom:7px;">Se toma la fecha final de cada período.</div>
+                </div>`;
+                if (nPer === 0) {
+                    html += `<div style="text-align:center; padding:30px; color:#666;">No hay nóminas en ese rango.</div>`;
+                    container.innerHTML = html;
+                    return;
+                }
+                const tile = (t, v, sub, color) => `<div style="flex:1 1 150px; background:white; border:1px solid #e1e5ea; border-radius:8px; padding:10px 14px;">
+                    <div style="font-size:0.72rem; letter-spacing:0.04em; text-transform:uppercase; color:#888;">${t}</div>
+                    <div style="font-size:1.25rem; font-weight:700; color:${color}; font-variant-numeric:tabular-nums;">${v}</div>
+                    ${sub ? `<div style="font-size:0.78rem; color:#999; font-variant-numeric:tabular-nums;">${sub}</div>` : ''}</div>`;
+                html += `<div id="histNominaResumen" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                    ${tile('Períodos', nPer, nPer === sortedAll.length ? 'todos los guardados' : `de ${sortedAll.length} guardados`, '#2c3e50')}
+                    ${tile('Total pagado (neto)', money(totNeto), 'Bruto ' + money(totBruto), '#27ae60')}
+                    ${tile('Promedio por período', money(totNeto / nPer), 'Bruto ' + money(totBruto / nPer), '#2980b9')}
+                </div>`;
+                html += '<div style="display:flex; flex-direction:column; gap:10px;">';
                 sorted.forEach(p => {
+                    const netoP = sumaDe(p, 'netPay');
+                    const brutoP = sumaDe(p, 'grossPay');
+                    const nEmp = (p.payroll || []).length;
                     const savedDate = new Date(p.savedAt).toLocaleDateString('en-US');
                     // Badge de estado de cheques
                     const status = p.checksStatus || 'pending';
@@ -7533,15 +7579,19 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         ? `<button class="btn btn-sm" onclick="app.printChecksFromHistory('${p.id}')" style="background:#e67e22;color:white;">🖨️ Imprimir Cheques</button>`
                         : `<button class="btn btn-sm" onclick="app.printChecksFromHistory('${p.id}')" style="background:#95a5a6;color:white;">🖨️ Reimprimir</button>`;
 
-                    html += `<div style="display:flex; justify-content:space-between; align-items:center; background:#f8f9fa; padding:14px 18px; border-radius:8px; border-left:4px solid ${status==='pending'?'#e67e22':status==='printed'?'#27ae60':'#2980b9'};">
+                    html += `<div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; background:#f8f9fa; padding:14px 18px; border-radius:8px; border-left:4px solid ${status==='pending'?'#e67e22':status==='printed'?'#27ae60':'#2980b9'};">
                         <div>
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <strong style="font-size:1.05rem;">📅 ${p.label}</strong>
                                 ${statusBadge}
                             </div>
-                            <div style="font-size:0.85rem; color:#888; margin-top:3px;">Guardada el ${savedDate}</div>
+                            <div style="font-size:0.85rem; color:#888; margin-top:3px;">Guardada el ${savedDate} · ${nEmp} empleado${nEmp===1?'':'s'}</div>
                         </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <div style="margin-left:auto; margin-right:16px; text-align:right; font-variant-numeric:tabular-nums;">
+                            <div style="font-size:1.1rem; font-weight:700; color:#27ae60;">${money(netoP)}</div>
+                            <div style="font-size:0.75rem; color:#999;">neto pagado · bruto ${money(brutoP)}</div>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; min-width:370px;">
                             ${printBtn}
                             <button class="btn btn-primary btn-sm" onclick="app.viewSavedPayroll('${p.id}')">👁️ Ver</button>
                             <button class="btn btn-success btn-sm" onclick="app.exportSavedPayrollCSV('${p.id}')">📥 CSV</button>
@@ -7551,6 +7601,35 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 });
                 html += '</div>';
                 container.innerHTML = html;
+            },
+
+            // 2026-11-06.6: filtro del Historial de nóminas (se recuerda en este navegador).
+            _histFiltroLeer() {
+                let f = null;
+                try { f = JSON.parse(localStorage.getItem('ap_hist_nomina_filtro') || 'null'); } catch(e) {}
+                return Object.assign({ modo: 'todos', desde: '', hasta: '' }, f || {});
+            },
+            _histFiltroSet(cambio) {
+                const f = Object.assign(this._histFiltroLeer(), cambio || {});
+                try { localStorage.setItem('ap_hist_nomina_filtro', JSON.stringify(f)); } catch(e) {}
+                this.renderSavedPayrollList();
+            },
+            _histRango(f) {
+                const iso = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                const hoy = new Date(); const y = hoy.getFullYear(); const m = hoy.getMonth();
+                switch (f.modo) {
+                    case 'mes':        return { desde: iso(new Date(y, m, 1)),   hasta: iso(new Date(y, m+1, 0)) };
+                    case 'mesPasado':  return { desde: iso(new Date(y, m-1, 1)), hasta: iso(new Date(y, m, 0)) };
+                    case 'ult3':       return { desde: iso(new Date(y, m-2, 1)), hasta: iso(new Date(y, m+1, 0)) };
+                    case 'anio':       return { desde: `${y}-01-01`, hasta: `${y}-12-31` };
+                    case 'anioPasado': return { desde: `${y-1}-01-01`, hasta: `${y-1}-12-31` };
+                    case 'rango': {
+                        let d = f.desde || '', h = f.hasta || '';
+                        if (d && h && d > h) { const t = d; d = h; h = t; }
+                        return { desde: d, hasta: h };
+                    }
+                    default: return { desde: '', hasta: '' };
+                }
             },
 
             viewSavedPayroll(id) {
