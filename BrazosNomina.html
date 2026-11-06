@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.2</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.5</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -5588,7 +5588,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             </table>
                         </div>
                         <div style="text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;">
-                            <span style="font-size:0.85rem;color:#555;">🖨️ Coloca la chequera <strong>tal como viene del paquete, boca abajo</strong> — se imprime primero el <strong># MÁS ALTO</strong>.</span>
+                            <span style="font-size:0.85rem;color:#555;">🖨️ Coloca la chequera <strong>tal como viene del paquete, boca abajo, SIN reordenar</strong> — se imprime primero el <strong># MÁS ALTO</strong>.</span>
                             <button type="button" onclick="app.renderFinalCheckOrderPreview()" style="background:#fff;color:#1565c0;border:1.5px solid #1565c0;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">🔍 Ver orden final</button>
                             <button type="button" onclick="app.imprimirPruebaCheques()" title="Imprime en HOJAS NORMALES el orden en que saldrán los cheques. No guarda nada." style="background:#fff;color:#e67e22;border:1.5px solid #e67e22;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:0.85rem;">🧪 Imprimir prueba</button>
                             <button onclick="app.printChecksOnly()" style="background:#27ae60;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold;">🖨️ Imprimir Cheques</button>
@@ -5949,9 +5949,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         if (!confirm('🖨️ ANTES DE IMPRIMIR revisa tu chequera:\n\n' +
                             'La impresora debe tomar PRIMERO el cheque físico #' + pri.num + ' (' + pri.p.employeeName + ')' +
                             (orden.length > 1 ? '\ny AL FINAL el #' + ult.num + ' (' + ult.p.employeeName + ').' : '.') +
-                            '\n\nAjuste actual: primer cheque que entra = ' + ajuste + '.\n' +
+                            '\n\nLa chequera va TAL COMO VIENE DEL PAQUETE, boca abajo, SIN reordenar (primer cheque que entra = ' + ajuste + ').\n' +
                             'Desactiva "imprimir por ambos lados" en la impresora.\n\n' +
-                            'ACEPTAR = así está cargada, imprimir.\nCANCELAR = no hacer nada (cambia el ajuste "Primer cheque que entra" o acomoda la chequera).')) {
+                            'ACEPTAR = así está cargada, imprimir.\nCANCELAR = no hacer nada (acomoda la chequera como viene del paquete).')) {
                             this._processingChecks = false; return;
                         }
                     }
@@ -6738,6 +6738,12 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 // FIX 2026-09-04: aviso antes de imprimir un cheque ya marcado como
                 // ANULADO, para no reimprimirlo por accidente pensando que es válido.
                 if (check.voided && !confirm(`⚠️ El cheque #${check.checkNumber} está marcado como ANULADO.\n\n¿Imprimirlo de todas formas?`)) return;
+                // 2026-11-06 (Ranu): reimprimir UN cheque desde el Historial usaba una
+                // plantilla VIEJA distinta (solo el cheque de 3.5in, sin talones y sin tamaño
+                // de página fijo) — por eso esa semana hubo que meter la hoja de otra forma.
+                // Ahora usa EXACTAMENTE la misma hoja que la impresión normal del lote.
+                this.printMultipleChecks([check], this.checkConfig, '');
+                return;
                 const cfg = this.checkConfig;
 
                 const dateParts = check.date.split('T')[0].split('-');
@@ -7572,7 +7578,10 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 let html = `<div style="margin-top:20px; border-top:2px solid #ecf0f1; padding-top:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h3 style="margin:0; color:#2c3e50;">📅 ${period.label}</h3>
-                        <button class="btn btn-success btn-sm" onclick="app.exportSavedPayrollCSV('${id}')">📥 Exportar CSV</button>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-sm" onclick="app.printSavedPayrollSummary('${id}')" style="background:#2c3e50; color:white;">🖨️ Imprimir Resumen</button>
+                            <button class="btn btn-success btn-sm" onclick="app.exportSavedPayrollCSV('${id}')">📥 Exportar CSV</button>
+                        </div>
                     </div>
                     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;">
                         <div style="background:#e8f5e9; padding:12px; border-radius:8px; text-align:center;">
@@ -7655,6 +7664,72 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 a.href = url;
                 a.download = `nominas_todas_${new Date().toLocaleDateString('en-CA')}.csv`;
                 a.click();
+            },
+
+            // 2026-11-06 (Ranu): imprimir el RESUMEN de una nómina guardada — solo lo que
+            // se ve en la vista del período (fechas, # empleados, horas, bruto, neto y la
+            // tabla Empleado|Horas|Bruto|Deducción|Neto + TOTAL), con el logo de la empresa.
+            printSavedPayrollSummary(id) {
+                const period = (this.savedPayrollPeriods || []).find(p => String(p.id) === String(id));
+                if (!period) return;
+                const arr = ((period.payroll || []).slice()).sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+                if (!arr.length) { alert('Este período no tiene datos de nómina guardados.'); return; }
+                const n = v => parseFloat(v) || 0;
+                const $ = v => '$' + this.formatMoney(n(v));
+                const tot = arr.reduce((t, p) => ({ h: t.h + n(p.totalHours), b: t.b + n(p.grossPay), d: t.d + n(p.deductions), l: t.l + n(p.latePenalty), nt: t.nt + n(p.netPay) }), { h: 0, b: 0, d: 0, l: 0, nt: 0 });
+                const tard = !!this.workConfig.enableLateDeduction;
+                let logo = ''; try { logo = localStorage.getItem('companyLogo') || ''; } catch (e) {}
+                const empresa = (this.getCompanyName && this.getCompanyName()) || '';
+                const esc = t => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const filas = arr.map(p => `<tr>
+                    <td>${esc(p.employeeName)}</td>
+                    <td class="c">${n(p.totalHours).toFixed(2)} hrs</td>
+                    <td class="r">${$(p.grossPay)}</td>
+                    ${tard ? `<td class="r neg">${n(p.latePenalty) > 0 ? '-' + $(p.latePenalty) : '—'}</td>` : ''}
+                    <td class="r neg">${n(p.deductions) > 0 ? (n(p.empDeduction) > 0 ? '-' + p.empDeduction + '% (-' + $(p.deductions) + ')' : '-' + $(p.deductions)) : '—'}</td>
+                    <td class="r net">${$(p.netPay)}</td></tr>`).join('');
+                const w = window.open('', '', 'width=900,height=800');
+                if (!w) { alert('El navegador bloqueó la ventana de impresión.'); return; }
+                w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumen de Nómina ${esc(period.label)}</title>
+                <style>
+                    @page { size: letter portrait; margin: 0.5in; }
+                    body { font-family: Arial, Helvetica, sans-serif; color: #2c3e50; margin: 0; }
+                    .enc { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #2c3e50; padding-bottom: 12px; margin-bottom: 14px; }
+                    .enc img { max-height: 70px; max-width: 200px; object-fit: contain; }
+                    .enc h1 { margin: 0; font-size: 20pt; }
+                    .enc .sub { font-size: 11pt; color: #555; margin-top: 3px; }
+                    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+                    .tile { border: 1px solid #ccd3d9; border-radius: 6px; padding: 8px; text-align: center; }
+                    .tile b { display: block; font-size: 15pt; }
+                    .tile span { font-size: 9pt; color: #666; }
+                    table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+                    th { background: #2c3e50; color: #fff; padding: 8px; text-align: left; }
+                    td { padding: 7px 8px; border-bottom: 1px solid #e3e7ea; }
+                    tr:nth-child(even) td { background: #f6f8f9; }
+                    .c { text-align: center; } .r { text-align: right; } th.r { text-align: right; } th.c { text-align: center; }
+                    .neg { color: #c0392b; } .net { color: #1e8449; font-weight: bold; }
+                    tr.tot td { font-weight: bold; background: #ecf0f1; border-top: 2px solid #2c3e50; }
+                    .pie { margin-top: 14px; font-size: 8.5pt; color: #888; }
+                    .barra { padding: 10px; text-align: center; background: #eef6ff; }
+                    @media print { .barra { display: none; } }
+                </style></head><body>
+                <div class="barra"><button onclick="window.print()" style="padding:8px 18px;background:#2c3e50;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">🖨️ Imprimir</button>
+                    <button onclick="window.close()" style="padding:8px 18px;margin-left:8px;background:#95a5a6;color:#fff;border:none;border-radius:6px;cursor:pointer;">Cerrar</button></div>
+                <div class="enc">${logo ? `<img src="${logo}" alt="">` : ''}
+                    <div><h1>${esc(empresa) || 'Resumen de Nómina'}</h1><div class="sub">Resumen de Nómina · Período ${esc(period.label)}</div></div></div>
+                <div class="tiles">
+                    <div class="tile"><b>${arr.length}</b><span>Empleados</span></div>
+                    <div class="tile"><b>${tot.h.toFixed(2)} hrs</b><span>Horas Totales</span></div>
+                    <div class="tile"><b>${$(tot.b)}</b><span>Pago Bruto</span></div>
+                    <div class="tile"><b>${$(tot.nt)}</b><span>Pago Neto</span></div>
+                </div>
+                <table><thead><tr><th>Empleado</th><th class="c">Horas</th><th class="r">Pago Bruto</th>${tard ? '<th class="r">Tardanza</th>' : ''}<th class="r">Deducción</th><th class="r">Pago Neto</th></tr></thead>
+                <tbody>${filas}
+                <tr class="tot"><td>TOTAL (${arr.length})</td><td class="c">${tot.h.toFixed(2)} hrs</td><td class="r">${$(tot.b)}</td>${tard ? `<td class="r neg">${tot.l > 0 ? '-' + $(tot.l) : '—'}</td>` : ''}<td class="r neg">${tot.d > 0 ? '-' + $(tot.d) : '—'}</td><td class="r net">${$(tot.nt)}</td></tr>
+                </tbody></table>
+                <div class="pie">Impreso el ${new Date().toLocaleDateString('en-US')}</div>
+                </body></html>`);
+                w.document.close();
             },
 
             exportSavedPayrollCSV(id) {
