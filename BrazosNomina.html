@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-06.7</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-13.1</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -6583,8 +6583,20 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 let ocultarAnulados = false;
                 try { ocultarAnulados = localStorage.getItem('nomina_ocultarAnulados') === '1'; } catch(e) {}
                 const nAnulados = this.checks.filter(c => c.voided).length;
+                // 2026-11-13 (Ranu): selección para imprimir VARIOS cheques ya guardados juntos
+                // ("Guardar — Imprimir Después" + imprimir al día siguiente).
+                this._chkSel = this._chkSel || new Set();
+                const _vivos = new Set(this.checks.filter(c => !c.voided).map(c => String(c.id)));
+                [...this._chkSel].forEach(id => { if (!_vivos.has(id)) this._chkSel.delete(id); });
+                const _nSel = this._chkSel.size;
+                const _nSinImp = this.checks.filter(c => !c.voided && c.printed === false).length;
                 let html = `
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <button class="btn btn-primary btn-sm" onclick="app.imprimirChequesSeleccionados()" ${_nSel ? '' : 'disabled style="opacity:0.5;cursor:default;"'}>🖨️ Imprimir seleccionados (${_nSel})</button>
+                            ${_nSinImp ? `<button class="btn btn-secondary btn-sm" onclick="app.seleccionarChequesSinImprimir()">☑️ Marcar los ${_nSinImp} sin imprimir</button>` : ''}
+                            ${_nSel ? `<button class="btn btn-secondary btn-sm" onclick="app._chkSel.clear(); app.refreshChecks();">Quitar selección</button>` : ''}
+                        </div>
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;color:#555;">
                             <input type="checkbox" ${ocultarAnulados ? 'checked' : ''} onchange="try{localStorage.setItem('nomina_ocultarAnulados', this.checked ? '1' : '0')}catch(e){}; app.refreshChecks()" style="width:16px;height:16px;cursor:pointer;">
                             Ocultar cheques anulados (${nAnulados})
@@ -6593,6 +6605,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     <table>
                         <thead>
                             <tr>
+                                <th style="width:34px;"></th>
                                 <th>#</th>
                                 <th>Fecha</th>
                                 <th>Empleado</th>
@@ -6621,6 +6634,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
 
                     html += `
                         <tr style="${rowStyle}">
+                            <td style="text-align:center;">${voided ? '' : `<input type="checkbox" ${this._chkSel.has(String(check.id)) ? 'checked' : ''} onchange="app._toggleChkSel('${check.id}', this.checked)" title="Seleccionar para imprimir" style="width:17px;height:17px;cursor:pointer;">`}</td>
                             <td style="${textStyle}"><strong>#${check.checkNumber}</strong></td>
                             <td style="${textStyle}">${dateUSA}</td>
                             <td style="${textStyle}">${check.employeeName}</td>
@@ -6628,7 +6642,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             <td style="color: #27ae60; font-weight: bold;${textStyle}">$${this.formatMoney(check.gross || 0)}</td>
                             <td style="color: #e74c3c;${textStyle}">-$${(check.deductions || 0).toFixed(2)}</td>
                             <td style="color: #2980b9; font-weight: bold; font-size: 1.1rem;${textStyle}">$${this.formatMoney(check.net || check.gross)}</td>
-                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>'}</td>
+                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>' + (check.printed === false ? '<div style="font-size:0.72rem;color:#e67e22;font-weight:700;margin-top:3px;">🖨️ Sin imprimir</div>' : '')}</td>
                             <td style="display:flex; gap:6px;">
                                 <button class="btn btn-secondary btn-sm" onclick="app.viewCheck(${check.id})">
                                     👁️ Ver
@@ -6656,6 +6670,49 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // solo se marca voided:true para que su # de cheque quede reservado y
             // no se reutilice, y quede visible en el historial que ese cheque no es
             // válido.
+            _toggleChkSel(id, on) {
+                this._chkSel = this._chkSel || new Set();
+                if (on) this._chkSel.add(String(id)); else this._chkSel.delete(String(id));
+                this.refreshChecks();
+            },
+            seleccionarChequesSinImprimir() {
+                this._chkSel = new Set(this.checks.filter(c => !c.voided && c.printed === false).map(c => String(c.id)));
+                this.refreshChecks();
+            },
+            // Imprime los cheques marcados con la MISMA vista previa/hoja y el MISMO orden de
+            // alimentación que la impresión normal del lote (_ordenarParaImprimir).
+            imprimirChequesSeleccionados() {
+                const ids = this._chkSel || new Set();
+                const sel = this.checks.filter(c => ids.has(String(c.id)) && !c.voided);
+                if (!sel.length) { alert('Marca al menos un cheque.'); return; }
+                const yaImpresos = sel.filter(c => c.printed !== false);
+                if (yaImpresos.length && !confirm(`⚠️ ${yaImpresos.length} de los cheques marcados ya se habían impreso:\n` +
+                    yaImpresos.map(c => '#' + c.checkNumber + ' ' + c.employeeName).join('\n') + '\n\n¿Imprimirlos otra vez?')) return;
+                const orden = this._ordenarParaImprimir(sel, c => c.checkNumber);
+                if (!confirm(`Se van a imprimir ${orden.length} cheque(s), en este orden de alimentación:\n\n` +
+                    orden.map((c, k) => (k + 1) + '. #' + c.checkNumber + ' — ' + c.employeeName).join('\n') +
+                    '\n\nRevisa que los cheques físicos estén en la impresora con esos números.')) return;
+                const bgImage = localStorage.getItem('ap_nomina_checkBgImage') || '';
+                this.previewChecks(orden, this.checkConfig, bgImage);
+                this._marcarChequesImpresos(orden);
+                this._chkSel.clear();
+                this.refreshChecks();
+            },
+            // Marca cheques como impresos y, si a su nómina ya no le queda ninguno pendiente,
+            // también la nómina ("✅ Cheques Impresos").
+            _marcarChequesImpresos(lista) {
+                const ahora = new Date().toISOString();
+                (lista || []).forEach(c => { c.printed = true; c.printedAt = ahora; c.updatedAt = ahora; });
+                [...new Set((lista || []).map(c => c.period).filter(Boolean))].forEach(per => {
+                    const pendientes = this.checks.filter(c => !c.voided && c.printed === false && this._mismoPeriodo(c.period, per));
+                    if (pendientes.length) return;
+                    (this.savedPayrollPeriods || []).forEach(p => {
+                        if (this._mismoPeriodo(p.label, per) && p.checksStatus !== 'digital') { p.checksStatus = 'printed'; p.updatedAt = ahora; }
+                    });
+                });
+                this.save();
+            },
+
             cancelCheck(id) {
                 const check = this.checks.find(c => c.id === id);
                 if (!check) return;
@@ -6743,6 +6800,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 // de página fijo) — por eso esa semana hubo que meter la hoja de otra forma.
                 // Ahora usa EXACTAMENTE la misma hoja que la impresión normal del lote.
                 this.printMultipleChecks([check], this.checkConfig, '');
+                // 2026-11-13: queda marcado como impreso (y la nómina, si era el último pendiente)
+                try { this._marcarChequesImpresos([check]); this.refreshChecks(); } catch (e) {}
                 return;
                 const cfg = this.checkConfig;
 
