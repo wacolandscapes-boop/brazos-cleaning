@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-13.1</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-13.3</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -4423,6 +4423,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 all[k] = all[k] || {};
                 if (modo === 'suma') delete all[k][String(empId)]; else all[k][String(empId)] = modo;
                 try { localStorage.setItem('ap_nomina_pagarPor', JSON.stringify(all)); } catch (e) {}
+                // 2026-11-13: al cambiar "Pagar por" se vuelven a calcular sus horas (se descarta
+                // lo que se hubiera escrito a mano en esa fila).
+                document.querySelectorAll(`.manualRegHours[data-emp="${empId}"], .manualOtHours[data-emp="${empId}"]`).forEach(i => { delete i.dataset.editado; });
                 // El bono del % solo aplica cuando se paga con el %
                 const bonusInp = document.querySelector(`.manualBonus[data-emp="${empId}"]`);
                 if (bonusInp && bonusInp.dataset.pctBonus !== undefined) {
@@ -4454,7 +4457,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 if (mismoPeriodoQueAntes) {
                     list.querySelectorAll('.manualRegHours').forEach(input => {
                         const empId = input.dataset.emp;
+                        const _otI = list.querySelector(`.manualOtHours[data-emp="${empId}"]`);
                         valoresPrevios[empId] = {
+                            editado: input.dataset.editado === '1' || (_otI && _otI.dataset.editado === '1'),
                             reg: input.value,
                             ot: list.querySelector(`.manualOtHours[data-emp="${empId}"]`)?.value,
                             bonus: list.querySelector(`.manualBonus[data-emp="${empId}"]`)?.value,
@@ -4540,6 +4545,11 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     let otValFinal = prodLock ? Math.max(combinedHrs - 40, 0).toFixed(2) : otVal;
                     // Solo %: se pagan EXACTAMENTE las horas Reg/OT que mandó el Scheduler
                     if (modoPago === 'pct') { regValFinal = (pre.regularHours || 0).toFixed(2); otValFinal = (pre.overtimeHours || 0).toFixed(2); }
+                    // 2026-11-13 (Ranu): si en esta fila se corrigieron las horas A MANO, se conservan
+                    // (aunque se vuelva a dibujar la tabla por un sync), hasta cambiar de período,
+                    // cambiar "Pagar por" o guardar la nómina.
+                    const editadoAMano = !!(prodLock && prevVal && prevVal.editado);
+                    if (editadoAMano) { regValFinal = prevVal.reg; otValFinal = prevVal.ot; }
                     let bonusFinal = bonusVal;
                     if (modoPago === 'horas' && !prevVal) bonusFinal = 0;
                     // Comparación para decidir (y para mostrársela a quien la necesite)
@@ -4570,7 +4580,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     const prodBadge = prodLock
                         ? ` <span style="background:#eafaf1; color:#1e8449; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Ya tiene ${prodHrs.toFixed(2)} hrs registradas en Producción (Reloj Checador/Scheduler) para este período — se incluyen aparte con 'Calcular Nómina', no las captures aquí de nuevo">🕐 Producción: ${prodHrs.toFixed(2)} hrs</span>`
                         : '';
-                    const lockAttrs = prodLock ? ` disabled data-prodlock="1" title="Horas ya registradas en Producción — se calculan aparte con 'Calcular Nómina (Reloj Checador)'" style="width:90px; padding:6px; background:#f2f3f4; color:#1e8449; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
+                    // 2026-11-13: ya NO se bloquean (Ranu quiere poder corregirlas aquí). Se ven en
+                    // verde mientras sean las calculadas y en naranja cuando se corrigieron a mano.
+                    const lockAttrs = prodLock ? ` data-prodlock="1"${editadoAMano ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'; this.style.background='#fff3e0'; this.style.color='#e65100';" title="Horas registradas (Calendar/Producción). Puedes corregirlas aquí: solo cambian esta nómina, no el registro." style="width:90px; padding:6px; background:${editadoAMano ? '#fff3e0' : '#f2f3f4'}; color:${editadoAMano ? '#e65100' : '#1e8449'}; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
                     const pctExtraBadge = (prePctHrs > 0 && modoPago === 'suma')
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Nómina x % del Scheduler para los días sin registrar de este período (semana ${pre.weekStart} a ${pre.weekEnd}) — ${prePctHrs.toFixed(2)} hrs ya sumadas a las reales de Producción de arriba">➕ Nómina x%: ${prePctHrs.toFixed(2)} hrs</span>`
                         : '';
@@ -4757,7 +4769,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <h3 style="margin:0;">Período: ${startUSA} - ${endUSA}</h3>
                         <button class="btn btn-success" onclick="app.savePayrollPeriod('${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}','${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}')" style="white-space:nowrap;">
-                            💾 Guardar Nómina
+                            ${(this.savedPayrollPeriods || []).some(p => p.start === `${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}` && p.end === `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`) ? '🔄 Actualizar Nómina Guardada' : '💾 Guardar Nómina'}
                         </button>
                     </div>
                     
@@ -7485,6 +7497,61 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 URL.revokeObjectURL(url);
             },
 
+            // 2026-11-13 (Ranu): ACTUALIZAR una nómina ya guardada con el cálculo actual
+            // (p. ej. se guardó, se imprimió un cheque y al día siguiente se agregan horas).
+            //  - Reemplaza period.payroll con this.currentPayrollCalc.
+            //  - Cheques de este período que NO se han impreso: se actualizan con el monto
+            //    nuevo y conservan su número.
+            //  - Cheques YA impresos: no se tocan; si el monto de ese empleado cambió, se avisa
+            //    (hay que anular ese cheque y sacar otro).
+            actualizarNominaGuardada(period) {
+                const nuevo = JSON.parse(JSON.stringify(this.currentPayrollCalc || []));
+                if (!period || !nuevo.length) { alert('No hay una nómina calculada para actualizar.'); return; }
+                const $ = n => '$' + this.formatMoney(Number(n) || 0);
+                const viejoPor = {}; (period.payroll || []).forEach(p => { viejoPor[String(p.employeeId)] = p; });
+                const nuevoPor = {}; nuevo.forEach(p => { nuevoPor[String(p.employeeId)] = p; });
+                const cheques = (this.checks || []).filter(c => !c.voided && this._mismoPeriodo(c.period, period.label));
+                const lineas = [], aActualizar = [], impresosConCambio = [], sinCheque = [];
+                Object.keys(nuevoPor).forEach(id => {
+                    const n = nuevoPor[id], v = viejoPor[id];
+                    const cambio = !v || Math.abs((n.netPay || 0) - (v.netPay || 0)) > 0.004 || Math.abs((n.totalHours || 0) - (v.totalHours || 0)) > 0.004;
+                    if (!cambio) return;
+                    lineas.push(`• ${n.employeeName}: ${v ? (v.totalHours || 0).toFixed(2) + ' hrs ' + $(v.netPay) : '(nuevo)'} → ${(n.totalHours || 0).toFixed(2)} hrs ${$(n.netPay)}`);
+                    const chq = cheques.find(c => String(c.employeeId) === id);
+                    if (!chq) { if (v) sinCheque.push(n.employeeName); return; }
+                    if (chq.printed === false) aActualizar.push({ chq, n }); else impresosConCambio.push(`#${chq.checkNumber} ${n.employeeName}`);
+                });
+                const quitados = Object.keys(viejoPor).filter(id => !nuevoPor[id]).map(id => viejoPor[id].employeeName);
+                if (!lineas.length && !quitados.length) { alert('La nómina guardada ya tiene exactamente estos montos. No hay nada que actualizar.'); return; }
+                let msg = `🔄 Actualizar la nómina guardada ${period.label}\n\nCambios:\n${lineas.join('\n') || '(ninguno)'}`;
+                if (quitados.length) msg += `\n\n⚠️ Ya no aparecen en el cálculo (se quitarán de la nómina guardada): ${quitados.join(', ')}`;
+                if (aActualizar.length) msg += `\n\n🧾 Cheques SIN imprimir que se actualizan (conservan su número): ${aActualizar.map(x => '#' + x.chq.checkNumber + ' ' + x.n.employeeName).join(', ')}`;
+                if (impresosConCambio.length) msg += `\n\n⛔ Cheques YA IMPRESOS con monto distinto (NO se cambian; anúlalos y saca uno nuevo): ${impresosConCambio.join(', ')}`;
+                msg += '\n\n¿Aplicar los cambios?';
+                if (!confirm(msg)) return;
+                const ahora = new Date().toISOString();
+                aActualizar.forEach(({ chq, n }) => {
+                    Object.assign(chq, {
+                        hours: n.totalHours, regularHours: n.regularHours || 0, overtimeHours: n.overtimeHours || 0,
+                        rate: n.rate || 0, regularPay: n.regularPay || 0, overtimePay: n.overtimePay || 0,
+                        gross: n.grossPay, deductions: n.deductions || 0, reimbursement: n.reimbursement || 0, bonus: n.bonus || 0,
+                        net: n.netPay, workerType: n.workerType || chq.workerType,
+                        federalTax: n.federalTax || 0, socialSecurityTax: n.socialSecurityTax || 0, medicareTax: n.medicareTax || 0,
+                        updatedAt: ahora
+                    });
+                });
+                period.payroll = nuevo;
+                period.updatedAt = ahora;
+                period.actualizadaAt = ahora;
+                this.save();
+                try { this.renderSavedPayrollList(); } catch (e) {}
+                try { this.refreshChecks(); } catch (e) {}
+                let fin = `✅ Nómina actualizada.${aActualizar.length ? '\n\nCheques actualizados: ' + aActualizar.length : ''}`;
+                if (sinCheque.length) fin += `\n\nℹ️ Sin cheque todavía: ${sinCheque.join(', ')} — se generan al asignar/imprimir cheques.`;
+                if (impresosConCambio.length) fin += `\n\n⛔ Recuerda: ${impresosConCambio.join(', ')} ya estaban impresos con el monto anterior.`;
+                alert(fin);
+            },
+
             savePayrollPeriod(startStr, endStr) {
                 // Check if already saved
                 const exists = this.savedPayrollPeriods.find(p => p.start === startStr && p.end === endStr);
@@ -7494,7 +7561,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     // null/desactualizada para quien llamó a esta función esperando
                     // obtenerla (ver el auto-guardado en confirmAndPrintChecks() abajo).
                     this.currentPayrollPeriodId = exists.id;
-                    if (!this._autoSavingPeriod) alert('Esta nómina ya está guardada.');
+                    // 2026-11-13 (Ranu): ya no solo avisa — ofrece ACTUALIZAR la nómina guardada
+                    // (y los cheques que aún no se imprimen) con lo que se calculó ahora.
+                    if (!this._autoSavingPeriod) this.actualizarNominaGuardada(exists);
                     return;
                 }
                 const startDate = new Date(startStr + 'T00:00:00');
