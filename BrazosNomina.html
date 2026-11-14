@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.2</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.3</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -6028,7 +6028,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             medicareTax: p.medicareTax || 0,
                             checkNumber: parseInt(numInput ? numInput.value : 0),
                             payMethod: 'check',
-                            printed: shouldPrint
+                            printed: shouldPrint && showPreview // 2026-11-14: "Guardar — Imprimir Después" no imprime nada
                         };
                         if (_reemplazos[i]) { const viejo = _reemplazos[i]; const idViejo = viejo.id; Object.keys(viejo).forEach(k => { if (!(k in check)) delete viejo[k]; }); Object.assign(viejo, check, { id: idViejo, replacedAt: new Date().toISOString() }); if (shouldPrint) toPrintChecks.push(viejo); }
                         else { this.checks.push(check); if (shouldPrint) toPrintChecks.push(check); }
@@ -6054,7 +6054,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             medicareTax: p.medicareTax || 0,
                             checkNumber: txnInput ? (txnInput.value.trim() || '—') : '—',
                             payMethod: method,
-                            printed: shouldPrint
+                            printed: shouldPrint && showPreview // 2026-11-14: "Guardar — Imprimir Después" no imprime nada
                         };
                         if (_reemplazos[i]) { const viejo = _reemplazos[i]; const idViejo = viejo.id; Object.keys(viejo).forEach(k => { if (!(k in check)) delete viejo[k]; }); Object.assign(viejo, check, { id: idViejo, replacedAt: new Date().toISOString() }); if (shouldPrint) toPrintDigital.push(viejo); }
                         else { this.checks.push(check); if (shouldPrint) toPrintDigital.push(check); }
@@ -6669,6 +6669,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                                 <button class="btn btn-sm" onclick="app.cancelCheck(${check.id})" style="background:${voided ? '#95a5a6' : '#e74c3c'};color:white;">
                                     ${voided ? '↩️ Reactivar' : '🚫 Anular'}
                                 </button>
+                                ${!voided && check.printed !== false && (check.payMethod || 'check') === 'check' ? `<button class="btn btn-sm" onclick="app.desmarcarImpreso(${check.id})" title="Este cheque NO salió en papel: quitarle la marca de impreso y ponerle el monto de la nómina guardada" style="background:#f39c12;color:white;">↩️ No se imprimió</button>` : ''}
                                 ${voided && (check.payMethod || 'check') === 'check' && !check.partialOf && this._reposiciones(check).reduce((t, c) => t + (Number(c.partialPct) || 0), 0) < 99.999 ? `<button class="btn btn-sm" onclick="app.reponerCheque(${check.id})" title="Sacar un cheque nuevo por una parte (o el resto) de este cheque anulado" style="background:#8e44ad;color:white;">💵 Reponer</button>` : ''}
                             </td>
                         </tr>
@@ -6816,6 +6817,37 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 this._chkSel = this._chkSel || new Set();
                 this._chkSel.add(String(nuevo.id));
                 this.refreshChecks();
+            },
+            // 2026-11-14 (Ranu): un cheque quedó marcado "impreso" sin haber salido en papel
+            // (bug de "Guardar — Imprimir Después"). Le quita la marca y, si la nómina guardada
+            // de su período trae otro monto para ese empleado, lo actualiza (conserva su #).
+            desmarcarImpreso(id) {
+                const chq = this.checks.find(c => String(c.id) === String(id));
+                if (!chq || chq.voided) return;
+                if (!confirm(`¿Confirmas que el cheque #${chq.checkNumber} de ${chq.employeeName} NO se imprimió en papel?\n\nSe le quita la marca de impreso para poder imprimirlo después.`)) return;
+                const ahora = new Date().toISOString();
+                chq.printed = false; delete chq.printedAt; chq.updatedAt = ahora;
+                const per = (this.savedPayrollPeriods || []).find(p => this._mismoPeriodo(p.label, chq.period));
+                const n = per && (per.payroll || []).find(p => String(p.employeeId) === String(chq.employeeId));
+                let msg = `✅ El cheque #${chq.checkNumber} quedó "Sin imprimir".`;
+                if (n && (Math.abs((n.netPay || 0) - (chq.net || 0)) > 0.004 || Math.abs((n.totalHours || 0) - (chq.hours || 0)) > 0.004)) {
+                    const $ = v => '$' + this.formatMoney(Number(v) || 0);
+                    if (confirm(`La nómina guardada (${per.label}) tiene otro monto para ${chq.employeeName}:\n\n${(chq.hours || 0).toFixed(2)} hrs ${$(chq.net)}  →  ${(n.totalHours || 0).toFixed(2)} hrs ${$(n.netPay)}\n\n¿Actualizar el cheque #${chq.checkNumber} con el monto de la nómina guardada?`)) {
+                        Object.assign(chq, {
+                            hours: n.totalHours, regularHours: n.regularHours || 0, overtimeHours: n.overtimeHours || 0,
+                            rate: n.rate || 0, regularPay: n.regularPay || 0, overtimePay: n.overtimePay || 0,
+                            gross: n.grossPay, deductions: n.deductions || 0, reimbursement: n.reimbursement || 0, bonus: n.bonus || 0,
+                            net: n.netPay, workerType: n.workerType || chq.workerType,
+                            federalTax: n.federalTax || 0, socialSecurityTax: n.socialSecurityTax || 0, medicareTax: n.medicareTax || 0,
+                            updatedAt: ahora
+                        });
+                        msg += `\n\nMonto actualizado: ${$(chq.net)}.`;
+                    }
+                }
+                if (per && per.checksStatus === 'printed') { per.checksStatus = 'pending'; per.updatedAt = ahora; }
+                this.save();
+                this.refreshChecks();
+                alert(msg);
             },
             _toggleChkSel(id, on) {
                 this._chkSel = this._chkSel || new Set();
