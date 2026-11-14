@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-13.3</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.2</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -6248,6 +6248,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         <span style="color:#555;">Check #${check.checkNumber}</span>
                     </div>
                     <div style="text-align:center; font-size:7.5pt; color:#999; letter-spacing:1.5px; padding:2px; text-transform:uppercase;">${label}</div>
+                    ${check.partialOf ? (() => { const o = (this.checks || []).find(c => String(c.id) === String(check.partialOf)); return `<div style="text-align:center; font-size:8pt; font-weight:bold; color:#333; padding:0 16px 2px;">Partial payment (${check.partialPct || ''}%)${o ? ' — replaces voided check #' + o.checkNumber : ''}</div>`; })() : ''}
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; padding:2px 16px; font-size:8.5pt; margin-bottom:2px;">
                         <div><strong>${check.employeeName}</strong>${check.employeeAddress ? '<br>' + check.employeeAddress : ''}${check.employeeCity ? '<br>' + check.employeeCity : ''}</div>
                         <div style="text-align:right;">Period: ${check.period || dateUSA}<br>Pay Date: ${dateUSA}</div>
@@ -6654,7 +6655,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                             <td style="color: #27ae60; font-weight: bold;${textStyle}">$${this.formatMoney(check.gross || 0)}</td>
                             <td style="color: #e74c3c;${textStyle}">-$${(check.deductions || 0).toFixed(2)}</td>
                             <td style="color: #2980b9; font-weight: bold; font-size: 1.1rem;${textStyle}">$${this.formatMoney(check.net || check.gross)}</td>
-                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>' + (check.printed === false ? '<div style="font-size:0.72rem;color:#e67e22;font-weight:700;margin-top:3px;">🖨️ Sin imprimir</div>' : '')}</td>
+                            <td>${voided ? '<span style="background:#e74c3c;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">🚫 ANULADO</span>' : '<span style="background:#27ae60;color:white;padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:bold;">✅ Vigente</span>' + (check.printed === false ? '<div style="font-size:0.72rem;color:#e67e22;font-weight:700;margin-top:3px;">🖨️ Sin imprimir</div>' : '')}${this._reposicionInfoHTML(check)}</td>
                             <td style="display:flex; gap:6px;">
                                 <button class="btn btn-secondary btn-sm" onclick="app.viewCheck(${check.id})">
                                     👁️ Ver
@@ -6668,6 +6669,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                                 <button class="btn btn-sm" onclick="app.cancelCheck(${check.id})" style="background:${voided ? '#95a5a6' : '#e74c3c'};color:white;">
                                     ${voided ? '↩️ Reactivar' : '🚫 Anular'}
                                 </button>
+                                ${voided && (check.payMethod || 'check') === 'check' && !check.partialOf && this._reposiciones(check).reduce((t, c) => t + (Number(c.partialPct) || 0), 0) < 99.999 ? `<button class="btn btn-sm" onclick="app.reponerCheque(${check.id})" title="Sacar un cheque nuevo por una parte (o el resto) de este cheque anulado" style="background:#8e44ad;color:white;">💵 Reponer</button>` : ''}
                             </td>
                         </tr>
                     `;
@@ -6682,6 +6684,139 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // solo se marca voided:true para que su # de cheque quede reservado y
             // no se reutilice, y quede visible en el historial que ese cheque no es
             // válido.
+            // 2026-11-14 (Ranu): REPOSICIÓN / PAGO PARCIAL de un cheque anulado (p. ej. rebotó
+            // por fondos insuficientes). El cheque original queda ANULADO; se crean cheques
+            // nuevos del MISMO período por un % de él (todos los montos y horas × %), y la
+            // app lleva cuánto falta. El último pago ("el resto") se calcula como original −
+            // lo ya repuesto, campo por campo, para que la suma cuadre al centavo.
+            _reposiciones(orig) {
+                return (this.checks || []).filter(c => !c.voided && String(c.partialOf) === String(orig.id));
+            },
+            _reposicionInfoHTML(check) {
+                const $ = n => '$' + this.formatMoney(Number(n) || 0);
+                if (check.partialOf) {
+                    const o = (this.checks || []).find(c => String(c.id) === String(check.partialOf));
+                    return `<div style="font-size:0.72rem;color:#8e44ad;font-weight:700;margin-top:3px;">💵 Reposición ${check.partialPct || ''}%${o ? ' de #' + o.checkNumber : ''}</div>`;
+                }
+                if (!check.voided) return '';
+                const reps = this._reposiciones(check);
+                if (!reps.length) return '';
+                const pagado = reps.reduce((t, c) => t + (c.net || 0), 0);
+                const falta = Math.max(0, Math.round(((check.net || 0) - pagado) * 100) / 100);
+                return `<div style="font-size:0.72rem;margin-top:3px;font-weight:700;color:${falta > 0.004 ? '#e67e22' : '#27ae60'};">💵 Repuesto ${$(pagado)}${falta > 0.004 ? ' · Pendiente ' + $(falta) : ' · Completo'}</div>`;
+            },
+            _calcReposicion(orig, pct) {
+                const campos = ['hours', 'regularHours', 'overtimeHours', 'regularPay', 'overtimePay', 'gross', 'deductions', 'reimbursement', 'bonus', 'net', 'federalTax', 'socialSecurityTax', 'medicareTax'];
+                const reps = this._reposiciones(orig);
+                const pctPrevio = reps.reduce((t, c) => t + (Number(c.partialPct) || 0), 0);
+                const esResto = pctPrevio + pct >= 99.999;
+                const r = {};
+                campos.forEach(k => {
+                    const total = Number(orig[k]) || 0;
+                    if (esResto) {
+                        const ya = reps.reduce((t, c) => t + (Number(c[k]) || 0), 0);
+                        r[k] = Math.round((total - ya) * 100) / 100;
+                    } else {
+                        r[k] = Math.round(total * pct) / 100;
+                    }
+                });
+                return { r, esResto, pctPrevio };
+            },
+            reponerCheque(id) {
+                const orig = this.checks.find(c => String(c.id) === String(id));
+                if (!orig || !orig.voided) return;
+                const reps = this._reposiciones(orig);
+                const pctPrevio = reps.reduce((t, c) => t + (Number(c.partialPct) || 0), 0);
+                const restante = Math.max(0, Math.round((100 - pctPrevio) * 100) / 100);
+                if (restante <= 0.001) { alert(`El cheque #${orig.checkNumber} ya se repuso completo.`); return; }
+                const maxNum = Math.max(0, ...this.checks.filter(c => (c.payMethod || 'check') === 'check').map(c => parseInt(c.checkNumber) || 0));
+                const hoy = new Date(); const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+                const pctDef = pctPrevio > 0 ? restante : Math.min(50, restante);
+                document.getElementById('reponerModal')?.remove();
+                const modal = document.createElement('div');
+                modal.id = 'reponerModal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                const lbl = 'display:block;font-size:0.8rem;font-weight:700;color:#555;margin:10px 0 4px;';
+                const inp = 'width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font-size:1rem;box-sizing:border-box;';
+                modal.innerHTML = `
+                    <div style="background:#fff;border-radius:12px;padding:22px;max-width:440px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);max-height:92vh;overflow:auto;">
+                        <h3 style="margin:0 0 4px 0;color:#8e44ad;">💵 Reponer cheque anulado</h3>
+                        <p style="color:#666;margin:0 0 6px 0;font-size:0.9rem;"><strong>${orig.employeeName}</strong> — cheque #${orig.checkNumber} (anulado) por $${this.formatMoney(orig.net)}<br>Período: ${orig.period || '—'}</p>
+                        ${pctPrevio > 0 ? `<p style="background:#fef5e7;border-radius:8px;padding:8px 10px;font-size:0.85rem;color:#8a5a00;margin:0 0 6px;">Ya se repuso ${pctPrevio}% (${reps.map(c => '#' + c.checkNumber).join(', ')}). Falta ${restante}%.</p>` : ''}
+                        <label style="${lbl}">Porcentaje a pagar ahora (%)</label>
+                        <input type="number" id="repPct" min="1" max="${restante}" step="0.01" value="${pctDef}" style="${inp}" oninput="app._previewReposicion(${JSON.stringify(String(orig.id)).replace(/"/g, '&quot;')})">
+                        <label style="${lbl}"># de cheque nuevo</label>
+                        <input type="number" id="repNum" value="${maxNum + 1}" style="${inp}">
+                        <label style="${lbl}">Fecha de pago</label>
+                        <input type="date" id="repFecha" value="${hoyStr}" style="${inp}">
+                        <div id="repPreview" style="margin-top:12px;background:#f7f3fa;border-radius:8px;padding:10px 12px;font-size:0.88rem;"></div>
+                        <div id="repWarn" style="color:#e74c3c;font-size:0.82rem;margin-top:8px;min-height:1.1em;"></div>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+                            <button onclick="document.getElementById('reponerModal').remove()" style="background:#95a5a6;color:white;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:bold;">Cancelar</button>
+                            <button onclick="app._guardarReposicion(${JSON.stringify(String(orig.id)).replace(/"/g, '&quot;')})" style="background:#8e44ad;color:white;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:bold;">💾 Crear cheque (sin imprimir)</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+                this._previewReposicion(String(orig.id));
+            },
+            _previewReposicion(id) {
+                const orig = this.checks.find(c => String(c.id) === String(id));
+                const box = document.getElementById('repPreview');
+                if (!orig || !box) return;
+                const pct = parseFloat(document.getElementById('repPct').value);
+                if (!(pct > 0)) { box.innerHTML = 'Escribe un porcentaje.'; return; }
+                const { r, esResto } = this._calcReposicion(orig, pct);
+                const $ = n => '$' + this.formatMoney(n || 0);
+                const imp = (r.federalTax || 0) + (r.socialSecurityTax || 0) + (r.medicareTax || 0);
+                const falta = Math.max(0, Math.round(((orig.net || 0) - this._reposiciones(orig).reduce((t, c) => t + (c.net || 0), 0) - r.net) * 100) / 100);
+                box.innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr auto;gap:3px 12px;">
+                        <span>Horas</span><span style="text-align:right;">${(r.hours || 0).toFixed(2)}</span>
+                        <span>Bruto</span><span style="text-align:right;">${$(r.gross)}</span>
+                        ${imp > 0 ? `<span>Impuestos (Federal + SS + Medicare)</span><span style="text-align:right;">-${$(imp)}</span>` : ''}
+                        ${r.reimbursement ? `<span>Reembolso</span><span style="text-align:right;">${$(r.reimbursement)}</span>` : ''}
+                        <strong>Neto del cheque nuevo</strong><strong style="text-align:right;color:#8e44ad;">${$(r.net)}</strong>
+                        <span style="color:#888;">Quedará pendiente</span><span style="text-align:right;color:${falta > 0.004 ? '#e67e22' : '#27ae60'};font-weight:700;">${falta > 0.004 ? $(falta) : 'nada (completo)'}</span>
+                    </div>${esResto ? '<div style="font-size:0.78rem;color:#888;margin-top:6px;">Es el último pago: se calcula como original − lo ya repuesto, para que cuadre al centavo.</div>' : ''}`;
+            },
+            _guardarReposicion(id) {
+                const orig = this.checks.find(c => String(c.id) === String(id));
+                if (!orig) return;
+                const warn = document.getElementById('repWarn');
+                const reps = this._reposiciones(orig);
+                const restante = 100 - reps.reduce((t, c) => t + (Number(c.partialPct) || 0), 0);
+                const pct = parseFloat(document.getElementById('repPct').value);
+                const num = parseInt(document.getElementById('repNum').value);
+                const fecha = document.getElementById('repFecha').value;
+                if (!(pct > 0) || pct > restante + 0.001) { warn.textContent = `El porcentaje debe ser entre 1 y ${Math.round(restante * 100) / 100}.`; return; }
+                if (isNaN(num) || num < 1) { warn.textContent = 'Escribe un # de cheque válido.'; return; }
+                const dup = this.checks.find(c => (c.payMethod || 'check') === 'check' && parseInt(c.checkNumber) === num);
+                if (dup) { warn.textContent = `El #${num} ya lo usa ${dup.employeeName}${dup.voided ? ' (anulado)' : ''}. Usa otro número.`; return; }
+                if (!fecha) { warn.textContent = 'Escribe la fecha de pago.'; return; }
+                const { r } = this._calcReposicion(orig, pct);
+                const pctR = Math.round(pct * 100) / 100;
+                if (!confirm(`¿Crear el cheque #${num} para ${orig.employeeName} por $${this.formatMoney(r.net)} (${pctR}% del cheque anulado #${orig.checkNumber})?\n\nQueda "Sin imprimir": lo imprimes desde esta pestaña con la casilla + "🖨️ Imprimir seleccionados".`)) return;
+                const ahora = new Date().toISOString();
+                const nuevo = Object.assign({}, orig, r, {
+                    id: Date.now(),
+                    date: fecha + 'T12:00:00',
+                    checkNumber: num,
+                    payMethod: 'check',
+                    printed: false,
+                    partialOf: orig.id,
+                    partialPct: pctR,
+                    createdAt: ahora,
+                    updatedAt: ahora
+                });
+                ['voided', 'voidedAt', 'printedAt', 'replacedAt'].forEach(k => delete nuevo[k]);
+                this.checks.push(nuevo);
+                this.save();
+                document.getElementById('reponerModal')?.remove();
+                this._chkSel = this._chkSel || new Set();
+                this._chkSel.add(String(nuevo.id));
+                this.refreshChecks();
+            },
             _toggleChkSel(id, on) {
                 this._chkSel = this._chkSel || new Set();
                 if (on) this._chkSel.add(String(id)); else this._chkSel.delete(String(id));
@@ -6726,9 +6861,12 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             },
 
             cancelCheck(id) {
-                const check = this.checks.find(c => c.id === id);
+                const check = this.checks.find(c => String(c.id) === String(id)); // 2026-11-14: Historial manda el id como texto
                 if (!check) return;
                 if (check.voided) {
+                    // 2026-11-14: si ya se sacaron cheques de reposición por este cheque, reactivarlo lo pagaría dos veces
+                    const _reps = this._reposiciones(check);
+                    if (_reps.length) { alert(`⛔ No se puede reactivar el cheque #${check.checkNumber}: ya tiene cheque(s) de reposición (${_reps.map(c => '#' + c.checkNumber).join(', ')}).\n\nSi hace falta, anula primero esos cheques.`); return; }
                     if (!confirm(`¿Reactivar el cheque #${check.checkNumber} de ${check.employeeName}?`)) return;
                     check.voided = false;
                     delete check.voidedAt;
@@ -6749,7 +6887,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // (nunca borra ni recalcula el resto del cheque), con candado contra
             // duplicar el # de otro cheque vigente (no anulado).
             editCheckNumber(id) {
-                const check = this.checks.find(c => c.id === id);
+                const check = this.checks.find(c => String(c.id) === String(id)); // 2026-11-14: Historial manda el id como texto
                 if (!check) return;
                 document.getElementById('editCheckNumModal')?.remove();
                 const modal = document.createElement('div');
@@ -6772,7 +6910,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             },
 
             _saveEditedCheckNumber(id) {
-                const check = this.checks.find(c => c.id === id);
+                const check = this.checks.find(c => String(c.id) === String(id)); // 2026-11-14: Historial manda el id como texto
                 if (!check) return;
                 const input = document.getElementById('editCheckNumInput');
                 const newNum = parseInt(input ? input.value : NaN);
@@ -6782,7 +6920,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     return;
                 }
                 const oldNum = check.checkNumber;
-                const dup = this.checks.find(c => c.id !== id && !c.voided && parseInt(c.checkNumber) === newNum);
+                const dup = this.checks.find(c => String(c.id) !== String(id) && !c.voided && parseInt(c.checkNumber) === newNum);
                 if (dup) {
                     // FIX 2026-09-18: antes esto bloqueaba por completo y pedía corregir
                     // primero al otro empleado — pero eso hacía imposible intercambiar
