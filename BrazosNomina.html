@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.3</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.6</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -5689,13 +5689,15 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // activa (por defecto SÍ), las hojas se ENVÍAN en orden inverso para que el papel
             // salga exactamente como dice la vista previa / "Ver orden final".
             _impresoraInvierte() {
-                // 2026-10-23 (corrección de Ranu): la impresora NO invierte; el orden lo da
-                // la chequera boca abajo tal como viene del paquete (el # más ALTO queda
-                // arriba y entra primero). Se envía exactamente en el orden de la lista.
-                return false;
+                // 2026-11-14 (Ranu): la impresora volvió a imprimir las páginas al revés de la
+                // vista previa (Angelina #3927 salió en el papel de Claudia). Como ha cambiado de
+                // una semana a otra, ahora es una casilla en la vista previa que se recuerda.
+                // Por defecto NO invierte: lo que funcionó el 14-nov (chequera de MENOR a MAYOR,
+                // el # más bajo entra primero, app en orden normal).
+                try { return localStorage.getItem('nomina_impresoraInvierte2') === '1'; } catch (e) { return false; }
             },
             _guardarImpresoraInvierte(v) {
-                try { localStorage.setItem('nomina_impresoraInvierte', v ? '1' : '0'); } catch (e) {}
+                try { localStorage.setItem('nomina_impresoraInvierte2', v ? '1' : '0'); } catch (e) {}
             },
             _ordenEnvio(lista) {
                 return this._impresoraInvierte() ? [...lista].reverse() : lista;
@@ -6248,7 +6250,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         <span style="color:#555;">Check #${check.checkNumber}</span>
                     </div>
                     <div style="text-align:center; font-size:7.5pt; color:#999; letter-spacing:1.5px; padding:2px; text-transform:uppercase;">${label}</div>
-                    ${check.partialOf ? (() => { const o = (this.checks || []).find(c => String(c.id) === String(check.partialOf)); return `<div style="text-align:center; font-size:8pt; font-weight:bold; color:#333; padding:0 16px 2px;">Partial payment (${check.partialPct || ''}%)${o ? ' — replaces voided check #' + o.checkNumber : ''}</div>`; })() : ''}
+                    ${check.partialOf ? (() => { const o = (this.checks || []).find(c => String(c.id) === String(check.partialOf)); return `<div style="text-align:center; font-size:8pt; font-weight:bold; color:#333; padding:0 16px 2px;">${Number(check.partialPct) >= 100 ? 'Replacement check' : 'Partial payment (' + (check.partialPct || '') + '%)'}${o ? ' — replaces voided check #' + o.checkNumber : ''}</div>`; })() : ''}
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; padding:2px 16px; font-size:8.5pt; margin-bottom:2px;">
                         <div><strong>${check.employeeName}</strong>${check.employeeAddress ? '<br>' + check.employeeAddress : ''}${check.employeeCity ? '<br>' + check.employeeCity : ''}</div>
                         <div style="text-align:right;">Period: ${check.period || dateUSA}<br>Pay Date: ${dateUSA}</div>
@@ -6363,7 +6365,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     '<div style="background:#f0f0f0;border-radius:12px;padding:20px;max-width:740px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.5);">' +
                         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
                             '<h3 style="margin:0;color:#1565c0;">🔍 Preview — ' + checks.length + ' cheque(s)</h3>' +
-                            '<div style="display:flex;gap:10px;">' +
+                            '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' +
+                                '<label title="Márcalo si el papel sale en orden contrario a esta vista previa" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#333;cursor:pointer;background:#fff;padding:6px 10px;border-radius:8px;border:1px solid #ccc;"><input type="checkbox" ' + (this._impresoraInvierte() ? 'checked' : '') + ' onchange="app._guardarImpresoraInvierte(this.checked)" style="width:16px;height:16px;"> 🔃 Mi impresora invierte el orden</label>' +
                                 '<button onclick="app._doPrintChecks(); if(app.currentPayrollPeriodId){app.markChecksAsPrinted(app.currentPayrollPeriodId);}" style="background:#27ae60;color:white;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:1rem;">🖨️ Imprimir</button>' +
                                 '<button onclick="document.getElementById(&quot;checkPreviewAllModal&quot;).remove()" style="background:#e74c3c;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:bold;">✕</button>' +
                             '</div>' +
@@ -6697,7 +6700,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 const $ = n => '$' + this.formatMoney(Number(n) || 0);
                 if (check.partialOf) {
                     const o = (this.checks || []).find(c => String(c.id) === String(check.partialOf));
-                    return `<div style="font-size:0.72rem;color:#8e44ad;font-weight:700;margin-top:3px;">💵 Reposición ${check.partialPct || ''}%${o ? ' de #' + o.checkNumber : ''}</div>`;
+                    return `<div style="font-size:0.72rem;color:#8e44ad;font-weight:700;margin-top:3px;">💵 ${Number(check.partialPct) >= 100 ? 'Reemplaza' : 'Reposición ' + (check.partialPct || '') + '%'}${o ? ' ' + (Number(check.partialPct) >= 100 ? 'al' : 'de') + ' #' + o.checkNumber : ''}</div>`;
                 }
                 if (!check.voided) return '';
                 const reps = this._reposiciones(check);
