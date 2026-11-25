@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-14.6</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-25.3</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -1589,6 +1589,13 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 <label>⏱️ Horas fijas por semana (recurrentes):</label>
                 <input type="number" id="empStandingHours" step="0.01" min="0" placeholder="0" value="0">
                 <small style="color: #7f8c8d; margin-top: 5px;">Se precargan solas en "Horas Regulares" cada semana en Captura Manual de Horas, hasta que las cambies o las pongas en 0</small>
+                <!-- 2026-11-25 (Ranu): empleados que se pagan SOLO por Nómina % (sus registros del
+                     Calendar/Reloj quedan de control y no se pagan). -->
+                <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;font-weight:600;">
+                    <input type="checkbox" id="empSoloPct" style="width:auto;">
+                    🚫 No contar horas del Calendar / Reloj (se paga solo por Nómina %)
+                </label>
+                <small style="color: #7f8c8d; margin-top: 5px;">Sus salidas/regresos registrados se siguen viendo en el Scheduler, pero en Nómina se paga solo lo que mande Nómina % (o lo que captures a mano).</small>
             </div>
             <!-- FIX 2026-09-04: saldo inicial de Acumulado del Año (YTD), para
                  empleados que migran de QuickBooks a mitad de año — se captura UNA
@@ -2859,6 +2866,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 document.getElementById('empDeduction').value = 0;
                 document.getElementById('empReimbursement').value = 0;
                 document.getElementById('empStandingHours').value = 0;
+                if (document.getElementById('empSoloPct')) document.getElementById('empSoloPct').checked = false;
                 document.getElementById('empYtdOpenYear').value = new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = 0;
                 document.getElementById('empYtdOpenOvertimePay').value = 0;
@@ -2903,6 +2911,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 document.getElementById('empDeduction').value = emp.deduction || 0;
                 document.getElementById('empReimbursement').value = emp.reimbursement || 0;
                 document.getElementById('empStandingHours').value = emp.standingHours || 0;
+                if (document.getElementById('empSoloPct')) document.getElementById('empSoloPct').checked = !!emp.soloPct;
                 document.getElementById('empYtdOpenYear').value = emp.ytdOpenYear || new Date().getFullYear();
                 document.getElementById('empYtdOpenRegularPay').value = emp.ytdOpenRegularPay || 0;
                 document.getElementById('empYtdOpenOvertimePay').value = emp.ytdOpenOvertimePay || 0;
@@ -3022,6 +3031,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         emp.deduction = parseFloat(document.getElementById('empDeduction').value) || 0;
                         emp.reimbursement = parseFloat(document.getElementById('empReimbursement').value) || 0;
                         emp.standingHours = parseFloat(document.getElementById('empStandingHours').value) || 0;
+                        emp.soloPct = !!document.getElementById('empSoloPct')?.checked;
                         emp.ytdOpenYear = parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear();
                         emp.ytdOpenRegularPay = parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0;
                         emp.ytdOpenOvertimePay = parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0;
@@ -3061,6 +3071,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         deduction: parseFloat(document.getElementById('empDeduction').value) || 0,
                         reimbursement: parseFloat(document.getElementById('empReimbursement').value) || 0,
                         standingHours: parseFloat(document.getElementById('empStandingHours').value) || 0,
+                        soloPct: !!document.getElementById('empSoloPct')?.checked,
                         ytdOpenYear: parseInt(document.getElementById('empYtdOpenYear').value) || new Date().getFullYear(),
                         ytdOpenRegularPay: parseFloat(document.getElementById('empYtdOpenRegularPay').value) || 0,
                         ytdOpenOvertimePay: parseFloat(document.getElementById('empYtdOpenOvertimePay').value) || 0,
@@ -4131,7 +4142,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 // MISMO período no se pagan por horas registradas aquí (se pagan con el %).
                 const _isoP = d => d.toLocaleDateString('en-CA');
                 const _soloPct = Object.entries(this._pagarPorLeer(_isoP(startDate), _isoP(endDate)))
-                    .filter(([, m]) => m === 'pct').map(([id]) => String(id));
+                    .filter(([, m]) => m === 'pct').map(([id]) => String(id))
+                    .concat((this.employees || []).filter(e => e.soloPct).map(e => String(e.id))); // 2026-11-25
                 const periodAttendances = this.attendances.filter(a => {
                     // 2026-09-14: el dueño (isOwner) nunca entra a Nómina, aunque
                     // por error se le hayan registrado horas.
@@ -4458,12 +4470,17 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     list.querySelectorAll('.manualRegHours').forEach(input => {
                         const empId = input.dataset.emp;
                         const _otI = list.querySelector(`.manualOtHours[data-emp="${empId}"]`);
+                        const _bI = list.querySelector(`.manualBonus[data-emp="${empId}"]`);
+                        const _rI = list.querySelector(`.manualReimbursement[data-emp="${empId}"]`);
                         valoresPrevios[empId] = {
                             editado: input.dataset.editado === '1' || (_otI && _otI.dataset.editado === '1'),
                             reg: input.value,
                             ot: list.querySelector(`.manualOtHours[data-emp="${empId}"]`)?.value,
-                            bonus: list.querySelector(`.manualBonus[data-emp="${empId}"]`)?.value,
-                            reimb: list.querySelector(`.manualReimbursement[data-emp="${empId}"]`)?.value
+                            bonus: _bI?.value,
+                            reimb: _rI?.value,
+                            // 2026-11-25: qué campos se escribieron A MANO (solo esos se conservan)
+                            bonusE: !!(_bI && _bI.dataset.editado === '1'),
+                            reimbE: !!(_rI && _rI.dataset.editado === '1')
                         };
                     });
                 }
@@ -4483,6 +4500,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         if (!a.hours) return;
                         const d = new Date(a.date + 'T00:00:00');
                         if (d < startD || d > endD) return;
+                        // 2026-11-25: empleados "solo Nómina %" — sus registros no se pagan
+                        const _e = (this.employees || []).find(e => String(e.id) === String(a.employeeId));
+                        if (_e && _e.soloPct) return;
                         prodHorasPorEmpleado[a.employeeId] = (prodHorasPorEmpleado[a.employeeId] || 0) + a.hours;
                     });
                 }
@@ -4503,15 +4523,23 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     // el empleado tiene "Horas fijas por semana" configuradas (jornada
                     // constante, ej. 8 hrs/semana), se precargan solas en vez de dejar el
                     // campo en 0 — así no hay que capturarlas a mano cada semana.
+                    // 2026-11-25 (Ranu): antes se conservaba TODO lo que había en pantalla (aunque
+                    // fueran los ceros de antes de que llegaran las horas del Scheduler) y por eso
+                    // se quedaban en 0. Ahora solo se conserva lo que se escribió A MANO.
                     const prevVal = valoresPrevios[emp.id];
-                    const regVal = prevVal ? prevVal.reg : (pre ? pre.regularHours : (emp.standingHours || 0));
-                    const otVal = prevVal ? prevVal.ot : (pre ? pre.overtimeHours : 0);
+                    const prevHoras = prevVal && prevVal.editado ? prevVal : null;
+                    // 2026-11-25 (Ranu): si el empleado tiene "Horas fijas por semana" (ej. Patricia 8),
+                    // esas MANDAN sobre las horas de Nómina % del Scheduler (el bono sí se respeta).
+                    // Siguen editables aquí. No aplica si tiene horas registradas (Producción).
+                    const _fijas = (parseFloat(emp.standingHours) || 0) > 0 && !((prodHorasPorEmpleado[emp.id] || 0) > 0);
+                    const regVal = prevHoras ? prevHoras.reg : (_fijas ? emp.standingHours : (pre ? pre.regularHours : (emp.standingHours || 0)));
+                    const otVal = prevHoras ? prevHoras.ot : (_fijas ? 0 : (pre ? pre.overtimeHours : 0));
                     // El Bono de "Nómina x %" (pre.bonus) es independiente de las horas —
                     // se precarga aquí siempre que haya "pre", sin importar si además hay
                     // horas reales de Producción (prodLock, ver abajo). No se toca ni se
                     // duplica en ningún otro lado del código.
-                    const bonusVal = prevVal ? prevVal.bonus : (pre ? pre.bonus : 0);
-                    const reimbVal = prevVal ? prevVal.reimb : (emp.reimbursement || 0);
+                    const bonusVal = (prevVal && prevVal.bonusE) ? prevVal.bonus : (pre ? pre.bonus : 0);
+                    const reimbVal = (prevVal && prevVal.reimbE) ? prevVal.reimb : (emp.reimbursement || 0);
                     const prodHrs = prodHorasPorEmpleado[emp.id] || 0;
                     // FIX 2026-09-04: si el empleado ya tiene horas de Producción (Reloj
                     // Checador/Scheduler Shop→Shop) en este período, se muestran los
@@ -4551,7 +4579,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     const editadoAMano = !!(prodLock && prevVal && prevVal.editado);
                     if (editadoAMano) { regValFinal = prevVal.reg; otValFinal = prevVal.ot; }
                     let bonusFinal = bonusVal;
-                    if (modoPago === 'horas' && !prevVal) bonusFinal = 0;
+                    if (modoPago === 'horas' && !(prevVal && prevVal.bonusE)) bonusFinal = 0;
                     // Comparación para decidir (y para mostrársela a quien la necesite)
                     let comparaHtml = '';
                     if (ambas) {
@@ -4572,7 +4600,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     // vienen literalmente de "pre" (caso sin Producción real); cuando hay
                     // prodLock, las horas ya son la SUMA de reales + % — eso lo indican
                     // prodBadge y pctExtraBadge de abajo, más específico.
-                    const badge = (pre && !prodLock)
+                    const badge = (pre && !prodLock && !_fijas)
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Precargado desde el Scheduler (Nómina x %), semana ${pre.weekStart} a ${pre.weekEnd}">📤 Scheduler</span>`
                         : (emp.standingHours > 0 && !prodLock
                             ? ` <span style="background:#e8f6f3; color:#117a65; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Horas fijas semanales configuradas en el perfil del empleado">🔁 Fijas</span>`
@@ -4582,7 +4610,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         : '';
                     // 2026-11-13: ya NO se bloquean (Ranu quiere poder corregirlas aquí). Se ven en
                     // verde mientras sean las calculadas y en naranja cuando se corrigieron a mano.
-                    const lockAttrs = prodLock ? ` data-prodlock="1"${editadoAMano ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'; this.style.background='#fff3e0'; this.style.color='#e65100';" title="Horas registradas (Calendar/Producción). Puedes corregirlas aquí: solo cambian esta nómina, no el registro." style="width:90px; padding:6px; background:${editadoAMano ? '#fff3e0' : '#f2f3f4'}; color:${editadoAMano ? '#e65100' : '#1e8449'}; font-weight:600;"` : ` style="width:90px; padding:6px;"`;
+                    const lockAttrs = prodLock ? ` data-prodlock="1"${editadoAMano ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'; this.style.background='#fff3e0'; this.style.color='#e65100';" title="Horas registradas (Calendar/Producción). Puedes corregirlas aquí: solo cambian esta nómina, no el registro." style="width:90px; padding:6px; background:${editadoAMano ? '#fff3e0' : '#f2f3f4'}; color:${editadoAMano ? '#e65100' : '#1e8449'}; font-weight:600;"` : ` style="width:90px; padding:6px;"${prevHoras ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'"`;
                     const pctExtraBadge = (prePctHrs > 0 && modoPago === 'suma')
                         ? ` <span style="background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:8px; font-size:0.68rem; font-weight:600;" title="Nómina x % del Scheduler para los días sin registrar de este período (semana ${pre.weekStart} a ${pre.weekEnd}) — ${prePctHrs.toFixed(2)} hrs ya sumadas a las reales de Producción de arriba">➕ Nómina x%: ${prePctHrs.toFixed(2)} hrs</span>`
                         : '';
@@ -4600,8 +4628,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                                 <input type="hidden" class="manualRegHours" data-emp="${emp.id}" value="0">
                                 <input type="hidden" class="manualOtHours" data-emp="${emp.id}" value="0">
                             </td>
-                            <td><input type="number" class="manualBonus" data-emp="${emp.id}" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
-                            <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
+                            <td><input type="number" class="manualBonus" data-emp="${emp.id}"${prevVal && prevVal.bonusE ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'" min="0" step="0.01" value="${bonusVal}" style="width:90px; padding:6px;"></td>
+                            <td><input type="number" class="manualReimbursement" data-emp="${emp.id}"${prevVal && prevVal.reimbE ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
                         </tr>
                     `;
                     }
@@ -4612,8 +4640,8 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                         <td>$${this.formatMoney(emp.rate || 0)}/hr</td>
                         <td><input type="number" class="manualRegHours" data-emp="${emp.id}" min="0" step="0.01" value="${regValFinal}"${lockAttrs}></td>
                         <td><input type="number" class="manualOtHours" data-emp="${emp.id}" min="0" step="0.01" value="${otValFinal}"${lockAttrs}></td>
-                        <td><input type="number" class="manualBonus" data-emp="${emp.id}"${ambas ? ` data-pct-bonus="${parseFloat(pre.bonus) || 0}"` : ''} min="0" step="0.01" value="${bonusFinal}" style="width:90px; padding:6px;"></td>
-                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualBonus" data-emp="${emp.id}"${ambas ? ` data-pct-bonus="${parseFloat(pre.bonus) || 0}"` : ''}${prevVal && prevVal.bonusE ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'" min="0" step="0.01" value="${bonusFinal}" style="width:90px; padding:6px;"></td>
+                        <td><input type="number" class="manualReimbursement" data-emp="${emp.id}"${prevVal && prevVal.reimbE ? ' data-editado="1"' : ''} oninput="this.dataset.editado='1'" min="0" step="0.01" value="${reimbVal}" style="width:90px; padding:6px;"></td>
                     </tr>
                 `;
                 }).join('');
