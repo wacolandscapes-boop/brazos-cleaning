@@ -382,7 +382,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 </div>
                 <div>
                     <h1 id="ap-pay-company-name" style="color:#00b5ad; font-weight:900; letter-spacing:1px; margin:0;">{{company_name}}</h1>
-                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-25.3</span></div>
+                    <div class="subtitle">Sistema de Nómina — AppPronto <span id="nominaVersion" title="Versión de la app (cambia en cada actualización)" style="margin-left:6px;padding:1px 8px;border-radius:10px;background:#ecf0f1;color:#7f8c8d;font-size:0.75rem;font-weight:600;white-space:nowrap;">v2026-11-25.4</span></div>
                 </div>
             </div>
             <div class="header-buttons">
@@ -4796,9 +4796,12 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 let html = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <h3 style="margin:0;">Período: ${startUSA} - ${endUSA}</h3>
+                        <span style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn" onclick="app.printResumenNominaActual()" style="background:#2c3e50;color:white;" title="Imprimir el resumen de este cálculo (antes o después de guardar)">🖨️ Imprimir Resumen</button>
                         <button class="btn btn-success" onclick="app.savePayrollPeriod('${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}','${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}')" style="white-space:nowrap;">
                             ${(this.savedPayrollPeriods || []).some(p => p.start === `${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}` && p.end === `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`) ? '🔄 Actualizar Nómina Guardada' : '💾 Guardar Nómina'}
                         </button>
+                        </span>
                     </div>
                     
                     <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 0.9rem;">
@@ -8156,8 +8159,14 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
             // 2026-11-06 (Ranu): imprimir el RESUMEN de una nómina guardada — solo lo que
             // se ve en la vista del período (fechas, # empleados, horas, bruto, neto y la
             // tabla Empleado|Horas|Bruto|Deducción|Neto + TOTAL), con el logo de la empresa.
-            printSavedPayrollSummary(id) {
-                const period = (this.savedPayrollPeriods || []).find(p => String(p.id) === String(id));
+            // 2026-11-25 (Ranu): imprimir el resumen del cálculo ACTUAL (antes de guardar)
+            printResumenNominaActual() {
+                const calc = this.currentPayrollCalc || [];
+                if (!calc.length) { alert('Primero calcula la nómina.'); return; }
+                this.printSavedPayrollSummary(null, { label: (this.currentPayrollPeriod || '') + ' (sin guardar)', payroll: calc });
+            },
+            printSavedPayrollSummary(id, periodObj) {
+                const period = periodObj || (this.savedPayrollPeriods || []).find(p => String(p.id) === String(id));
                 if (!period) return;
                 const arr = ((period.payroll || []).slice()).sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
                 if (!arr.length) { alert('Este período no tiene datos de nómina guardados.'); return; }
@@ -8165,6 +8174,7 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                 const $ = v => '$' + this.formatMoney(n(v));
                 const tot = arr.reduce((t, p) => ({ h: t.h + n(p.totalHours), b: t.b + n(p.grossPay), d: t.d + n(p.deductions), l: t.l + n(p.latePenalty), nt: t.nt + n(p.netPay) }), { h: 0, b: 0, d: 0, l: 0, nt: 0 });
                 const tard = !!this.workConfig.enableLateDeduction;
+                const conBono = arr.some(p => n(p.bonus) > 0), conReemb = arr.some(p => n(p.reimbursement) > 0); // 2026-11-25
                 let logo = ''; try { logo = localStorage.getItem('companyLogo') || ''; } catch (e) {}
                 const empresa = (this.getCompanyName && this.getCompanyName()) || '';
                 const esc = t => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -8172,8 +8182,10 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     <td>${esc(p.employeeName)}</td>
                     <td class="c">${n(p.totalHours).toFixed(2)} hrs</td>
                     <td class="r">${$(p.grossPay)}</td>
+                    ${conBono ? `<td class="r">${n(p.bonus) > 0 ? '+' + $(p.bonus) : '—'}</td>` : ''}
                     ${tard ? `<td class="r neg">${n(p.latePenalty) > 0 ? '-' + $(p.latePenalty) : '—'}</td>` : ''}
                     <td class="r neg">${n(p.deductions) > 0 ? (n(p.empDeduction) > 0 ? '-' + p.empDeduction + '% (-' + $(p.deductions) + ')' : '-' + $(p.deductions)) : '—'}</td>
+                    ${conReemb ? `<td class="r">${n(p.reimbursement) > 0 ? '+' + $(p.reimbursement) : '—'}</td>` : ''}
                     <td class="r net">${$(p.netPay)}</td></tr>`).join('');
                 const w = window.open('', '', 'width=900,height=800');
                 if (!w) { alert('El navegador bloqueó la ventana de impresión.'); return; }
@@ -8210,9 +8222,9 @@ document.getElementById('pwaManifest').href=URL.createObjectURL(new Blob([JSON.s
                     <div class="tile"><b>${$(tot.b)}</b><span>Pago Bruto</span></div>
                     <div class="tile"><b>${$(tot.nt)}</b><span>Pago Neto</span></div>
                 </div>
-                <table><thead><tr><th>Empleado</th><th class="c">Horas</th><th class="r">Pago Bruto</th>${tard ? '<th class="r">Tardanza</th>' : ''}<th class="r">Deducción</th><th class="r">Pago Neto</th></tr></thead>
+                <table><thead><tr><th>Empleado</th><th class="c">Horas</th><th class="r">Pago Bruto</th>${conBono ? '<th class="r">Bono</th>' : ''}${tard ? '<th class="r">Tardanza</th>' : ''}<th class="r">Deducción</th>${conReemb ? '<th class="r">Reembolso</th>' : ''}<th class="r">Pago Neto</th></tr></thead>
                 <tbody>${filas}
-                <tr class="tot"><td>TOTAL (${arr.length})</td><td class="c">${tot.h.toFixed(2)} hrs</td><td class="r">${$(tot.b)}</td>${tard ? `<td class="r neg">${tot.l > 0 ? '-' + $(tot.l) : '—'}</td>` : ''}<td class="r neg">${tot.d > 0 ? '-' + $(tot.d) : '—'}</td><td class="r net">${$(tot.nt)}</td></tr>
+                <tr class="tot"><td>TOTAL (${arr.length})</td><td class="c">${tot.h.toFixed(2)} hrs</td><td class="r">${$(tot.b)}</td>${conBono ? `<td class="r">+${$(arr.reduce((t, p) => t + n(p.bonus), 0))}</td>` : ''}${tard ? `<td class="r neg">${tot.l > 0 ? '-' + $(tot.l) : '—'}</td>` : ''}<td class="r neg">${tot.d > 0 ? '-' + $(tot.d) : '—'}</td>${conReemb ? `<td class="r">+${$(arr.reduce((t, p) => t + n(p.reimbursement), 0))}</td>` : ''}<td class="r net">${$(tot.nt)}</td></tr>
                 </tbody></table>
                 <div class="pie">Impreso el ${new Date().toLocaleDateString('en-US')}</div>
                 </body></html>`);
